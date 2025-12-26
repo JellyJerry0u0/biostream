@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../widgets/onboarding_slide.dart';
 import '../widgets/slide_indicator.dart';
 import '../utils/responsive.dart';
-import 'facescan_screen.dart';
+import 'signup_screen.dart';
+import 'login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -29,30 +30,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _onGetStarted() {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const FaceScanScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(1.0, 0.0);
-          const end = Offset.zero;
-          const curve = Curves.ease;
-
-          var tween = Tween(begin: begin, end: end).chain(
-            CurveTween(curve: curve),
-          );
-
-          return SlideTransition(
-            position: animation.drive(tween),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 300),
+      MaterialPageRoute(
+        builder: (context) => const SignUpScreen(),
       ),
     );
   }
 
   void _onLogin() {
-    // TODO: Navigate to login screen
-    debugPrint('Login tapped');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const LoginScreen(),
+      ),
+    );
   }
 
   @override
@@ -88,7 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           SizedBox(width: Responsive.padding(context, 6)),
                           Text(
-                            'SkinAI',
+                            'BioStream',
                             style: TextStyle(
                               fontSize: Responsive.fontSize(context, 18),
                               fontWeight: FontWeight.bold,
