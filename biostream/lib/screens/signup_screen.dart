@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/responsive.dart';
 import 'login_screen.dart';
+import '../services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -38,23 +39,42 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
   }
+final _authService = AuthService(); // 서비스 인스턴스 추가
 
-  void _onStartJourney() {
-    if (!_agreeToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('약관에 동의해주세요.'),
-        ),
-      );
-      return;
-    }
-    // Navigate to login screen
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => const LoginScreen(),
-      ),
-    );
+  void _onStartJourney() async {
+  // 1. 유효성 검사
+  if (!_agreeToTerms) {
+    _showSnackBar('약관에 동의해주세요.');
+    return;
   }
+  if (_passwordController.text != _confirmPasswordController.text) {
+    _showSnackBar('비밀번호가 일치하지 않습니다.');
+    return;
+  }
+  if (_nicknameController.text.isEmpty) {
+    _showSnackBar('닉네임을 입력해주세요.');
+    return;
+  }
+
+  // 2. 백엔드 통신 시작
+  final result = await _authService.signUp(
+    _emailController.text.trim(),
+    _passwordController.text,
+    _nicknameController.text.trim(),
+  );
+
+  if (result['success']) {
+    _showSnackBar('회원가입 성공! 로그인해주세요.');
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    );
+  } else {
+    _showSnackBar(result['message']);
+  }
+}
+void _showSnackBar(String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
 
   void _onKakaoSignUp() {
     // TODO: Implement Kakao sign up

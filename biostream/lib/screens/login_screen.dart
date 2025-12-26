@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/responsive.dart';
 import 'facescan_screen.dart';
 import 'signup_screen.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,14 +23,33 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _onLogin() {
-    // Navigate to FaceScanScreen
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => const FaceScanScreen(),
-      ),
-    );
+  final _authService = AuthService(); // 서비스 인스턴스 추가
+  
+  void _onLogin() async {
+  if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    _showSnackBar('이메일과 비밀번호를 모두 입력해주세요.');
+    return;
   }
+
+  final result = await _authService.login(
+    _emailController.text.trim(),
+    _passwordController.text,
+  );
+
+  if (result['success']) {
+    debugPrint('${result['nickname']}님 환영합니다!');
+    // 로그인 성공 시 FaceScanScreen으로 이동
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const FaceScanScreen()),
+    );
+  } else {
+    _showSnackBar(result['message']);
+  }
+}
+
+void _showSnackBar(String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
 
   void _onForgotPassword() {
     // TODO: Navigate to forgot password screen
