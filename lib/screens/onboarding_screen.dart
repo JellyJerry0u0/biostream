@@ -77,7 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           SizedBox(width: Responsive.padding(context, 6)),
                           Text(
-                            'SkinAI',
+                            'BioStream',
                             style: TextStyle(
                               fontSize: Responsive.fontSize(context, 18),
                               fontWeight: FontWeight.bold,
