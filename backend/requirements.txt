@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+passlib[bcrypt]    # 비밀번호 암호화용
+python-jose[cryptography]  # JWT 생성 및 검증용
+python-multipart   # 폼 데이터 처리용
