@@ -14,7 +14,8 @@ dependencies:
   http: ^1.1.0 # HTTP 요청용
   flutter_secure_storage: ^9.0.0  # JWT 토큰 안전 저장용
   kakao_flutter_sdk_user: ^1.9.0  # 카카오 로그인 SDK
-
+  health: ^10.0.0  # 최신 버전 확인 필요
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
