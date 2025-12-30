@@ -7,8 +7,8 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=True) # 일반 가입용
-    kakao_id = Column(String, unique=True, nullable=True) # 카카오 연동용
+    hashed_password = Column(String, nullable=True) # 일반 가입용, 카카오 전용 가입자는 비번이 없을 수 있음
+    kakao_id = Column(String, unique=True,index=True, nullable=True) # 카카오 연동용
     nickname = Column(String, nullable=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

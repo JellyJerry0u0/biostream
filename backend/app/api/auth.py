@@ -19,6 +19,12 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class KakaoLogin(BaseModel):
+    kakao_id: str
+    email: str
+    nickname: str
+
+
 # 1. 회원가입 API
 @router.post("/signup")
 def signup(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -45,5 +51,32 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="이메일 또는 비밀번호가 틀렸습니다.")
     
     # 로그인 성공 시 토큰 발급
+    token = create_access_token(data={"sub": user.email})
+    return {"access_token": token, "token_type": "bearer", "nickname": user.nickname}
+
+# 3. 카카오 로그인 API
+@router.post("/kakao-login")
+def kakao_login(user_in: KakaoLogin, db: Session = Depends(get_db)):
+    # 1. 카카오 ID로 기존 유저 확인
+    user = db.query(User).filter(User.kakao_id == user_in.kakao_id).first()
+    
+    if not user:
+        # 2. 카카오 ID는 없지만 이메일이 같은 유저가 있는지 확인 (계정 통합 로직)
+        user = db.query(User).filter(User.email == user_in.email).first()
+        if user:
+            user.kakao_id = user_in.kakao_id # 계정 연결
+        else:
+            # 3. 아예 새로운 유저라면 생성
+            user = User(
+                email=user_in.email,
+                nickname=user_in.nickname,
+                kakao_id=user_in.kakao_id,
+                hashed_password=None # 소셜 가입자는 비밀번호 없음
+            )
+            db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    # 4. 우리 서비스 전용 JWT 토큰 발급
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer", "nickname": user.nickname}
