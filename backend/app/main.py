@@ -6,7 +6,7 @@ from sqlalchemy.exc import OperationalError
 
 from .database import engine, get_db
 from . import models
-from .api import auth  # 만약 경로 에러가 나면 from app.api import auth로 시도
+from .api import auth, data  # 만약 경로 에러가 나면 from app.api import auth로 시도
 
 app = FastAPI(title="BioStream API")
 
@@ -37,6 +37,7 @@ init_db()
 
 # [3] 라우터 등록
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(data.router, prefix="/data", tags=["Data Collection"])
 
 @app.get("/")
 def read_root():
