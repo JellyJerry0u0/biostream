@@ -42,3 +42,4 @@ app.include_router(data.router, prefix="/data", tags=["Data Collection"])
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "BioStream API is running"}
+
