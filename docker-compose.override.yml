@@ -1,0 +1,13 @@
+# 프로젝트 루트/docker-compose.override.yml
+services:
+  mcp-server:
+    build:
+      context: ./backend
+    container_name: biostream_mcp
+    restart: always
+    env_file: backend/.env
+    environment:
+      - RUNNING_IN_DOCKER=true  # 도커 환경임을 알리는 플래그
+    depends_on:
+      db:
+        condition: service_healthy # DB가 완전히 준비된 후 실행
