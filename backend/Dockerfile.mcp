@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # MCP 서버 실행 (FastAPI와 별도로 실행됨)
-CMD ["python", "-m", "mcp.server"]
+CMD ["python", "-m", "mcp_server.server"]
