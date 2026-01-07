@@ -5,7 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
   // 안드로이드 에뮬레이터에서 로컬 백엔드 접속 시 10.0.2.2:8080 사용
-  static const String baseUrl = "http://localhost:8080/auth";
+  static const String baseUrl = "http://172.30.1.44:8080/auth";
   final storage = const FlutterSecureStorage();
 
   // 회원가입 요청
