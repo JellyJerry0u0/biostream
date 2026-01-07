@@ -67,28 +67,28 @@ def fetch_user_aging_context(user_id:int):
         #LLM이 이해하기 쉬운 형식으로 데이터 구성
         return{
             "profile":{ #User 테이블에서 가져온 변하지 않는 정보
-                "age": calculate_age(user.birthdate),
+                "age": f"{calculate_age(user.birthdate)} years",
                 "gender": user.gender
             },
             "lifestyle":{ #listyle 테이블에서 가져온 최근 설문 정보 중 생활습관에 관련된 정보
                 "smoking":{
                     "smoking_status": lifestyle.smoking_status,
-                    "smoking_amount_per_day": lifestyle.smoking_amount,
-                    "smoking_duration_years": lifestyle.smoking_duration
+                    "smoking_amount_per_day": f"{lifestyle.smoking_amount} cigarettes",
+                    "smoking_duration_years": f"{lifestyle.smoking_duration} years"
                 },
                 "exercise":{
-                    "daily_exercise_minutes": lifestyle.exercise_daily_mins,
-                    "weekly_exercise_frequency": lifestyle.exercise_freq_per_week,
+                    "daily_exercise_minutes": f"{lifestyle.exercise_daily_mins} minutes",
+                    "weekly_exercise_frequency": {lifestyle.exercise_freq_per_week},
                     "exercise_intensity": lifestyle.exercise_intensity,
                     "exercise_type": lifestyle.exercise_type,
-                    "sedentary_hours_per_day": lifestyle.sedentary_hours_per_day,
+                    "sedentary_hours_per_day": f"{lifestyle.sedentary_hours_per_day} hours",
                     "exercise_regularity": lifestyle.exercise_regularity,
-                    "exercise_duration_years": lifestyle.exercise_duration_years,
+                    "exercise_duration_years": f"{lifestyle.exercise_duration_years} years",
                     "stretching_habit": lifestyle.stretching_habit,
                     "exercise_location": lifestyle.excercise_location
                 },
                 "sleep":{
-                    "average_sleep_hours": lifestyle.sleep_hours,
+                    "average_sleep_hours": f"{lifestyle.sleep_hours} hours",
                     "sleep_quality": lifestyle.sleep_quality,
                     "sleep_disorders": lifestyle.sleep_disorders,
                     "sleep_consistency": lifestyle.sleep_consistency
@@ -97,7 +97,7 @@ def fetch_user_aging_context(user_id:int):
                     "drinking_frequency": lifestyle.drinking_frequency,
                     "drinking_details": lifestyle.drinking_details,
                     "facial_flushing": lifestyle.facial_flushing,
-                    "drinking_duration_years": lifestyle.drinking_duration_years        
+                    "drinking_duration_years": f"{lifestyle.drinking_duration_years} years"
                 },
                 "uv":{
                     "uv_activity_hours": lifestyle.uv_actuvity_hours,
@@ -108,18 +108,18 @@ def fetch_user_aging_context(user_id:int):
 
             },
             "bodystate":{ #Lifestyle 테이블에서 가져온 최근 설문 정보 중 신체 상태에 관련된 정보
-                "weight_kg": lifestyle.weight,
-                "height_cm": lifestyle.height,
-                "muscle_mass_kg": lifestyle.muscle_mass,
-                "body_fat_mass_kg": lifestyle.body_fat_mass,
-                "body_fat_percentage": lifestyle.body_fat_percentage,
-                "bmi": lifestyle.bmi,
-                "bmr": lifestyle.bmr,
-                "whr": lifestyle.whr,
-                "body_water": lifestyle.body_water,
-                "visceral_fat_level": lifestyle.visceral_fat_level
+                "weight_kg": f"{lifestyle.weight}kg", #단위 명시
+                "height_cm": f"{lifestyle.height}cm", #단위 명시
+                "muscle_mass_kg": f"{lifestyle.muscle_mass}kg", #단위 명시
+                "body_fat_mass_kg": f"{lifestyle.body_fat_mass}kg", #단위 명시
+                "body_fat_percentage": f"{lifestyle.body_fat_percentage}%", #단위 명시
+                "bmi": lifestyle.bmi, #단위 없음
+                "bmr": f"{lifestyle.bmr} kcal", #기초대사량 단위는 kcal로 고정
+                "whr": lifestyle.whr, 
+                "body_water": f"{lifestyle.body_water}L", #단위 명시
+                "visceral_fat_level": f"{lifestyle.visceral_fat_level}Lv",
             },
-            "target_age": lifestyle.target_years
+            "target_age": f"{lifestyle.target_years} years after" #몇년후로 가고 싶은지
 
         }
     
