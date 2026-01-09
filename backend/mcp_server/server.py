@@ -1,7 +1,7 @@
 #MCP 서버 메인 실행 파일(Gemini와 통신하는 입구)
 # mcp/server.py 예시
 from mcp.server.fastmcp import FastMCP
-from backend.mcp_server.tools.db_tools import fetch_user_aging_context # 우리가 만든 함수
+from tools.db_tools import fetch_user_aging_context # 우리가 만든 함수
 
 mcp = FastMCP("BioStream")
 
