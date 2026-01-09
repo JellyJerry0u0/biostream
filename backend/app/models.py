@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime,Date,ForeignKey, Float,
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
+
 #SQLAlchemy 라는 ORM을 사용해 PostgreSQL 데이터베이스와 상호작용하기 위한 모델 정의
 
 class User(Base):
@@ -80,7 +81,7 @@ class Lifestyle(Base):
     drinking_duration_years = Column(Integer) # 총 음주 경력 (년)
 
     #5. 야외 활동 및 자외선 노출
-    uv_actuvity_hours=Column(JSON) # 여러 시간대를 입력받으므로 JSON 타입으로 저장 (예: ["12:00~12:30", "15:00~16:00"])
+    uv_activity_hours=Column(JSON) # 여러 시간대를 입력받으므로 JSON 타입으로 저장 (예: ["12:00~12:30", "15:00~16:00"])
     sunscreen_usage=Column(String) #자외선 차단제 사용 빈도(매일/가끔/안함)
     sunscreen_reapply_interval = Column(String) # 선크림 재도포 주기
 
