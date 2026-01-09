@@ -40,7 +40,7 @@ class LifestyleSurveyCreate(BaseModel):
     drinking_duration_years: Optional[int] = None
     
     # 야외 활동 및 자외선 노출
-    uv_actuvity_hours: Optional[List[str]] = None  # JSON 형식 ["12:00~12:30", ...]
+    uv_activity_hours: Optional[List[str]] = None  # JSON 형식 ["12:00~12:30", ...]
     sunscreen_usage: str  # 매일/가끔/안함
     sunscreen_reapply_interval: Optional[str] = None
     
@@ -109,7 +109,7 @@ def create_lifestyle_profile(
         drinking_details=profile_data.drinking_details,
         facial_flushing=profile_data.facial_flushing,
         drinking_duration_years=profile_data.drinking_duration_years,
-        uv_actuvity_hours=profile_data.uv_actuvity_hours,
+        uv_activity_hours=profile_data.uv_activity_hours,
         sunscreen_usage=profile_data.sunscreen_usage,
         sunscreen_reapply_interval=profile_data.sunscreen_reapply_interval,
         weight=profile_data.weight,

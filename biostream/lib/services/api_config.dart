@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'dart:html';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -6,7 +6,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 class ApiConfig {
   static const String _keyBaseOrigin = 'api_base_origin';
 
-  static const String _releaseOrigin = "https://api.biostream.com"; // TODO: 배포 시 실제 도메인으로 교체
+  static const String _releaseOrigin =
+      "https://api.biostream.com"; // TODO: 배포 시 실제 도메인으로 교체
 
   // 저장된 오리진 조회 (없으면 기본값)
   static Future<String> getBaseOrigin() async {
@@ -21,12 +22,17 @@ class ApiConfig {
     // 릴리즈 빌드에서는 고정 도메인 사용
     if (kReleaseMode) return _releaseOrigin;
 
+    // 웹 플랫폼: localhost 사용
+    if (kIsWeb) {
+      return "http://localhost:8080";
+    }
+
     // 개발 모드: 에뮬레이터/시뮬레이터 여부를 구분
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       final isEmulator = await _isEmulator();
       return isEmulator ? "http://10.0.2.2:8080" : "http://127.0.0.1:8080";
     }
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       final isSimulator = await _isEmulator();
       return isSimulator ? "http://127.0.0.1:8080" : "http://127.0.0.1:8080";
     }
@@ -36,6 +42,9 @@ class ApiConfig {
   }
 
   static Future<bool> _isEmulator() async {
+    // 웹에서는 에뮬레이터 체크 불필요
+    if (kIsWeb) return false;
+
     final deviceInfo = DeviceInfoPlugin();
     try {
       if (Platform.isAndroid) {
@@ -67,5 +76,3 @@ class ApiConfig {
     await prefs.remove(_keyBaseOrigin);
   }
 }
-
-
