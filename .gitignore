@@ -55,3 +55,4 @@ env/
 ENV/
 .venv
 /backend/mcp_server/venv/
+/backend/mcp_server/run_inspector.sh
