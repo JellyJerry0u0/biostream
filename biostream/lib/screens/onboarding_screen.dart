@@ -4,6 +4,7 @@ import '../widgets/slide_indicator.dart';
 import '../utils/responsive.dart';
 import 'signup_screen.dart';
 import 'login_screen.dart';
+import '../services/api_config.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -15,6 +16,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  String? _currentApiOrigin;
 
   @override
   void dispose() {
@@ -41,6 +43,98 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       MaterialPageRoute(
         builder: (context) => const LoginScreen(),
       ),
+    );
+  }
+
+  Future<void> _openDevSettingsDialog() async {
+    final initial = await ApiConfig.getBaseOrigin();
+    final controller = TextEditingController(text: initial);
+    setState(() {
+      _currentApiOrigin = initial;
+    });
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          title: const Text('개발자 설정'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'API Base URL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: 'http://192.168.x.x:8080',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '현재: ${_currentApiOrigin ?? '-'}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await ApiConfig.resetToDefault();
+                final refreshed = await ApiConfig.getBaseOrigin();
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _currentApiOrigin = refreshed;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('기본값으로 리셋되었습니다.')),
+                  );
+                }
+              },
+              child: const Text('기본값'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('닫기'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await ApiConfig.setBaseOrigin(controller.text.trim());
+                final refreshed = await ApiConfig.getBaseOrigin();
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _currentApiOrigin = refreshed;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('API URL이 저장되었습니다.')),
+                  );
+                }
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -86,18 +180,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ],
                       ),
-                      TextButton(
-                        onPressed: _onGetStarted,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.grey[600],
-                        ),
-                        child: Text(
-                          'Skip',
-                          style: TextStyle(
-                            fontSize: Responsive.fontSize(context, 14),
-                            fontWeight: FontWeight.w500,
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: _openDevSettingsDialog,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[600],
+                            ),
+                            child: Text(
+                              '개발자설정',
+                              style: TextStyle(
+                                fontSize: Responsive.fontSize(context, 12),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
+                          TextButton(
+                            onPressed: _onGetStarted,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[600],
+                            ),
+                            child: Text(
+                              'Skip',
+                              style: TextStyle(
+                                fontSize: Responsive.fontSize(context, 14),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

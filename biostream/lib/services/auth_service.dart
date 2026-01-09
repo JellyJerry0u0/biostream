@@ -2,17 +2,17 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'api_config.dart';
 
 class AuthService {
-  // 안드로이드 에뮬레이터에서 로컬 백엔드 접속 시 10.0.2.2:8080 사용
-  static const String baseUrl = "http://172.30.1.44:8080/auth";
   final storage = const FlutterSecureStorage();
 
   // 회원가입 요청
   Future<Map<String, dynamic>> signUp(String email, String password, String nickname) async {
     try {
+      final origin = await ApiConfig.getBaseOrigin();
       final response = await http.post(
-        Uri.parse('$baseUrl/signup'),
+        Uri.parse('$origin/auth/signup'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,
@@ -20,7 +20,21 @@ class AuthService {
           "nickname": nickname,
         }),
       );
-      return {"success": response.statusCode == 200, "message": jsonDecode(response.body)['detail'] ?? "회원가입 완료"};
+      
+      if (response.statusCode == 200) {
+        return {"success": true, "message": "회원가입 완료"};
+      } else {
+        final body = jsonDecode(response.body);
+        final detail = body['detail'];
+        // detail이 리스트일 수도 있고 문자열일 수도 있음
+        String message;
+        if (detail is List) {
+          message = detail.map((e) => e['msg'] ?? e.toString()).join(', ');
+        } else {
+          message = detail?.toString() ?? "회원가입 실패";
+        }
+        return {"success": false, "message": message};
+      }
     } catch (e) {
       return {"success": false, "message": "서버 연결 실패"};
     }
@@ -29,8 +43,9 @@ class AuthService {
   // 로그인 요청 및 토큰 저장
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
+      final origin = await ApiConfig.getBaseOrigin();
       final response = await http.post(
-        Uri.parse('$baseUrl/login'),
+        Uri.parse('$origin/auth/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,
