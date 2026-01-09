@@ -126,8 +126,10 @@ test.db
 # Editor
 .vscode/
 
-# Upload / local data
-backend/uploads/
+# Backend uploads 아래 파일들 무시
+backend/uploads/*
+# 하지만 uploads 폴더 자체는 추적
+!backend/uploads/.gitkeep
 
 # Flutter
 build/
