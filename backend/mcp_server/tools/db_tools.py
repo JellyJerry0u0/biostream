@@ -10,7 +10,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import OperationalError  # DB 연결 관련 예외 처리를 위해 필요
 
 
+from pathlib import Path
+
 load_dotenv()
+
 
 #DB 연결 설정
 # 실행 환경 플래그 확인 (도커 환경이면 true)
