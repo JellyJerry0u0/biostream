@@ -21,3 +21,13 @@ def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=60) # 1시간 유효
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            return None
+        return email
+    except jwt.JWTError:
+        return None

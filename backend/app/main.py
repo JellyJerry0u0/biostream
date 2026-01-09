@@ -39,6 +39,10 @@ init_db()
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(data.router, prefix="/data", tags=["Data Collection"])
 
+# Lifestyle 설문조사 API (Lifestyle 모델 기반)
+from .api import lifestyle_survey
+app.include_router(lifestyle_survey.router, prefix="/api", tags=["Lifestyle Survey"])
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "BioStream API is running"}

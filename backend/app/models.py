@@ -34,7 +34,7 @@ class Lifestyle(Base):
     user_id = Column(Integer, ForeignKey("users.id"))  # 어떤 유저의 설문인지 식별하기 위한 외래키
      
     #사진 정보 필드
-    original_image_url = Column(String)  # 사용자가 업로드한 원본 사진 경로
+    original_image_url = Column(String, nullable=True)  # 사용자가 업로드한 원본 사진 경로 (설문 단계에서는 없을 수 있음)
     #처음에는 null허용인데 나중에는 미래 얼굴 사진이 반드시 생성되니 일단은 nullable=True
     generated_image_url = Column(String, nullable=True) # Gemini가 생성한 미래 얼굴 사진 경로
       
