@@ -116,3 +116,18 @@ coverage/
 # Exceptions to above rules.
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 
+#gitpush하려고
+# Python
+.venv/
+__pycache__/
+*.pyc
+test.db
+
+# Editor
+.vscode/
+
+# Upload / local data
+backend/uploads/
+
+# Flutter
+build/
