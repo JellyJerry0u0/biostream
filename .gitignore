@@ -44,19 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-<<<<<<< HEAD
-# Python related
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
-.venv
-/backend/mcp_server/venv/
-=======
 # iOS related
 **/ios/**/*.mode1v3
 **/ios/**/*.mode2v3
@@ -114,18 +101,32 @@ coverage/
 # Exceptions to above rules.
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 
-#gitpush하려고
-# Python
-.venv/
+# Python related
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+/backend/mcp_server/venv/
+/backend/mcp_server/run_inspector.sh
 test.db
 
 # Editor
 .vscode/
 
+<<<<<<< HEAD
 # Upload / local data
 backend/uploads/
+=======
+# Backend uploads 아래 파일들 무시
+backend/uploads/*
+# 하지만 uploads 폴더 자체는 추적
+!backend/uploads/.gitkeep
 
 # Flutter
 build/
+
