@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../utils/responsive.dart';
 import '../widgets/face_scanner_widget.dart';
+import '../services/image_service.dart';
 import 'survey_screen.dart';
 
 class FaceScanScreen extends StatefulWidget {
@@ -13,6 +15,9 @@ class FaceScanScreen extends StatefulWidget {
 class _FaceScanScreenState extends State<FaceScanScreen>
     with SingleTickerProviderStateMixin {
   AnimationController? _scanController;
+  final ImageService _imageService = ImageService();
+  bool _isUploading = false;
+  bool _isPickingImage = false;  // 이미지 피커 활성화 상태 추적
 
   @override
   void initState() {
@@ -38,17 +43,189 @@ class _FaceScanScreenState extends State<FaceScanScreen>
     debugPrint('Skip tapped');
   }
 
-  void _onCamera() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const SurveyScreen(),
-      ),
-    );
+  Future<void> _onCamera() async {
+    if (_isUploading || _isPickingImage) {
+      debugPrint('[FaceScanScreen] 이미지 피커가 활성화되어 있습니다. 카메라 열기 취소');
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isPickingImage = true;
+    });
+
+    try {
+      debugPrint('[FaceScanScreen] 카메라 버튼 클릭됨');
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (image != null && mounted) {
+        debugPrint('[FaceScanScreen] 카메라에서 이미지 선택됨: ${image.path}');
+        await _uploadAndNavigate(image);
+      } else {
+        debugPrint('[FaceScanScreen] 카메라에서 이미지 선택 취소됨');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[FaceScanScreen] 카메라 오류: $e');
+      debugPrint('[FaceScanScreen] 스택 트레이스: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('카메라를 사용하는 중 오류가 발생했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPickingImage = false;
+        });
+      }
+    }
   }
 
-  void _onGallery() {
-    // TODO: Open gallery
-    debugPrint('Gallery tapped');
+  Future<void> _onGallery() async {
+    if (_isUploading || _isPickingImage) {
+      debugPrint('[FaceScanScreen] 이미지 피커가 활성화되어 있습니다. 갤러리 열기 취소');
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isPickingImage = true;
+    });
+
+    try {
+      debugPrint('[FaceScanScreen] ===== 갤러리 버튼 클릭됨 =====');
+      final ImagePicker picker = ImagePicker();
+      
+      debugPrint('[FaceScanScreen] 갤러리 열기 중...');
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (image != null && mounted) {
+        debugPrint('[FaceScanScreen] ✅ 갤러리에서 이미지 선택 완료!');
+        debugPrint('[FaceScanScreen] 선택된 이미지 경로: ${image.path}');
+        debugPrint('[FaceScanScreen] 선택된 이미지 이름: ${image.name}');
+        debugPrint('[FaceScanScreen] 이미지 업로드 및 설문조사 페이지로 이동 시작...');
+        await _uploadAndNavigate(image);
+      } else {
+        debugPrint('[FaceScanScreen] ❌ 갤러리에서 이미지 선택 취소됨');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[FaceScanScreen] ❌ 갤러리 오류 발생: $e');
+      debugPrint('[FaceScanScreen] 스택 트레이스: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('갤러리에서 이미지를 선택하는 중 오류가 발생했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPickingImage = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _uploadAndNavigate(XFile image) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      // 로딩 표시
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      debugPrint('[FaceScanScreen] 이미지 업로드 시작: ${image.path}');
+      // target_years는 기본값 30으로 설정 (나중에 SurveyScreen에서 수정 가능)
+      final result = await _imageService.uploadImage(image, 30);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+      }
+
+      if (result['success'] == true && mounted) {
+        final originalImageUrl = result['original_image_url'] as String?;
+        final savedPath = result['saved_path'] as String?;
+        final finalImageUrl = originalImageUrl ?? savedPath;
+        
+        debugPrint('[FaceScanScreen] ===== 이미지 업로드 성공! =====');
+        debugPrint('[FaceScanScreen] ✅ original_image_url: $originalImageUrl');
+        debugPrint('[FaceScanScreen] ✅ saved_path: $savedPath');
+        debugPrint('[FaceScanScreen] ✅ 최종 전달할 URL: $finalImageUrl');
+        debugPrint('[FaceScanScreen] ✅ lifestyle_id: ${result['lifestyle_id']}');
+        debugPrint('[FaceScanScreen] 설문조사 페이지로 이동 중...');
+        
+        // SurveyScreen으로 이동하며 original_image_url 전달
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => SurveyScreen(
+                originalImageUrl: finalImageUrl,
+              ),
+            ),
+          );
+          debugPrint('[FaceScanScreen] ✅ 설문조사 페이지로 이동 완료!');
+          debugPrint('[FaceScanScreen] 전달된 original_image_url: $finalImageUrl');
+        }
+      } else {
+        debugPrint('[FaceScanScreen] 이미지 업로드 실패: ${result['message']}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? '이미지 업로드에 실패했습니다.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[FaceScanScreen] 이미지 업로드 오류: $e');
+      debugPrint('[FaceScanScreen] 스택 트레이스: $stackTrace');
+      
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('이미지 업로드 중 오류가 발생했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
   }
 
   @override

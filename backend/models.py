@@ -80,7 +80,7 @@ class Lifestyle(Base):
     drinking_duration_years = Column(Integer) # 총 음주 경력 (년)
 
     #5. 야외 활동 및 자외선 노출
-    uv_actuvity_hours=Column(JSON) # 여러 시간대를 입력받으므로 JSON 타입으로 저장 (예: ["12:00~12:30", "15:00~16:00"])
+    uv_activity_hours=Column(JSON) # 여러 시간대를 입력받으므로 JSON 타입으로 저장 (예: ["12:00~12:30", "15:00~16:00"])  # 오타 수정: uv_actuvity_hours -> uv_activity_hours
     sunscreen_usage=Column(String) #자외선 차단제 사용 빈도(매일/가끔/안함)
     sunscreen_reapply_interval = Column(String) # 선크림 재도포 주기
 

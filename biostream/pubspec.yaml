@@ -17,6 +17,7 @@ dependencies:
   health: ^11.0.0  # 최신 버전 확인 필요
   shared_preferences: ^2.2.2
   device_info_plus: ^10.1.0
+  image_picker: ^1.0.7  # 갤러리 및 카메라 이미지 선택용
 
 dev_dependencies:
   flutter_test:

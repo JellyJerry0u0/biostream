@@ -60,7 +60,7 @@ async def upload_image(
             drinking_frequency="none",
             facial_flushing=False,
             drinking_duration_years=0,
-            uv_actuvity_hours=[],
+            uv_activity_hours=[],  # 오타 수정: uv_actuvity_hours -> uv_activity_hours
             sunscreen_usage="none",
             sunscreen_reapply_interval="none",
         )

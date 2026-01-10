@@ -5,7 +5,12 @@ import '../services/lifestyle_service.dart';
 import 'result_screen.dart';
 
 class SurveyScreen extends StatefulWidget {
-  const SurveyScreen({super.key});
+  final String? originalImageUrl;
+
+  const SurveyScreen({
+    super.key,
+    this.originalImageUrl,
+  });
 
   @override
   State<SurveyScreen> createState() => _SurveyScreenState();
@@ -14,6 +19,20 @@ class SurveyScreen extends StatefulWidget {
 class _SurveyScreenState extends State<SurveyScreen> {
   final _formKey = GlobalKey<FormState>();
   final LifestyleService _lifestyleService = LifestyleService();
+
+  @override
+  void initState() {
+    super.initState();
+    // original_image_url 확인 로그
+    debugPrint('[SurveyScreen] ===== 설문조사 화면 초기화 =====');
+    if (widget.originalImageUrl != null) {
+      debugPrint('[SurveyScreen] ✅ original_image_url 받음: ${widget.originalImageUrl}');
+      debugPrint('[SurveyScreen] ✅ 이미지 URL이 정상적으로 전달되었습니다.');
+    } else {
+      debugPrint('[SurveyScreen] ⚠️ original_image_url이 없습니다.');
+      debugPrint('[SurveyScreen] ⚠️ 이미지 없이 설문조사를 진행합니다.');
+    }
+  }
 
   // Form controllers - 흡연
   String _smokingStatus = '비흡연'; // 비흡연/과거 흡연/현재 흡연
@@ -158,7 +177,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       "drinking_details": drinkingDetailsJson,
       "facial_flushing": _facialFlushing,
       "drinking_duration_years": int.tryParse(_drinkingDurationYearsController.text),
-      "uv_actuvity_hours": uvActivityHoursJson,
+      "uv_activity_hours": uvActivityHoursJson,  // 오타 수정: uv_actuvity_hours -> uv_activity_hours
       "sunscreen_usage": _sunscreenUsage,
       "sunscreen_reapply_interval": _sunscreenReapplyIntervalController.text.isNotEmpty ? _sunscreenReapplyIntervalController.text : null,
       "weight": _weightController.text.isNotEmpty ? double.tryParse(_weightController.text) : null,
@@ -172,18 +191,28 @@ class _SurveyScreenState extends State<SurveyScreen> {
       "body_water": _bodyWaterController.text.isNotEmpty ? double.tryParse(_bodyWaterController.text) : null,
       "visceral_fat_level": _visceralFatLevelController.text.isNotEmpty ? double.tryParse(_visceralFatLevelController.text) : null,
       "target_years": _targetYears.toInt(),
+      // original_image_url 추가
+      if (widget.originalImageUrl != null) "original_image_url": widget.originalImageUrl,
     };
+
+    debugPrint('[SurveyScreen] 설문 데이터 제출 시작');
+    debugPrint('[SurveyScreen] original_image_url 포함: ${widget.originalImageUrl ?? "없음"}');
+    debugPrint('[SurveyScreen] 설문 데이터: $lifestyleData');
 
     // API 호출
     final result = await _lifestyleService.saveLifestyleProfile(lifestyleData);
     
+    debugPrint('[SurveyScreen] 설문 제출 결과: $result');
+    
     if (result['success'] == true) {
+      debugPrint('[SurveyScreen] 설문 제출 성공! ResultScreen으로 이동');
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const ResultScreen()),
         );
       }
     } else {
+      debugPrint('[SurveyScreen] 설문 제출 실패: ${result['message']}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(result['message'] ?? '저장에 실패했습니다.')),
