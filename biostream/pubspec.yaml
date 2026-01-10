@@ -18,6 +18,7 @@ dependencies:
   shared_preferences: ^2.2.2
   device_info_plus: ^10.1.0
   image_picker: ^1.0.7  # 갤러리 및 카메라 이미지 선택용
+  intl: ^0.19.0  # 날짜 포맷팅용
 
 dev_dependencies:
   flutter_test:

@@ -8,17 +8,27 @@ class AuthService {
   final storage = const FlutterSecureStorage();
 
   // 회원가입 요청
-  Future<Map<String, dynamic>> signUp(String email, String password, String nickname) async {
+  Future<Map<String, dynamic>> signUp(
+    String email,
+    String password,
+    String nickname,
+    String birthdate,  // 필수
+    String gender,  // 필수
+  ) async {
     try {
       final origin = await ApiConfig.getBaseOrigin();
+      final body = {
+        "email": email,
+        "password": password,
+        "nickname": nickname,
+        "birthdate": birthdate,
+        "gender": gender,
+      };
+      
       final response = await http.post(
         Uri.parse('$origin/auth/signup'),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "email": email,
-          "password": password,
-          "nickname": nickname,
-        }),
+        body: jsonEncode(body),
       );
       
       if (response.statusCode == 200) {

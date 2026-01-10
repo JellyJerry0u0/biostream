@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import User
 from app.auth.security import hash_password, verify_password, create_access_token
 from pydantic import BaseModel, EmailStr
+from datetime import date
 
 router = APIRouter()
 
@@ -14,6 +15,8 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     nickname: str
+    birthdate: str  # "YYYY-MM-DD" 형식 (필수)
+    gender: str  # "남성", "여성", "기타" 등 (필수)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -33,15 +36,28 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="이미 가입된 이메일입니다.")
     
+    # 생년월일 파싱 (YYYY-MM-DD 형식, 필수)
+    try:
+        birthdate_obj = date.fromisoformat(user_in.birthdate)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"생년월일 형식이 올바르지 않습니다. (YYYY-MM-DD): {str(e)}")
+    
+    # 성별 유효성 검사 (필수)
+    if not user_in.gender or user_in.gender.strip() == "":
+        raise HTTPException(status_code=400, detail="성별을 선택해주세요.")
+    
     # 새 유저 생성 (비밀번호는 반드시 해싱해서 저장)
     new_user = User(
         email=user_in.email,
         hashed_password=hash_password(user_in.password),
-        nickname=user_in.nickname
+        nickname=user_in.nickname,
+        birthdate=birthdate_obj,
+        gender=user_in.gender
     )
     db.add(new_user)
     db.commit()
-    return {"message": "회원가입 성공"}
+    db.refresh(new_user)
+    return {"message": "회원가입 성공", "user_id": new_user.id}
 
 # 2. 로그인 API (토큰 발급)
 @router.post("/login")

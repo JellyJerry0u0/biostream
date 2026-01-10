@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../utils/responsive.dart';
 import 'login_screen.dart';
 import '../services/auth_service.dart';
@@ -15,9 +16,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nicknameController = TextEditingController();
+  final _birthdateController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
+  String? _selectedGender;
+  DateTime? _selectedDate;
 
   @override
   void dispose() {
@@ -25,6 +29,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _nicknameController.dispose();
+    _birthdateController.dispose();
     super.dispose();
   }
 
@@ -39,42 +44,116 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
   }
-final _authService = AuthService(); // 서비스 인스턴스 추가
+
+  final _authService = AuthService(); // 서비스 인스턴스 추가
+
+  Future<void> _selectBirthdate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ??
+          DateTime.now().subtract(const Duration(days: 365 * 25)),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: const Color(0xFF37EC13),
+              onPrimary: Colors.black,
+              surface: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF1C3019)
+                  : Colors.white,
+              onSurface: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : Colors.black87,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _birthdateController.text = DateFormat('yyyy-MM-dd').format(picked);
+      });
+    }
+  }
 
   void _onStartJourney() async {
-  // 1. 유효성 검사
-  if (!_agreeToTerms) {
-    _showSnackBar('약관에 동의해주세요.');
-    return;
-  }
-  if (_passwordController.text != _confirmPasswordController.text) {
-    _showSnackBar('비밀번호가 일치하지 않습니다.');
-    return;
-  }
-  if (_nicknameController.text.isEmpty) {
-    _showSnackBar('닉네임을 입력해주세요.');
-    return;
-  }
+    // 1. 모든 필드 유효성 검사
+    final List<String> missingFields = [];
 
-  // 2. 백엔드 통신 시작
-  final result = await _authService.signUp(
-    _emailController.text.trim(),
-    _passwordController.text,
-    _nicknameController.text.trim(),
-  );
+    if (_emailController.text.trim().isEmpty) {
+      missingFields.add('이메일');
+    }
+    if (_passwordController.text.isEmpty) {
+      missingFields.add('비밀번호');
+    }
+    if (_confirmPasswordController.text.isEmpty) {
+      missingFields.add('비밀번호 확인');
+    }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showSnackBar('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    if (_nicknameController.text.trim().isEmpty) {
+      missingFields.add('닉네임');
+    }
+    if (_birthdateController.text.trim().isEmpty) {
+      missingFields.add('생년월일');
+    }
+    if (_selectedGender == null || _selectedGender!.isEmpty) {
+      missingFields.add('성별');
+    }
+    if (!_agreeToTerms) {
+      missingFields.add('약관 동의');
+    }
 
-  if (result['success']) {
-    _showSnackBar('회원가입 성공! 로그인해주세요.');
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    // 누락된 필드가 있으면 메시지 출력
+    if (missingFields.isNotEmpty) {
+      final message = '다음 항목을 입력해주세요:\n${missingFields.join(', ')}';
+      _showSnackBar(message);
+      return;
+    }
+
+    debugPrint('[SignUpScreen] 회원가입 시작');
+    debugPrint('[SignUpScreen] Email: ${_emailController.text.trim()}');
+    debugPrint('[SignUpScreen] Nickname: ${_nicknameController.text.trim()}');
+    debugPrint('[SignUpScreen] Birthdate: ${_birthdateController.text.trim()}');
+    debugPrint('[SignUpScreen] Gender: $_selectedGender');
+
+    // 2. 백엔드 통신 시작
+    final result = await _authService.signUp(
+      _emailController.text.trim(),
+      _passwordController.text,
+      _nicknameController.text.trim(),
+      _birthdateController.text.trim(),
+      _selectedGender!,
     );
-  } else {
-    _showSnackBar(result['message']);
+
+    debugPrint('[SignUpScreen] 회원가입 결과: $result');
+
+    if (result['success']) {
+      _showSnackBar('회원가입 성공! 로그인해주세요.');
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    } else {
+      _showSnackBar(result['message']);
+    }
   }
-}
-void _showSnackBar(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-}
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   void _onKakaoSignUp() {
     // TODO: Implement Kakao sign up
@@ -594,6 +673,173 @@ void _showSnackBar(String message) {
                                 ),
                               ],
                             ),
+                            SizedBox(height: Responsive.padding(context, 20)),
+                            // Birthdate Field
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: EdgeInsets.only(
+                                    left: Responsive.padding(context, 4),
+                                    bottom: Responsive.padding(context, 8),
+                                  ),
+                                  child: Text(
+                                    'Birthdate',
+                                    style: TextStyle(
+                                      fontSize:
+                                          Responsive.fontSize(context, 14),
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: _selectBirthdate,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? const Color(0xFF1C3019)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? const Color(0xFF2A4225)
+                                            : const Color(0xFFD3E7CF),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal:
+                                          Responsive.padding(context, 20),
+                                      vertical: Responsive.padding(context, 20),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _birthdateController.text.isEmpty
+                                                ? 'YYYY-MM-DD (예: 1990-01-01)'
+                                                : _birthdateController.text,
+                                            style: TextStyle(
+                                              fontSize: Responsive.fontSize(
+                                                  context, 16),
+                                              color: _birthdateController
+                                                      .text.isEmpty
+                                                  ? (isDark
+                                                      ? const Color(0xFF8FC985)
+                                                          .withOpacity(0.5)
+                                                      : const Color(0xFF599A4C)
+                                                          .withOpacity(0.6))
+                                                  : (isDark
+                                                      ? Colors.white
+                                                      : Colors.black87),
+                                            ),
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.calendar_today_outlined,
+                                          color: isDark
+                                              ? const Color(0xFF8FC985)
+                                              : const Color(0xFF599A4C),
+                                          size:
+                                              Responsive.iconSize(context, 20),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: Responsive.padding(context, 20)),
+                            // Gender Field
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: EdgeInsets.only(
+                                    left: Responsive.padding(context, 4),
+                                    bottom: Responsive.padding(context, 8),
+                                  ),
+                                  child: Text(
+                                    'Gender',
+                                    style: TextStyle(
+                                      fontSize:
+                                          Responsive.fontSize(context, 14),
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF1C3019)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? const Color(0xFF2A4225)
+                                          : const Color(0xFFD3E7CF),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: Responsive.padding(context, 4),
+                                    vertical: Responsive.padding(context, 4),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: _GenderOption(
+                                          label: '남성',
+                                          isSelected: _selectedGender == '남성',
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedGender = '남성';
+                                            });
+                                          },
+                                          isDark: isDark,
+                                        ),
+                                      ),
+                                      SizedBox(
+                                          width:
+                                              Responsive.padding(context, 8)),
+                                      Expanded(
+                                        child: _GenderOption(
+                                          label: '여성',
+                                          isSelected: _selectedGender == '여성',
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedGender = '여성';
+                                            });
+                                          },
+                                          isDark: isDark,
+                                        ),
+                                      ),
+                                      SizedBox(
+                                          width:
+                                              Responsive.padding(context, 8)),
+                                      Expanded(
+                                        child: _GenderOption(
+                                          label: '기타',
+                                          isSelected: _selectedGender == '기타',
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedGender = '기타';
+                                            });
+                                          },
+                                          isDark: isDark,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                             SizedBox(height: Responsive.padding(context, 8)),
                             // Terms Checkbox
                             Row(
@@ -878,4 +1124,50 @@ class _KakaoIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Gender Option Widget
+class _GenderOption extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  const _GenderOption({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: Responsive.fontSize(context, 48),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF37EC13) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF37EC13)
+                : (isDark ? const Color(0xFF2A4225) : const Color(0xFFD3E7CF)),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 14),
+            fontWeight: FontWeight.w600,
+            color: isSelected
+                ? Colors.black
+                : (isDark ? Colors.white : Colors.black87),
+          ),
+        ),
+      ),
+    );
+  }
 }
