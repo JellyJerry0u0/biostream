@@ -25,12 +25,43 @@ services:
     container_name: biostream_api
     restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8080:8000"
     environment:
       - DATABASE_URL=postgresql://myuser:mypassword@db:5432/biostream
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}  # Gemini API 키 (선택적, .env 파일에서 로드)
+      # MCP 서버 도구를 사용하기 위한 환경변수
+      - RUNNING_IN_DOCKER=true
+      - DB_HOST_DOCKER=db
+      - DB_USER=myuser
+      - DB_PASSWORD=mypassword
+      - DB_NAME=biostream
+      - DB_PORT=5432
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/app:/app/app  # 코드 변경 시 자동 반영 (개발 환경)
+      - ./backend/mcp_server:/app/mcp_server  # MCP 서버 코드도 반영
 
+  mcp_server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.mcp
+    container_name: biostream_mcp
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - RUNNING_IN_DOCKER=true
+      - DB_HOST_DOCKER=db
+      - DB_USER=myuser
+      - DB_PASSWORD=mypassword
+      - DB_NAME=biostream
+      - DB_PORT=5432
+    # MCP 서버는 stdio를 통해 통신하므로 포트 노출 불필요
+    # 필요시 stdio 기반 통신 설정
 
 volumes:
   postgres_data:

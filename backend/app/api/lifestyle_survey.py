@@ -129,9 +129,15 @@ def create_lifestyle_profile(
     db.commit()
     db.refresh(new_lifestyle)
     
+    print(f"✅ Lifestyle 레코드 저장 완료 - lifestyle_id: {new_lifestyle.id}, user_id: {current_user.id}")
+    
+    # 저장 성공 후 건강 리포트 생성은 클라이언트에서 별도로 호출
+    # (리포트 생성에 시간이 걸릴 수 있으므로 비동기로 처리)
+    
     return {
         "success": True,
         "message": "생활습관 정보가 저장되었습니다.",
-        "lifestyle_id": new_lifestyle.id
+        "lifestyle_id": new_lifestyle.id,
+        "user_id": current_user.id
     }
 

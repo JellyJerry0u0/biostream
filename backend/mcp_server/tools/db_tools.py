@@ -21,12 +21,12 @@ is_docker = os.getenv("RUNNING_IN_DOCKER") == "true"
 
 # 환경에 맞는 호스트 선택
 # 도커 내부라면 서비스 명칭인 'db'를 사용하고, 로컬이면 'localhost'를 사용합니다.
-db_host = os.getenv("DB_HOST_DOCKER") if is_docker else os.getenv("DB_HOST_LOCAL")
-
-db_user = os.getenv("DB_USER")
-db_password = os.getenv("DB_PASSWORD")
-db_name = os.getenv("DB_NAME")
-db_port = os.getenv("DB_PORT")
+# 환경변수가 없을 경우 기본값 사용
+db_host = os.getenv("DB_HOST_DOCKER") if is_docker else os.getenv("DB_HOST_LOCAL", "localhost")
+db_user = os.getenv("DB_USER", "myuser")
+db_password = os.getenv("DB_PASSWORD", "mypassword")
+db_name = os.getenv("DB_NAME", "biostream")
+db_port = os.getenv("DB_PORT", "5432")
 
 DATABASE_URL = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
@@ -45,12 +45,26 @@ def calculate_age(birthdate: date) -> int:
 
 #LLM이 이해하기 쉬운 형식으로 사용자 정보 반환
 def fetch_user_aging_context(user_id:int):
-    from backend.app.models import User, Lifestyle
     """
     MCP 서버 시작 지점이 아닌, Tool이 실제 호출될때 DB 연결
 
     User에서 생년월일과 성별, Lifestyle에서 흡연 및 운동 습관 정보를 조회하여
     """
+    import sys
+    import os
+    
+    # 컨테이너 환경에서 models에 접근하기 위한 경로 설정
+    # /app이 WORKDIR이고, mcp_server는 /app/mcp_server에, models는 /app/app/models.py에 있음
+    # PYTHONPATH가 /app으로 설정되어 있으므로 직접 import 가능
+    try:
+        from app.models import User, Lifestyle
+    except ImportError:
+        # fallback: sys.path에 직접 추가
+        app_path = os.path.join(os.path.dirname(__file__), "../..")
+        app_path = os.path.abspath(app_path)
+        if app_path not in sys.path:
+            sys.path.insert(0, app_path)
+        from app.models import User, Lifestyle
 
     db = SessionLocal()
     try:
@@ -69,18 +83,18 @@ def fetch_user_aging_context(user_id:int):
         #LLM이 이해하기 쉬운 형식으로 데이터 구성
         return{
             "profile":{ #User 테이블에서 가져온 변하지 않는 정보
-                "age": f"{calculate_age(user.birthdate)} years",
+                "age": f"{calculate_age(user.birthdate)} years" if user.birthdate else None,
                 "gender": user.gender
             },
             "lifestyle":{ #listyle 테이블에서 가져온 최근 설문 정보 중 생활습관에 관련된 정보
                 "smoking":{
                     "smoking_status": lifestyle.smoking_status,
-                    "smoking_amount_per_day": f"{lifestyle.smoking_amount} cigarettes",
-                    "smoking_duration_years": f"{lifestyle.smoking_duration} years"
+                    "smoking_amount_per_day": f"{lifestyle.smoking_amount} cigarettes" if lifestyle.smoking_amount else None,
+                    "smoking_duration_years": f"{lifestyle.smoking_duration} years" if lifestyle.smoking_duration else None
                 },
                 "exercise":{
                     "daily_exercise_minutes": f"{lifestyle.exercise_daily_mins} minutes",
-                    "weekly_exercise_frequency": {lifestyle.exercise_freq_per_week},
+                    "weekly_exercise_frequency": lifestyle.exercise_freq_per_week,
                     "exercise_intensity": lifestyle.exercise_intensity,
                     "exercise_type": lifestyle.exercise_type,
                     "sedentary_hours_per_day": f"{lifestyle.sedentary_hours_per_day} hours",
@@ -99,7 +113,7 @@ def fetch_user_aging_context(user_id:int):
                     "drinking_frequency": lifestyle.drinking_frequency,
                     "drinking_details": lifestyle.drinking_details,
                     "facial_flushing": lifestyle.facial_flushing,
-                    "drinking_duration_years": f"{lifestyle.drinking_duration_years} years"
+                    "drinking_duration_years": f"{lifestyle.drinking_duration_years} years" if lifestyle.drinking_duration_years else None
                 },
                 "uv":{
                     "uv_activity_hours": lifestyle.uv_activity_hours,
@@ -110,18 +124,22 @@ def fetch_user_aging_context(user_id:int):
 
             },
             "bodystate":{ #Lifestyle 테이블에서 가져온 최근 설문 정보 중 신체 상태에 관련된 정보
-                "weight_kg": f"{lifestyle.weight}kg", #단위 명시
-                "height_cm": f"{lifestyle.height}cm", #단위 명시
-                "muscle_mass_kg": f"{lifestyle.muscle_mass}kg", #단위 명시
-                "body_fat_mass_kg": f"{lifestyle.body_fat_mass}kg", #단위 명시
-                "body_fat_percentage": f"{lifestyle.body_fat_percentage}%", #단위 명시
+                "weight_kg": f"{lifestyle.weight}kg" if lifestyle.weight else None, #단위 명시
+                "height_cm": f"{lifestyle.height}cm" if lifestyle.height else None, #단위 명시
+                "muscle_mass_kg": f"{lifestyle.muscle_mass}kg" if lifestyle.muscle_mass else None, #단위 명시
+                "body_fat_mass_kg": f"{lifestyle.body_fat_mass}kg" if lifestyle.body_fat_mass else None, #단위 명시
+                "body_fat_percentage": f"{lifestyle.body_fat_percentage}%" if lifestyle.body_fat_percentage else None, #단위 명시
                 "bmi": lifestyle.bmi, #단위 없음
-                "bmr": f"{lifestyle.bmr} kcal", #기초대사량 단위는 kcal로 고정
+                "bmr": f"{lifestyle.bmr} kcal" if lifestyle.bmr else None, #기초대사량 단위는 kcal로 고정
                 "whr": lifestyle.whr, 
-                "body_water": f"{lifestyle.body_water}L", #단위 명시
-                "visceral_fat_level": f"{lifestyle.visceral_fat_level}Lv",
+                "body_water": f"{lifestyle.body_water}L" if lifestyle.body_water else None, #단위 명시
+                "visceral_fat_level": f"{lifestyle.visceral_fat_level}Lv" if lifestyle.visceral_fat_level else None,
             },
-            "target_age": f"{lifestyle.target_years} years after" #몇년후로 가고 싶은지
+            "target_age": f"{lifestyle.target_years} years after" if lifestyle.target_years else None, #몇년후로 가고 싶은지
+            "images": {
+                "original_image_url": lifestyle.original_image_url,  # 원본 이미지 경로
+                "generated_image_url": lifestyle.generated_image_url  # 생성된 이미지 경로
+            }
 
         }
     except OperationalError as e:

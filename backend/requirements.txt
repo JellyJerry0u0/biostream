@@ -7,3 +7,5 @@ python-jose[cryptography]  # JWT 생성 및 검증용
 python-multipart   # 폼 데이터 처리용
 email-validator
 bcrypt==4.0.1
+google-generativeai>=0.3.0  # Gemini API 호출용 (최신 모델 지원)
+httpx  # HTTP 클라이언트
