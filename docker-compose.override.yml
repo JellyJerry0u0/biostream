@@ -3,7 +3,7 @@ services:
   mcp-server:
     build:
       context: ./backend
-      dockerfile: mcp_server/Dockerfile.mcp
+      dockerfile: Dockerfile.mcp
     container_name: biostream_mcp
     restart: always
     env_file: backend/.env
