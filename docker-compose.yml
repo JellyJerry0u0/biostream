@@ -19,7 +19,7 @@ services:
       retries: 5  
 
   backend:
-    build:
+    build: 
       context: ./backend
       dockerfile: Dockerfile.api
     container_name: biostream_api
