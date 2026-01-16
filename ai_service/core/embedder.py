@@ -12,7 +12,7 @@ class BioEmbedder:
     def __init__(self):
         # 모델 세팅
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-001",
+            model="models/text-embedding-004",
             google_api_key=os.getenv("GOOGLE_API_KEY")
         )
 

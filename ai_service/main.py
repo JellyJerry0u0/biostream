@@ -72,3 +72,13 @@ def run_ingestion(file_path: str):
     except Exception as e:
         logger.error(f"오류 발생: {str(e)}")
         raise
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("사용법: python main.py <파일_경로>")
+        print("예: python main.py sample_dataset.json")
+        sys.exit(1)
+    
+    file_path = sys.argv[1]
+    run_ingestion(file_path)
