@@ -39,15 +39,28 @@ def test_search(query: str, collection_name: str = None, limit: int = 3):
             with_vectors=False  # 벡터 데이터는 제외
         ).points
 
-        # 3. 결과 출력
+        # 3. 결과 출력 및 분석
         logger.info(f"검색 결과 ({len(search_results)}개):")
         for i, result in enumerate(search_results, 1):
             logger.info(f"\n--- 결과 {i} ---")
             logger.info(f"ID: {result.id}")
             logger.info(f"점수 (유사도): {result.score:.4f}")
-            logger.info("Payload (메타데이터):")
+            
+            # 텍스트 내용 출력 (text 필드)
+            text_content = result.payload.get('text', 'N/A')
+            logger.info(f"텍스트 내용: {text_content[:200]}...")  # 처음 200자만 출력
+            
+            # 메타데이터 출력
+            logger.info("메타데이터:")
             for key, value in result.payload.items():
-                logger.info(f"  {key}: {value}")
+                if key != 'text':  # text는 이미 출력했으므로 제외
+                    logger.info(f"  {key}: {value}")
+            
+            # 쿼리와의 키워드 매칭 분석 (간단한 방법)
+            query_keywords = set(query.lower().split())
+            text_keywords = set(text_content.lower().split())
+            matching_keywords = query_keywords.intersection(text_keywords)
+            logger.info(f"쿼리 키워드 매칭: {len(matching_keywords)}/{len(query_keywords)} ({', '.join(matching_keywords) if matching_keywords else '없음'})")
 
         return search_results
 
