@@ -16,10 +16,12 @@ class BioEmbedder:
             google_api_key=os.getenv("GOOGLE_API_KEY")
         )
 
+#검색 쿼리나 단일 문서에 사용 
     def embed_text(self, text: str):
         """단일 문장을 벡터로 변환합니다."""
         return self.embeddings.embed_query(text)
-
+    
+#여러 텍스트를 배치로 임베딩
     def embed_documents(self, texts: list):
         """여러 문서(청크)를 한꺼번에 벡터로 변환합니다."""
         return self.embeddings.embed_documents(texts)

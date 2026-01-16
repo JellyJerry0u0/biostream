@@ -63,5 +63,16 @@ services:
     # MCP 서버는 stdio를 통해 통신하므로 포트 노출 불필요
     # 필요시 stdio 기반 통신 설정
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: biostream_qdrant
+    restart: always
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
 volumes:
   postgres_data:
+  qdrant_data:

@@ -73,12 +73,60 @@ def run_ingestion(file_path: str):
         logger.error(f"오류 발생: {str(e)}")
         raise
 
+def view_qdrant_data(collection_name: str = None, limit: int = 5):
+    """
+    Qdrant에 저장된 데이터를 조회합니다.
+    """
+    if collection_name is None:
+        collection_name = os.getenv("COLLECTION_NAME", "biostream_v1")
+    
+    q_client = QdrantClient(os.getenv("QDRANT_URL", "http://localhost:6333"))
+    
+    try:
+        # 컬렉션 정보 확인
+        collection_info = q_client.get_collection(collection_name)
+        logger.info(f"컬렉션 '{collection_name}' 정보: {collection_info}")
+        
+        # 포인트 조회 (스크롤)
+        points, next_page = q_client.scroll(
+            collection_name=collection_name,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False  # 벡터는 길어서 제외
+        )
+        
+        logger.info(f"처음 {len(points)}개의 포인트 조회:")
+        for point in points:
+            logger.info(f"ID: {point.id}, Payload: {point.payload}")
+        
+        return points
+    
+    except Exception as e:
+        logger.error(f"조회 중 오류: {str(e)}")
+        raise
+
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 2:
-        print("사용법: python main.py <파일_경로>")
-        print("예: python main.py sample_dataset.json")
+    if len(sys.argv) < 2:
+        print("사용법: python main.py <명령> [인자]")
+        print("명령:")
+        print("  ingest <파일_경로>  : 데이터 적재")
+        print("  view [컬렉션_이름]   : 데이터 조회 (기본 5개)")
         sys.exit(1)
     
-    file_path = sys.argv[1]
-    run_ingestion(file_path)
+    command = sys.argv[1]
+    
+    if command == "ingest":
+        if len(sys.argv) != 3:
+            print("사용법: python main.py ingest <파일_경로>")
+            sys.exit(1)
+        file_path = sys.argv[2]
+        run_ingestion(file_path)
+    
+    elif command == "view":
+        collection_name = sys.argv[2] if len(sys.argv) > 2 else None
+        view_qdrant_data(collection_name)
+    
+    else:
+        print(f"알 수 없는 명령: {command}")
+        sys.exit(1)
