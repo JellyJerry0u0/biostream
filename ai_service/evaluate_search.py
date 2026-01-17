@@ -105,31 +105,65 @@ def analyze_results(lifestyle: str, results: list):
                 logger.info(f"  {direction}: {count}개")
 
         # 영향 평가
-        evaluate_impact(lifestyle, effect_directions, relevant_results)
+        evaluate_impact(lifestyle, effect_directions, relevant_results, evidence_levels)
     else:
         logger.info(f"{lifestyle}의 노화 영향에 대한 충분한 증거를 찾을 수 없습니다.")
 
-def evaluate_impact(lifestyle: str, effect_directions: dict, total_relevant: int):
+def evaluate_impact(lifestyle: str, effect_directions: dict, total_relevant: int, evidence_levels: dict):
     """
-    생활습관의 노화 영향을 평가합니다.
+    생활습관의 노화 영향을 평가합니다. (개선된 버전)
     """
+    logger.info(f"\n=== {lifestyle} 노화 영향 평가 (개선 버전) ===")
+
     increase = effect_directions.get("increase", 0)
     decrease = effect_directions.get("decrease", 0)
+    no_effect = effect_directions.get("no_effect", 0)
+    unknown = effect_directions.get("unknown", 0)
 
-    logger.info(f"\n=== {lifestyle} 노화 영향 평가 ===")
-
+    # 1. 기본 신뢰도 계산
     if increase > decrease:
         impact = "노화 촉진"
-        confidence = (increase - decrease) / total_relevant
+        base_confidence = (increase - decrease) / total_relevant
     elif decrease > increase:
         impact = "노화 억제"
-        confidence = (decrease - increase) / total_relevant
+        base_confidence = (decrease - increase) / total_relevant
     else:
         impact = "불명확"
-        confidence = 0
+        base_confidence = 0
+
+    # 2. 데이터 양 보정 (최소 3개 이상의 증거 필요)
+    if total_relevant < 3:
+        base_confidence *= 0.5  # 데이터 부족 시 신뢰도 절반
+        logger.warning(f"⚠️ 데이터 부족: {total_relevant}개 증거 (최소 3개 권장)")
+
+    # 3. 일관성 점수 계산 (증거의 일관성)
+    total_directional = increase + decrease
+    if total_directional > 0:
+        consistency = max(increase, decrease) / total_directional
+        final_confidence = base_confidence * consistency  # 일관성 반영
+    else:
+        consistency = 0
+        final_confidence = base_confidence
 
     logger.info(f"예상 영향: {impact}")
-    logger.info(f"신뢰도: {confidence:.2f} (증거 기반)")
+    logger.info(f"기본 신뢰도: {base_confidence:.2f}")
+    logger.info(f"최종 신뢰도: {final_confidence:.2f} (일관성 반영)")
+    logger.info(f"증거 일관성: {consistency:.2f}")
+    logger.info(f"총 증거 수: {total_relevant}")
+
+    # 신뢰도 등급
+    if final_confidence >= 0.8:
+        grade = "매우 높음 (A)"
+    elif final_confidence >= 0.6:
+        grade = "높음 (B)"
+    elif final_confidence >= 0.4:
+        grade = "중간 (C)"
+    elif final_confidence >= 0.2:
+        grade = "낮음 (D)"
+    else:
+        grade = "매우 낮음 (F)"
+
+    logger.info(f"신뢰도 등급: {grade}")
 
     # 권장사항
     if impact == "노화 촉진":
@@ -138,6 +172,14 @@ def evaluate_impact(lifestyle: str, effect_directions: dict, total_relevant: int
         logger.info(f"💡 {lifestyle}을(를) 유지/증가시키는 것이 노화 예방에 도움이 될 수 있습니다.")
     else:
         logger.info(f"💡 {lifestyle}의 노화 영향에 대한 추가 연구가 필요합니다.")
+
+    return {
+        'impact': impact,
+        'confidence': final_confidence,
+        'grade': grade,
+        'evidence_count': total_relevant,
+        'consistency': consistency
+    }
 
 def interactive_lifestyle_analysis():
     """
