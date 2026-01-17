@@ -2,29 +2,34 @@
 
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from qdrant_client.models import PointStruct
+from openai import OpenAI
 
 # .env 파일 로드
 load_dotenv()
 
 class BioEmbedder:
     def __init__(self):
-        # 모델 세팅
-        self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
-            google_api_key=os.getenv("GOOGLE_API_KEY")
-        )
+        # OpenAI 임베딩 모델 사용 (3072차원)
+        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.model = "text-embedding-3-large"
 
 #검색 쿼리나 단일 문서에 사용 
     def embed_text(self, text: str):
         """단일 문장을 벡터로 변환합니다."""
-        return self.embeddings.embed_query(text)
+        response = self.client.embeddings.create(
+            input=text,
+            model=self.model
+        )
+        return response.data[0].embedding
     
 #여러 텍스트를 배치로 임베딩
     def embed_documents(self, texts: list):
         """여러 문서(청크)를 한꺼번에 벡터로 변환합니다."""
-        return self.embeddings.embed_documents(texts)
+        response = self.client.embeddings.create(
+            input=texts,
+            model=self.model
+        )
+        return [data.embedding for data in response.data]
     
 
     #JSON/CSV 데이터를 읽어, text 필드는 백터로 만들고 나머지 25개 필드는 payload로 묶어 Qdrant 포인트 리스트 생성

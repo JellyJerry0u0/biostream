@@ -4,3 +4,4 @@ python-dotenv
 qdrant-client
 pandas
 openpyxl
+langgraph
