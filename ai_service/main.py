@@ -125,6 +125,7 @@ if __name__ == "__main__":
         print("명령:")
         print("  ingest <파일_경로>  : 데이터 적재")
         print("  view [컬렉션_이름]   : 데이터 조회 (기본 5개)")
+        print("  reset               : 컬렉션 삭제 후 재생성")
         sys.exit(1)
     
     command = sys.argv[1]
@@ -139,6 +140,22 @@ if __name__ == "__main__":
     elif command == "view":
         collection_name = sys.argv[2] if len(sys.argv) > 2 else None
         view_qdrant_data(collection_name)
+    
+    elif command == "reset":
+        # Qdrant 클라이언트 연결
+        client = QdrantClient(url="http://localhost:6333")
+        collection_name = "biostream_v1"
+        
+        # 기존 컬렉션 삭제
+        try:
+            client.delete_collection(collection_name)
+            print(f"✅ 컬렉션 '{collection_name}' 삭제 완료")
+        except Exception as e:
+            print(f"⚠️ 컬렉션 삭제 실패 (없을 수 있음): {e}")
+        
+        # 새 컬렉션 생성
+        setup_qdrant_collection(client, collection_name)
+        print(f"✅ 컬렉션 '{collection_name}' 재생성 완료 (768차원)")
     
     else:
         print(f"알 수 없는 명령: {command}")
