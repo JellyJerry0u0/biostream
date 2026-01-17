@@ -3,7 +3,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
 def setup_qdrant_collection(client: QdrantClient, collection_name: str):
-    # 3072차원, 코사인 유사도 설정 (text-embedding-004 기준)
+    # gemini-embedding-001 기본 차원(3072)에 맞춰 설정
     client.recreate_collection(
         collection_name=collection_name,
         vectors_config=VectorParams(size=3072, distance=Distance.COSINE),

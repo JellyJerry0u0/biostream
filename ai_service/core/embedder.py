@@ -12,7 +12,7 @@ class BioEmbedder:
     def __init__(self):
         # 모델 세팅
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key=os.getenv("GOOGLE_API_KEY")
         )
 
@@ -39,8 +39,8 @@ class BioEmbedder:
                 # 1. 'text' 필드만 추출하여 임베딩 (핵심 지식)
                 vector = self.embed_text(record['text'])
                 
-                # 2. 나머지 모든 필드는 payload(메타데이터)로 처리
-                payload = {k: v for k, v in record.items() if k != 'text'}
+                # 2. 모든 필드를 payload(메타데이터)로 처리 (text 포함)
+                payload = dict(record)
                 
                 # 3. Qdrant 포인트 생성 (ID는 record의 'id' 필드 또는 인덱스 사용)
                 point_id = record.get('id', i)
