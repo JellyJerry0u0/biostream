@@ -9,55 +9,48 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# 입력을 위한 데이터 모델 (Lifestyle 테이블 스키마에 맞춤)
+# 입력을 위한 데이터 모델 (새로운 설문 구조)
 class LifestyleSurveyCreate(BaseModel):
-    # 흡연
-    smoking_status: str  # 비흡연/과거 흡연/현재 흡연
-    smoking_amount: Optional[int] = None
-    smoking_duration: Optional[int] = None
+    # A. 주요 목표 (리포트 톤 라우팅) - multi choice
+    outcomes: Optional[List[str]] = None  # ["wrinkle", "pigmentation", "hydration", "acne", "redness", "general_aging"]
     
-    # 운동
-    exercise_daily_mins: int
-    exercise_freq_per_week: int
-    exercise_intensity: str  # 저강도/중강도/고강도
-    exercise_type: str  # 유산소/무산소/기타/안함
-    sedentary_hours_per_day: float
-    exercise_regularity: str  # 규칙적/불규칙적
-    exercise_duration_years: int
-    stretching_habit: bool
-    excercise_location: str  # 실내/실외/혼합
+    # B. Sleep & Rhythm (5)
+    sleep_hours_weekday: Optional[float] = None  # 평균 수면시간(평일) 3~10h
+    sleep_hours_weekend: Optional[float] = None  # 평균 수면시간(주말)
+    sleep_quality_score: Optional[float] = None  # 수면의 질(주관) 0~10
     
-    # 수면
-    sleep_hours: float
-    sleep_quality: str  # 매우 좋음/좋음/보통/나쁨/매우 나쁨
-    sleep_disorders: str  # 무/코골이/수면무호흡증/불면증/기타
-    sleep_consistency: str  # 규칙적/불규칙적
+    # C. UV / Photoaging (4)
+    uv_exposure_10to16: Optional[str] = None  # 야외 노출(10~16시): <30m / 30~60 / 1~2h / >2h
+    sunscreen_frequency: Optional[str] = None  # 선크림 사용 빈도: never/sometimes/most_days/daily_with_reapply
+    sunscreen_reapply: Optional[str] = None  # 재도포(2~3시간 간격): never/rarely/sometimes/often
+    outdoor_sports_uv: Optional[str] = None  # 야외스포츠(강한 UV): none/monthly/weekly
     
-    # 음주
-    drinking_frequency: str  # 비음주/가끔/주1-2회/주3-4회/매일/기타
-    drinking_details: Optional[List[Dict[str, Any]]] = None  # JSON 형식
-    facial_flushing: bool
-    drinking_duration_years: Optional[int] = None
+    # D. Alcohol & Smoking (4)
+    drinking_days_per_week: Optional[str] = None  # 주당 음주일수: 0 / 1 / 2-3 / 4-5 / 6-7
+    drinking_amount_per_session: Optional[str] = None  # 1회 음주량 (문자열)
+    smoking_status: Optional[str] = None  # never/former/current
+    smoking_amount_per_day: Optional[str] = None  # current일 경우: 갑/개비
     
-    # 야외 활동 및 자외선 노출
-    uv_activity_hours: Optional[List[str]] = None  # JSON 형식 ["12:00~12:30", ...]
-    sunscreen_usage: str  # 매일/가끔/안함
-    sunscreen_reapply_interval: Optional[str] = None
+    # E. Stress & Recovery (4)
+    stress_score: Optional[float] = None  # 스트레스(지난 2주) 0~10
+    caffeine_intake: Optional[str] = None  # 카페인 섭취량: 0 / 1 / 2 / 3+
+    caffeine_timing: Optional[str] = None  # 카페인 섭취 시간대: before_noon / afternoon / evening
     
-    # 체성분 데이터 (선택적)
-    weight: Optional[float] = None
-    height: Optional[float] = None
-    muscle_mass: Optional[float] = None
-    body_fat_mass: Optional[float] = None
-    body_fat_percentage: Optional[float] = None
-    bmi: Optional[float] = None
-    bmr: Optional[float] = None
-    whr: Optional[float] = None
-    body_water: Optional[float] = None
-    visceral_fat_level: Optional[float] = None
+    # F. Activity & Metabolic (3)
+    aerobic_weekly: Optional[str] = None  # 유산소(주당): 0 / 1-2 / 3-4 / 5+
+    resistance_weekly: Optional[str] = None  # 근력(주당): 0 / 1 / 2 / 3+
+    height: Optional[float] = None  # 키
+    weight: Optional[float] = None  # 몸무게
+    
+    # Skin 상태 (3문항)
+    skin_type: Optional[str] = None  # 피부 타입: dry/oily/combination/sensitive
+    skin_concerns: Optional[List[str]] = None  # 주요 피부 고민: ["wrinkle", "pigmentation", "elasticity", "dryness", "redness", "acne"]
+    skin_satisfaction: Optional[float] = None  # 현재 피부상태 만족도 0~10
     
     # 목표 연도
     target_years: int
+    # 이미지 URL (기존 호환성)
+    original_image_url: Optional[str] = None
 
 def get_current_user(authorization: Optional[str] = None, db: Session = Depends(get_db)):
     if not authorization:
@@ -89,40 +82,30 @@ def create_lifestyle_profile(
     # Lifestyle 레코드 생성
     new_lifestyle = Lifestyle(
         user_id=current_user.id,
+        outcomes=profile_data.outcomes,
+        sleep_hours_weekday=profile_data.sleep_hours_weekday,
+        sleep_hours_weekend=profile_data.sleep_hours_weekend,
+        sleep_quality_score=profile_data.sleep_quality_score,
+        uv_exposure_10to16=profile_data.uv_exposure_10to16,
+        sunscreen_frequency=profile_data.sunscreen_frequency,
+        sunscreen_reapply=profile_data.sunscreen_reapply,
+        outdoor_sports_uv=profile_data.outdoor_sports_uv,
+        drinking_days_per_week=profile_data.drinking_days_per_week,
+        drinking_amount_per_session=profile_data.drinking_amount_per_session,
         smoking_status=profile_data.smoking_status,
-        smoking_amount=profile_data.smoking_amount,
-        smoking_duration=profile_data.smoking_duration,
-        exercise_daily_mins=profile_data.exercise_daily_mins,
-        exercise_freq_per_week=profile_data.exercise_freq_per_week,
-        exercise_intensity=profile_data.exercise_intensity,
-        exercise_type=profile_data.exercise_type,
-        sedentary_hours_per_day=profile_data.sedentary_hours_per_day,
-        exercise_regularity=profile_data.exercise_regularity,
-        exercise_duration_years=profile_data.exercise_duration_years,
-        stretching_habit=profile_data.stretching_habit,
-        excercise_location=profile_data.excercise_location,
-        sleep_hours=profile_data.sleep_hours,
-        sleep_quality=profile_data.sleep_quality,
-        sleep_disorders=profile_data.sleep_disorders,
-        sleep_consistency=profile_data.sleep_consistency,
-        drinking_frequency=profile_data.drinking_frequency,
-        drinking_details=profile_data.drinking_details,
-        facial_flushing=profile_data.facial_flushing,
-        drinking_duration_years=profile_data.drinking_duration_years,
-        uv_activity_hours=profile_data.uv_activity_hours,
-        sunscreen_usage=profile_data.sunscreen_usage,
-        sunscreen_reapply_interval=profile_data.sunscreen_reapply_interval,
-        weight=profile_data.weight,
+        smoking_amount_per_day=profile_data.smoking_amount_per_day,
+        stress_score=profile_data.stress_score,
+        caffeine_intake=profile_data.caffeine_intake,
+        caffeine_timing=profile_data.caffeine_timing,
+        aerobic_weekly=profile_data.aerobic_weekly,
+        resistance_weekly=profile_data.resistance_weekly,
         height=profile_data.height,
-        muscle_mass=profile_data.muscle_mass,
-        body_fat_mass=profile_data.body_fat_mass,
-        body_fat_percentage=profile_data.body_fat_percentage,
-        bmi=profile_data.bmi,
-        bmr=profile_data.bmr,
-        whr=profile_data.whr,
-        body_water=profile_data.body_water,
-        visceral_fat_level=profile_data.visceral_fat_level,
+        weight=profile_data.weight,
+        skin_type=profile_data.skin_type,
+        skin_concerns=profile_data.skin_concerns,
+        skin_satisfaction=profile_data.skin_satisfaction,
         target_years=profile_data.target_years,
+        original_image_url=profile_data.original_image_url,
     )
     
     db.add(new_lifestyle)

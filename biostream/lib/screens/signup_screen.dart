@@ -21,6 +21,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
   String? _selectedGender;
+  bool? _isPregnant; // 임신 여부 (여성일 경우에만 사용)
   DateTime? _selectedDate;
 
   @override
@@ -131,6 +132,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _nicknameController.text.trim(),
       _birthdateController.text.trim(),
       _selectedGender!,
+      _selectedGender == '여성' ? _isPregnant : null, // 여성일 경우에만 임신 여부 전달
     );
 
     debugPrint('[SignUpScreen] 회원가입 결과: $result');
@@ -800,6 +802,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                           onTap: () {
                                             setState(() {
                                               _selectedGender = '남성';
+                                              _isPregnant = null; // 남성 선택 시 임신 여부 초기화
                                             });
                                           },
                                           isDark: isDark,
@@ -815,6 +818,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                           onTap: () {
                                             setState(() {
                                               _selectedGender = '여성';
+                                              // 여성이 아닌 다른 성별 선택 시 임신 여부 초기화
                                             });
                                           },
                                           isDark: isDark,
@@ -830,6 +834,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                           onTap: () {
                                             setState(() {
                                               _selectedGender = '기타';
+                                              _isPregnant = null; // 기타 선택 시 임신 여부 초기화
                                             });
                                           },
                                           isDark: isDark,
@@ -840,6 +845,80 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 ),
                               ],
                             ),
+                            // 임신 여부 필드 (여성 선택 시에만 표시)
+                            if (_selectedGender == '여성') ...[
+                              SizedBox(height: Responsive.padding(context, 20)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      left: Responsive.padding(context, 4),
+                                      bottom: Responsive.padding(context, 8),
+                                    ),
+                                    child: Text(
+                                      '임신 여부',
+                                      style: TextStyle(
+                                        fontSize:
+                                            Responsive.fontSize(context, 14),
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? const Color(0xFF1C3019)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? const Color(0xFF2A4225)
+                                            : const Color(0xFFD3E7CF),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: Responsive.padding(context, 4),
+                                      vertical: Responsive.padding(context, 4),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: _PregnancyOption(
+                                            label: '임신 아님',
+                                            isSelected: _isPregnant == false,
+                                            onTap: () {
+                                              setState(() {
+                                                _isPregnant = false;
+                                              });
+                                            },
+                                            isDark: isDark,
+                                          ),
+                                        ),
+                                        SizedBox(
+                                            width: Responsive.padding(context, 8)),
+                                        Expanded(
+                                          child: _PregnancyOption(
+                                            label: '임신 중',
+                                            isSelected: _isPregnant == true,
+                                            onTap: () {
+                                              setState(() {
+                                                _isPregnant = true;
+                                              });
+                                            },
+                                            isDark: isDark,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                             SizedBox(height: Responsive.padding(context, 8)),
                             // Terms Checkbox
                             Row(
@@ -1124,6 +1203,52 @@ class _KakaoIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Pregnancy Option Widget
+class _PregnancyOption extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  const _PregnancyOption({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: Responsive.fontSize(context, 48),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF37EC13) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF37EC13)
+                : (isDark ? const Color(0xFF2A4225) : const Color(0xFFD3E7CF)),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 14),
+            fontWeight: FontWeight.w600,
+            color: isSelected
+                ? Colors.black
+                : (isDark ? Colors.white : Colors.black87),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // Gender Option Widget

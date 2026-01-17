@@ -80,60 +80,59 @@ def fetch_user_aging_context(user_id:int):
         
      
 
-        #LLM이 이해하기 쉬운 형식으로 데이터 구성
-        return{
+        # 디버깅: DB에서 조회된 원본 데이터 출력
+        print(f"🔍 [DB 조회] User ID: {user.id}, Lifestyle ID: {lifestyle.id}")
+        print(f"🔍 [DB 조회] sleep_hours_weekday: {lifestyle.sleep_hours_weekday}")
+        print(f"🔍 [DB 조회] sleep_quality_score: {lifestyle.sleep_quality_score}")
+        print(f"🔍 [DB 조회] stress_score: {lifestyle.stress_score}")
+        print(f"🔍 [DB 조회] smoking_status: {lifestyle.smoking_status}")
+        print(f"🔍 [DB 조회] outcomes: {lifestyle.outcomes}")
+        
+        #LLM이 이해하기 쉬운 형식으로 데이터 구성 (새로운 모델 구조에 맞게 수정)
+        result = {
             "profile":{ #User 테이블에서 가져온 변하지 않는 정보
                 "age": f"{calculate_age(user.birthdate)} years" if user.birthdate else None,
                 "gender": user.gender
             },
-            "lifestyle":{ #listyle 테이블에서 가져온 최근 설문 정보 중 생활습관에 관련된 정보
+            "lifestyle":{ #Lifestyle 테이블에서 가져온 최근 설문 정보 중 생활습관에 관련된 정보
+                "outcomes": lifestyle.outcomes if lifestyle.outcomes else None,
                 "smoking":{
                     "smoking_status": lifestyle.smoking_status,
-                    "smoking_amount_per_day": f"{lifestyle.smoking_amount} cigarettes" if lifestyle.smoking_amount else None,
-                    "smoking_duration_years": f"{lifestyle.smoking_duration} years" if lifestyle.smoking_duration else None
-                },
-                "exercise":{
-                    "daily_exercise_minutes": f"{lifestyle.exercise_daily_mins} minutes",
-                    "weekly_exercise_frequency": lifestyle.exercise_freq_per_week,
-                    "exercise_intensity": lifestyle.exercise_intensity,
-                    "exercise_type": lifestyle.exercise_type,
-                    "sedentary_hours_per_day": f"{lifestyle.sedentary_hours_per_day} hours",
-                    "exercise_regularity": lifestyle.exercise_regularity,
-                    "exercise_duration_years": f"{lifestyle.exercise_duration_years} years",
-                    "stretching_habit": lifestyle.stretching_habit,
-                    "exercise_location": lifestyle.excercise_location
+                    "smoking_amount_per_day": lifestyle.smoking_amount_per_day if lifestyle.smoking_amount_per_day else None,
                 },
                 "sleep":{
-                    "average_sleep_hours": f"{lifestyle.sleep_hours} hours",
-                    "sleep_quality": lifestyle.sleep_quality,
-                    "sleep_disorders": lifestyle.sleep_disorders,
-                    "sleep_consistency": lifestyle.sleep_consistency
-                },
-                "drinking":{
-                    "drinking_frequency": lifestyle.drinking_frequency,
-                    "drinking_details": lifestyle.drinking_details,
-                    "facial_flushing": lifestyle.facial_flushing,
-                    "drinking_duration_years": f"{lifestyle.drinking_duration_years} years" if lifestyle.drinking_duration_years else None
+                    "sleep_hours_weekday": f"{lifestyle.sleep_hours_weekday} hours" if lifestyle.sleep_hours_weekday is not None else None,
+                    "sleep_hours_weekend": f"{lifestyle.sleep_hours_weekend} hours" if lifestyle.sleep_hours_weekend is not None else None,
+                    "sleep_quality_score": f"{lifestyle.sleep_quality_score}/10" if lifestyle.sleep_quality_score is not None else None
                 },
                 "uv":{
-                    "uv_activity_hours": lifestyle.uv_activity_hours,
-                    "sunscreen_usage": lifestyle.sunscreen_usage,
-                    "sunscreen_reapply_interval": lifestyle.sunscreen_reapply_interval
+                    "uv_exposure_10to16": lifestyle.uv_exposure_10to16,
+                    "sunscreen_frequency": lifestyle.sunscreen_frequency,
+                    "sunscreen_reapply": lifestyle.sunscreen_reapply,
+                    "outdoor_sports_uv": lifestyle.outdoor_sports_uv
+                },
+                "drinking":{
+                    "drinking_days_per_week": lifestyle.drinking_days_per_week,
+                    "drinking_amount_per_session": lifestyle.drinking_amount_per_session
+                },
+                "stress":{
+                    "stress_score": f"{lifestyle.stress_score}/10" if lifestyle.stress_score is not None else None,
+                    "caffeine_intake": lifestyle.caffeine_intake,
+                    "caffeine_timing": lifestyle.caffeine_timing
+                },
+                "activity":{
+                    "aerobic_weekly": lifestyle.aerobic_weekly,
+                    "resistance_weekly": lifestyle.resistance_weekly
                 }
-                
-
             },
             "bodystate":{ #Lifestyle 테이블에서 가져온 최근 설문 정보 중 신체 상태에 관련된 정보
-                "weight_kg": f"{lifestyle.weight}kg" if lifestyle.weight else None, #단위 명시
-                "height_cm": f"{lifestyle.height}cm" if lifestyle.height else None, #단위 명시
-                "muscle_mass_kg": f"{lifestyle.muscle_mass}kg" if lifestyle.muscle_mass else None, #단위 명시
-                "body_fat_mass_kg": f"{lifestyle.body_fat_mass}kg" if lifestyle.body_fat_mass else None, #단위 명시
-                "body_fat_percentage": f"{lifestyle.body_fat_percentage}%" if lifestyle.body_fat_percentage else None, #단위 명시
-                "bmi": lifestyle.bmi, #단위 없음
-                "bmr": f"{lifestyle.bmr} kcal" if lifestyle.bmr else None, #기초대사량 단위는 kcal로 고정
-                "whr": lifestyle.whr, 
-                "body_water": f"{lifestyle.body_water}L" if lifestyle.body_water else None, #단위 명시
-                "visceral_fat_level": f"{lifestyle.visceral_fat_level}Lv" if lifestyle.visceral_fat_level else None,
+                "weight_kg": f"{lifestyle.weight}kg" if lifestyle.weight is not None else None,
+                "height_cm": f"{lifestyle.height}cm" if lifestyle.height is not None else None,
+            },
+            "skin":{
+                "skin_type": lifestyle.skin_type,
+                "skin_concerns": lifestyle.skin_concerns if lifestyle.skin_concerns else None,
+                "skin_satisfaction": f"{lifestyle.skin_satisfaction}/10" if lifestyle.skin_satisfaction is not None else None
             },
             "target_age": f"{lifestyle.target_years} years after" if lifestyle.target_years else None, #몇년후로 가고 싶은지
             "images": {
@@ -142,6 +141,12 @@ def fetch_user_aging_context(user_id:int):
             }
 
         }
+        
+        # 디버깅: 변환된 데이터 출력
+        import json
+        print(f"📊 [변환된 데이터] {json.dumps(result, indent=2, ensure_ascii=False, default=str)}")
+        
+        return result
     except OperationalError as e:
         # DB 연결 실패 시 시스템을 다운시키지 않고 에러 맥락을 반환
         return {
