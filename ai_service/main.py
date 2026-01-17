@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def load_data(file_path: str):
     """
-    JSON 또는 CSV 파일을 로드하여 리스트 of dict 형태로 반환.
+    JSON, CSV, XLSX 파일을 로드하여 리스트 형태로 반환.
     """
     if file_path.endswith('.json'):
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -23,8 +23,10 @@ def load_data(file_path: str):
             data = [data]  # 단일 객체일 경우 리스트로 변환
     elif file_path.endswith('.csv'):
         data = pd.read_csv(file_path).to_dict('records')
+    elif file_path.endswith(('.xlsx', '.xls')):
+        data = pd.read_excel(file_path).to_dict('records')
     else:
-        raise ValueError("지원되지 않는 파일 형식입니다. JSON 또는 CSV만 지원합니다.")
+        raise ValueError("지원되지 않는 파일 형식입니다. JSON, CSV, XLSX만 지원합니다.")
     return data
 
 def validate_data(data: list):

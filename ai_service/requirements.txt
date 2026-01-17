@@ -3,3 +3,4 @@ langchain-google-genai
 python-dotenv
 qdrant-client
 pandas
+openpyxl
