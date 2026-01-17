@@ -27,6 +27,13 @@ def load_data(file_path: str):
         data = pd.read_excel(file_path).to_dict('records')
     else:
         raise ValueError("지원되지 않는 파일 형식입니다. JSON, CSV, XLSX만 지원합니다.")
+    
+    # NaN 값들을 None으로 변환 (Qdrant 호환성)
+    for record in data:
+        for key, value in record.items():
+            if pd.isna(value):
+                record[key] = None
+    
     return data
 
 def validate_data(data: list):
@@ -34,7 +41,7 @@ def validate_data(data: list):
     데이터 검증: 각 레코드에 'text' 필드가 있는지 확인.
     """
     for i, record in enumerate(data):
-        if 'text' not in record or not record['text']:
+        if 'text' not in record or not record['text'] or pd.isna(record['text']):
             raise ValueError(f"레코드 {i}에 'text' 필드가 없거나 비어 있습니다.")
     logger.info(f"데이터 검증 완료: {len(data)}개의 레코드")
 
@@ -44,8 +51,12 @@ def run_ingestion(file_path: str):
         logger.info(f"데이터 로드 중: {file_path}")
         raw_data = load_data(file_path)
 
-        # 2. 데이터 검증
-        validate_data(raw_data)
+        # 2. 유효한 데이터만 필터링 (text가 있는 레코드만)
+        valid_data = [record for record in raw_data if record.get('text') and not pd.isna(record['text'])]
+        logger.info(f"유효한 데이터: {len(valid_data)}개 (총 {len(raw_data)}개 중)")
+
+        # 3. 데이터 검증
+        validate_data(valid_data)
 
         # 3. 임베더 및 클라이언트 설정
         embedder = BioEmbedder()
@@ -62,7 +73,7 @@ def run_ingestion(file_path: str):
 
         # 5. 포인트 생성 및 업로드 (배치 처리)
         logger.info("임베딩 생성 및 업로드 중...")
-        points = embedder.create_qdrant_points(raw_data)
+        points = embedder.create_qdrant_points(valid_data)
         batch_size = 100  # 배치 크기 조정 가능
         for i in range(0, len(points), batch_size):
             batch = points[i:i + batch_size]
