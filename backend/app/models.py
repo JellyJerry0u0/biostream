@@ -17,6 +17,8 @@ class User(Base):
     #기존에는 설문에서 받았던 생년월일,성별을 아예 사용자 테이블에 추가(한번 입력받는 고정 값이니)
     birthdate = Column(Date, nullable=True) #시/분/초 필요없으니 Date
     gender= Column(String, nullable=True) 
+    #여성일 경우에만 임신 여부 입력 가능
+    is_pregnant = Column(Boolean, nullable=True) #임신 여부(여성일 경우에만 값 있음) 
 
 
 
@@ -39,63 +41,42 @@ class Lifestyle(Base):
     #처음에는 null허용인데 나중에는 미래 얼굴 사진이 반드시 생성되니 일단은 nullable=True
     generated_image_url = Column(String, nullable=True) # Gemini가 생성한 미래 얼굴 사진 경로
       
+    # A. 주요 목표 (리포트 톤 라우팅) - multi choice
+    outcomes = Column(JSON, nullable=True)  # ["wrinkle", "pigmentation", "hydration", "acne", "redness", "general_aging"]
 
-      
-    #1. 흡연
-    #흡연 상태 (비흡연/과거 흡연/현재 흡연) 
-    smoking_status = Column(String) 
-    
-    #비흡연자일경우 아래 항목은 Null
-    #현재 흡연자는 과거 흡연량, 과거 흡연 기간 입력
-    smoking_amount=Column(Integer, nullable=True) #하루 흡연량(개비)
-    smoking_duration=Column(Integer, nullable=True) #총 흡연 기간(년)
+    # B. Sleep & Rhythm (5)
+    sleep_hours_weekday = Column(Float, nullable=True)  # 평균 수면시간(평일) 3~10h
+    sleep_hours_weekend = Column(Float, nullable=True)  # 평균 수면시간(주말)
+    sleep_quality_score = Column(Float, nullable=True)  # 수면의 질(주관) 0~10
 
+    # C. UV / Photoaging (4)
+    uv_exposure_10to16 = Column(String, nullable=True)  # 야외 노출(10~16시): <30m / 30~60 / 1~2h / >2h
+    sunscreen_frequency = Column(String, nullable=True)  # 선크림 사용 빈도: never/sometimes/most_days/daily_with_reapply
+    sunscreen_reapply = Column(String, nullable=True)  # 재도포(2~3시간 간격): never/rarely/sometimes/often
+    outdoor_sports_uv = Column(String, nullable=True)  # 야외스포츠(강한 UV): none/monthly/weekly
 
-    #2. 운동
-    exercise_daily_mins= Column(Integer) #하루 평균 운동 시간(분)
-    exercise_freq_per_week= Column(Integer) #주당 운동 빈도(횟수)
-    exercise_intensity= Column(String) #운동 강도(저강도/중강도/고강도)
-    exercise_type= Column(String) #주로 하는 운동 종류(유산소/무산소/기타(직접입력)/안함)
-    sedentary_hours_per_day= Column(Float) #하루 평균 앉아있는 시간(시간)
-    exercise_regularity= Column(String) #운동 규칙성(규칙적/불규칙적)
-    exercise_duration_years = Column(Integer) #운동 지속 기간(년)
-    stretching_habit= Column(Boolean) #스트레칭 습관 여부(예/아니오)
-    excercise_location= Column(String) #주로 운동하는 장소(실내/실외/혼합)=> 광노화관련
+    # D. Alcohol & Smoking (4)
+    drinking_days_per_week = Column(String, nullable=True)  # 주당 음주일수: 0 / 1 / 2-3 / 4-5 / 6-7
+    drinking_amount_per_session = Column(String, nullable=True)  # 1회 음주량 (문자열)
+    smoking_status = Column(String, nullable=True)  # never/former/current
+    smoking_amount_per_day = Column(String, nullable=True)  # current일 경우: 갑/개비
 
-    #3. 수면
-    sleep_hours=Column(Float) #평균 수면 시간(시간)
-    sleep_quality=Column(String) #수면의 질(매우 좋음/좋음/보통/나쁨/매우 나쁨)
-    sleep_disorders=Column(String) #수면 장애 여부(무/코골이/수면무호흡증/불면증/기타)
-    sleep_consistency=Column(String) #수면 패턴의 일관성(규칙적/불규칙적)
+    # E. Stress & Recovery (4)
+    stress_score = Column(Float, nullable=True)  # 스트레스(지난 2주) 0~10
+    caffeine_intake = Column(String, nullable=True)  # 카페인 섭취량: 0 / 1 / 2 / 3+
+    caffeine_timing = Column(String, nullable=True)  # 카페인 섭취 시간대: before_noon / afternoon / evening
 
-    #4. 음주
-    drinking_frequency=Column(String) #음주 빈도(비음주/가끔/주1-2회/주3-4회/매일/기타(직접입력))
-    #1회 음주 시 평균 음주량(JSON 형식)
-    # 예시 데이터: 
-    # [
-    #   {"type": "소주", "glass": "소주잔", "count": 5},
-    #   {"type": "맥주", "glass": "500cc", "count": 2}
-    # ]
-    drinking_details=Column(JSON,nullable=True)
-    facial_flushing = Column(Boolean)   # 음주 시 안면 홍조 여부
-    drinking_duration_years = Column(Integer) # 총 음주 경력 (년)
+    # F. Activity & Metabolic (3)
+    aerobic_weekly = Column(String, nullable=True)  # 유산소(주당): 0 / 1-2 / 3-4 / 5+
+    resistance_weekly = Column(String, nullable=True)  # 근력(주당): 0 / 1 / 2 / 3+
+    height = Column(Float, nullable=True)  # 키
+    weight = Column(Float, nullable=True)  # 몸무게
 
-    #5. 야외 활동 및 자외선 노출
-    uv_activity_hours=Column(JSON) # 여러 시간대를 입력받으므로 JSON 타입으로 저장 (예: ["12:00~12:30", "15:00~16:00"])
-    sunscreen_usage=Column(String) #자외선 차단제 사용 빈도(매일/가끔/안함)
-    sunscreen_reapply_interval = Column(String) # 선크림 재도포 주기
+    # Skin 상태 (3문항)
+    skin_type = Column(String, nullable=True)  # 피부 타입: dry/oily/combination/sensitive
+    skin_concerns = Column(JSON, nullable=True)  # 주요 피부 고민: ["wrinkle", "pigmentation", "elasticity", "dryness", "redness", "acne"]
+    skin_satisfaction = Column(Float, nullable=True)  # 현재 피부상태 만족도 0~10
 
-    #6. 체성분 데이터(인바디 측정시 알 수 있는 정보들, 선택적 입력)
-    weight = Column(Float, nullable=True)
-    height = Column(Float, nullable=True)
-    muscle_mass = Column(Float, nullable=True) #골격근량
-    body_fat_mass = Column(Float, nullable=True) #체지방량
-    body_fat_percentage = Column(Float, nullable=True) #체지방률
-    bmi = Column(Float, nullable=True) #BMI
-    bmr= Column(Float, nullable=True) #기초대사량
-    whr= Column(Float, nullable=True) #복부지방률
-    body_water = Column(Float, nullable=True) #체수분량
-    visceral_fat_level = Column(Float, nullable=True) #내장지방레벨
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

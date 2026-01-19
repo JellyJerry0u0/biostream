@@ -118,30 +118,12 @@ async def upload_image(
         print(f"✅ 파일 저장 완료: {save_path}")
         
         # 2. DB에 Lifestyle 레코드 생성 (원본 이미지 경로 저장)
+        # 새로운 모델 구조에 맞게 최소한의 필드만 설정 (나머지는 설문에서 채워짐)
         lifestyle = models.Lifestyle(
             user_id=user_id,
             original_image_url=save_path,  # 저장된 파일 경로
             target_years=target_years,
-            # 필수 필드들은 기본값 또는 NULL로 설정 (나중에 설문에서 채워짐)
-            smoking_status="unknown",
-            exercise_daily_mins=0,
-            exercise_freq_per_week=0,
-            exercise_intensity="unknown",
-            exercise_type="unknown",
-            sedentary_hours_per_day=0.0,
-            exercise_regularity="unknown",
-            exercise_duration_years=0,
-            stretching_habit=False,
-            sleep_hours=7.0,
-            sleep_quality="good",
-            sleep_disorders="none",
-            sleep_consistency="regular",
-            drinking_frequency="none",
-            facial_flushing=False,
-            drinking_duration_years=0,
-            uv_activity_hours=[],  # 오타 수정: uv_actuvity_hours -> uv_activity_hours
-            sunscreen_usage="none",
-            sunscreen_reapply_interval="none",
+            # 나머지 필드들은 모두 nullable이므로 None으로 설정 (설문에서 채워짐)
         )
         db.add(lifestyle)
         db.commit()
@@ -297,12 +279,18 @@ async def generate_health_report(
         lifestyle_data = fetch_user_aging_context(user.id)
         print(f"✅ MCP 서버에서 데이터 조회 완료")
         
+        # 디버깅: 조회된 데이터 출력
+        import json
+        print(f"📊 조회된 데이터: {json.dumps(lifestyle_data, indent=2, ensure_ascii=False, default=str)}")
+        
         if "error" in lifestyle_data:
             raise HTTPException(status_code=404, detail=lifestyle_data.get("error", "데이터를 찾을 수 없습니다."))
         
         # Gemini API가 사용 가능한지 확인
+        print(f"🔍 Gemini API 사용 가능 여부: {GEMINI_AVAILABLE}")
         if not GEMINI_AVAILABLE:
             # Gemini가 없으면 간단한 리포트 생성 (임시)
+            print(f"⚠️ Gemini API가 사용 불가능합니다. 간단한 리포트를 생성합니다.")
             return {
                 "success": True,
                 "report": _generate_simple_report(lifestyle_data),
@@ -311,8 +299,10 @@ async def generate_health_report(
         
         # Gemini API 키 확인
         gemini_api_key = os.getenv("GEMINI_API_KEY")
+        print(f"🔑 Gemini API 키 확인: {'설정됨' if gemini_api_key else '설정되지 않음'}")
         if not gemini_api_key:
             # API 키가 없으면 간단한 리포트 생성
+            print(f"⚠️ Gemini API 키가 없습니다. 간단한 리포트를 생성합니다.")
             return {
                 "success": True,
                 "report": _generate_simple_report(lifestyle_data),
@@ -338,7 +328,9 @@ async def generate_health_report(
                 model = genai.GenerativeModel(model_name)
         
         # LLM 프롬프트 생성
+        print(f"📝 프롬프트 생성 시작...")
         prompt = _create_health_report_prompt(lifestyle_data)
+        print(f"📝 프롬프트 생성 완료 (길이: {len(prompt)}자)")
         
         print(f"🤖 Gemini API 호출 시작 - User ID: {user.id}, 모델: {model_name}")
         
@@ -375,43 +367,124 @@ async def generate_health_report(
 
 def _create_health_report_prompt(lifestyle_data: dict) -> str:
     """
-    LLM에 전달할 프롬프트 생성
+    LLM에 전달할 프롬프트 생성 (새로운 모델 구조에 맞게 수정)
+    None 값을 'N/A'로 변환하는 헬퍼 함수
     """
+    def safe_get(data, *keys, default='N/A'):
+        """중첩된 딕셔너리에서 안전하게 값을 가져오고 None을 처리"""
+        current = data
+        for key in keys:
+            if isinstance(current, dict):
+                current = current.get(key)
+            else:
+                return default
+            if current is None:
+                return default
+        return current if current is not None else default
+    
     profile = lifestyle_data.get("profile", {})
     lifestyle = lifestyle_data.get("lifestyle", {})
     bodystate = lifestyle_data.get("bodystate", {})
+    skin = lifestyle_data.get("skin", {})
     target_age = lifestyle_data.get("target_age", "N/A")
+    
+    # None 값을 'N/A'로 변환 및 영어 코드를 한글 라벨로 변환
+    outcomes = lifestyle.get('outcomes')
+    outcomes_labels = {
+        'wrinkle': '주름',
+        'pigmentation': '색소',
+        'hydration': '수분',
+        'acne': '여드름',
+        'redness': '홍조',
+        'general_aging': '전체 노화',
+    }
+    if outcomes and isinstance(outcomes, list):
+        outcomes_str = ', '.join([outcomes_labels.get(o, o) for o in outcomes])
+    else:
+        outcomes_str = 'N/A'
+    
+    skin_concerns = skin.get('skin_concerns')
+    skin_concerns_labels = {
+        'wrinkle': '주름',
+        'pigmentation': '색소',
+        'elasticity': '탄력',
+        'dryness': '건조',
+        'redness': '홍조',
+        'acne': '트러블',
+    }
+    if skin_concerns and isinstance(skin_concerns, list):
+        skin_concerns_str = ', '.join([skin_concerns_labels.get(c, c) for c in skin_concerns])
+    else:
+        skin_concerns_str = 'N/A'
+    
+    # 영어 코드를 한글 라벨로 변환하는 헬퍼
+    def translate_value(value, translations):
+        if value is None:
+            return 'N/A'
+        return translations.get(value, value) if translations else value
+    
+    # 각 필드별 번역 맵
+    smoking_status_map = {'never': '비흡연', 'former': '과거 흡연', 'current': '현재 흡연'}
+    uv_exposure_map = {'<30m': '30분 미만', '30~60': '30분~1시간', '1~2h': '1~2시간', '>2h': '2시간 이상'}
+    sunscreen_freq_map = {'never': '안함', 'sometimes': '가끔', 'most_days': '대부분', 'daily_with_reapply': '매일(재도포)'}
+    sunscreen_reapply_map = {'never': '안함', 'rarely': '드물게', 'sometimes': '가끔', 'often': '자주'}
+    outdoor_sports_map = {'none': '안함', 'monthly': '월 1회', 'weekly': '주 1회 이상'}
+    drinking_days_map = {'0': '0일', '1': '1일', '2-3': '2-3일', '4-5': '4-5일', '6-7': '6-7일'}
+    caffeine_intake_map = {'0': '0잔', '1': '1잔', '2': '2잔', '3+': '3잔 이상'}
+    caffeine_timing_map = {'before_noon': '오전', 'afternoon': '오후', 'evening': '저녁'}
+    aerobic_map = {'0': '0회', '1-2': '1-2회', '3-4': '3-4회', '5+': '5회 이상'}
+    resistance_map = {'0': '0회', '1': '1회', '2': '2회', '3+': '3회 이상'}
+    skin_type_map = {'dry': '건성', 'oily': '지성', 'combination': '복합성', 'sensitive': '민감성'}
     
     prompt = f"""당신은 건강 전문가입니다. 사용자의 생활습관 데이터를 분석하여 맞춤형 건강 리포트를 작성해주세요.
 
 ## 사용자 기본 정보
-- 나이: {profile.get('age', 'N/A')}
-- 성별: {profile.get('gender', 'N/A')}
+- 나이: {safe_get(profile, 'age')}
+- 성별: {safe_get(profile, 'gender')}
 
 ## 생활습관 정보
-### 흡연
-- 흡연 상태: {lifestyle.get('smoking', {}).get('smoking_status', 'N/A')}
-- 일일 흡연량: {lifestyle.get('smoking', {}).get('smoking_amount_per_day', 'N/A')}
+### 주요 목표
+{outcomes_str}
 
-### 운동
-- 일일 운동 시간: {lifestyle.get('exercise', {}).get('daily_exercise_minutes', 'N/A')}
-- 주당 운동 빈도: {lifestyle.get('exercise', {}).get('weekly_exercise_frequency', 'N/A')}회
-- 운동 강도: {lifestyle.get('exercise', {}).get('exercise_intensity', 'N/A')}
-- 운동 종류: {lifestyle.get('exercise', {}).get('exercise_type', 'N/A')}
-- 하루 앉아있는 시간: {lifestyle.get('exercise', {}).get('sedentary_hours_per_day', 'N/A')}
+### 흡연
+- 흡연 상태: {translate_value(safe_get(lifestyle, 'smoking', 'smoking_status'), smoking_status_map)}
+- 일일 흡연량: {safe_get(lifestyle, 'smoking', 'smoking_amount_per_day')}
 
 ### 수면
-- 평균 수면 시간: {lifestyle.get('sleep', {}).get('average_sleep_hours', 'N/A')}
-- 수면의 질: {lifestyle.get('sleep', {}).get('sleep_quality', 'N/A')}
-
-### 음주
-- 음주 빈도: {lifestyle.get('drinking', {}).get('drinking_frequency', 'N/A')}
+- 평일 수면시간: {safe_get(lifestyle, 'sleep', 'sleep_hours_weekday')}
+- 주말 수면시간: {safe_get(lifestyle, 'sleep', 'sleep_hours_weekend')}
+- 수면의 질 점수: {safe_get(lifestyle, 'sleep', 'sleep_quality_score')}
 
 ### 자외선 노출
-- 자외선 차단제 사용: {lifestyle.get('uv', {}).get('sunscreen_usage', 'N/A')}
+- 야외 노출(10~16시): {translate_value(safe_get(lifestyle, 'uv', 'uv_exposure_10to16'), uv_exposure_map)}
+- 선크림 사용 빈도: {translate_value(safe_get(lifestyle, 'uv', 'sunscreen_frequency'), sunscreen_freq_map)}
+- 선크림 재도포: {translate_value(safe_get(lifestyle, 'uv', 'sunscreen_reapply'), sunscreen_reapply_map)}
+- 야외스포츠: {translate_value(safe_get(lifestyle, 'uv', 'outdoor_sports_uv'), outdoor_sports_map)}
+
+### 음주
+- 주당 음주일수: {translate_value(safe_get(lifestyle, 'drinking', 'drinking_days_per_week'), drinking_days_map)}
+- 1회 음주량: {safe_get(lifestyle, 'drinking', 'drinking_amount_per_session')}
+
+### 스트레스 및 회복
+- 스트레스 점수: {safe_get(lifestyle, 'stress', 'stress_score')}
+- 카페인 섭취량: {translate_value(safe_get(lifestyle, 'stress', 'caffeine_intake'), caffeine_intake_map)}
+- 카페인 섭취 시간대: {translate_value(safe_get(lifestyle, 'stress', 'caffeine_timing'), caffeine_timing_map)}
+
+### 활동
+- 유산소 운동(주당): {translate_value(safe_get(lifestyle, 'activity', 'aerobic_weekly'), aerobic_map)}
+- 근력 운동(주당): {translate_value(safe_get(lifestyle, 'activity', 'resistance_weekly'), resistance_map)}
+
+### 신체 상태
+- 키: {safe_get(bodystate, 'height_cm')}
+- 몸무게: {safe_get(bodystate, 'weight_kg')}
+
+### 피부 상태
+- 피부 타입: {translate_value(safe_get(skin, 'skin_type'), skin_type_map)}
+- 피부 고민: {skin_concerns_str}
+- 피부 만족도: {safe_get(skin, 'skin_satisfaction')}
 
 ## 보고 싶은 미래
-- 미래 나이: {target_age}
+- 미래 나이: {target_age if target_age else 'N/A'}
 
 위 정보를 바탕으로 다음 항목을 포함한 건강 리포트를 한국어로 작성해주세요:
 1. 현재 건강 상태 요약
@@ -421,6 +494,12 @@ def _create_health_report_prompt(lifestyle_data: dict) -> str:
 5. 미래 나이에 대한 모습 예측
 
 리포트는 전문적이면서도 이해하기 쉽게 작성해주세요."""
+    
+    # 디버깅: 생성된 프롬프트 전체 출력
+    print(f"📝 생성된 프롬프트 전체:")
+    print("=" * 80)
+    print(prompt)
+    print("=" * 80)
     
     return prompt
 

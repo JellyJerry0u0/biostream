@@ -17,6 +17,7 @@ class UserCreate(BaseModel):
     nickname: str
     birthdate: str  # "YYYY-MM-DD" 형식 (필수)
     gender: str  # "남성", "여성", "기타" 등 (필수)
+    is_pregnant: bool = None  # 임신 여부 (여성일 경우에만 선택 가능, 선택)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -54,6 +55,16 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
         print(f"❌ 성별이 비어있음")
         raise HTTPException(status_code=400, detail="성별을 선택해주세요.")
     
+    # 임신 여부 유효성 검사: 여성이 아닐 경우 임신 여부는 무시 (null로 설정)
+    is_pregnant_value = None
+    if user_in.gender == "여성":
+        is_pregnant_value = user_in.is_pregnant if user_in.is_pregnant is not None else None
+    else:
+        # 여성이 아닌 경우 임신 여부는 항상 null
+        if user_in.is_pregnant is not None:
+            print(f"⚠️  여성이 아닌데 임신 여부 값이 전달됨. 무시하고 null로 설정합니다.")
+        is_pregnant_value = None
+    
     # 나이 계산 (로그용)
     today = date.today()
     calculated_age = today.year - birthdate_obj.year - ((today.month, today.day) < (birthdate_obj.month, birthdate_obj.day))
@@ -65,7 +76,8 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
         hashed_password=hash_password(user_in.password),
         nickname=user_in.nickname,
         birthdate=birthdate_obj,
-        gender=user_in.gender
+        gender=user_in.gender,
+        is_pregnant=is_pregnant_value
     )
     db.add(new_user)
     

@@ -14,6 +14,7 @@ class AuthService {
     String nickname,
     String birthdate,  // 필수
     String gender,  // 필수
+    bool? isPregnant,  // 임신 여부 (여성일 경우에만, 선택)
   ) async {
     try {
       final origin = await ApiConfig.getBaseOrigin();
@@ -23,6 +24,7 @@ class AuthService {
         "nickname": nickname,
         "birthdate": birthdate,
         "gender": gender,
+        if (isPregnant != null) "is_pregnant": isPregnant,
       };
       
       final response = await http.post(
