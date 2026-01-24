@@ -1,5 +1,6 @@
 # 필요한 라이브러리 목록
-langchain-google-genai
+google-generativeai
+google-cloud-aiplatform  # Imagen 3용 Vertex AI SDK
 python-dotenv
 qdrant-client
 pandas
