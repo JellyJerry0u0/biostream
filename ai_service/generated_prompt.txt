@@ -1,0 +1,30 @@
+================================================================================
+Gemini가 생성한 노화 얼굴 이미지 프롬프트
+================================================================================
+
+[기본 사진] sample_face.jpg
+
+[프롬프트]
+A mature version of the Asian male from the reference photo, preserving original facial identity and bone structure. Natural facial characteristics with the following features: Periorbital: distinct character lines around eyes (depth 1-2mm, casting subtle shadows), Forehead: horizontal character lines (depth 1mm, 3 lines with dimensional depth), Cheeks: natural tonal variations (15% darker), hyperpigmentation patterns (size 3-5mm), textured pores, Jawline: nasolabial contour lines (depth 2-3mm), softly redefined jawline contours. Highly detailed skin pores, realistic skin imperfections, cinematic natural lighting, sharp focus on facial details, 8k, professional photography.
+
+================================================================================
+추천 외부 도구:
+================================================================================
+
+1. Stable Diffusion WebUI (무료, 로컬)
+   - 설치: https://github.com/AUTOMATIC1111/stable-diffusion-webui
+   - Image-to-Image 탭에서 위 프롬프트 사용
+   - Denoising strength: 0.3-0.5 (낮을수록 원본 유지)
+
+2. Replicate API (유료, $0.01/이미지)
+   - 모델: stability-ai/sdxl
+   - 자동화 가능 (Python SDK)
+
+3. ComfyUI (무료, 로컬)
+   - 설치: https://github.com/comfyanonymous/ComfyUI
+   - 워크플로우 자동화 가능
+
+4. Midjourney (유료, $10/월)
+   - Discord에서 /imagine 사용
+   - --iw 0.5 (이미지 가중치)
+
