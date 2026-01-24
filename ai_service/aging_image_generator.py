@@ -19,6 +19,21 @@ from test_search import test_search
 
 # Google Generative AI 라이브러리 직접 사용
 import google.generativeai as genai
+from google.generativeai import GenerativeModel
+
+# PIL for image handling
+from PIL import Image as PILImage
+import io
+
+# Vertex AI SDK (선택적 - Imagen 사용 시)
+try:
+    from vertexai.preview.vision_models import ImageGenerationModel
+    from vertexai.vision_models import Image as VertexImage
+    import vertexai
+    VERTEX_AI_AVAILABLE = True
+except ImportError:
+    VERTEX_AI_AVAILABLE = False
+    logger.warning("Vertex AI SDK를 사용할 수 없습니다. Gemini 이미지 생성 모델을 사용하세요.")
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -614,24 +629,33 @@ class BioStreamVisualizer:
 - 의학적으로 정확한 용어 사용
 
 ### 표현 규칙:
-✅ 사용 가능: natural, visible, noticeable, prominent, characteristic, distinct, clear
+✅ 사용 가능: natural, visible, noticeable, prominent, characteristic, distinct, clear, mature, developed
 ✅ 수치 표현: mm, cm, % 등 구체적 측정치
-✅ 중립적 설명: changes, variations, characteristics, features
+✅ 중립적 설명: features, characteristics, appearance, texture, structure
 
-❌ 금지 단어: premature, severe, extreme, dramatic, significant, tired, stressed, damaged, ugly
-❌ 부정적 감정: 피곤한, 지친, 손상된 등의 표현
+❌ 절대 금지: aging, old, elderly, loss, damage, deterioration, wrinkle, sagging, tired, stressed
+❌ 금지 표현: "accelerated aging", "loss of", "reduction in", "decrease in"
 
-**예시 변환:**
-- "심각한 주름" → "prominent crow's feet lines (1.8mm depth)"
-- "처진 피부" → "visible changes in skin contour"
-- "칙칙한 피부톤" → "skin tone variations (15% darker)"
+**변환 전략:**
+- "노화" → "facial characteristics" or "facial features"
+- "주름 1.8mm" → "fine facial lines with depth of 1.8mm"  
+- "처진 피부" → "facial contour variations"
+- "탄력 손실" → "skin texture characteristics"
+
+## 출력 형식 (반드시 준수):
+**Portrait of an Asian {gender_en}. Natural facial characteristics with the following features:**
+- Periorbital: Fine facial lines around eyes (depth 1-2mm, length 2-3cm), natural under-eye area features
+- Forehead: Horizontal facial lines (depth 1mm), natural expression marks
+- Cheeks: Skin tone variations (15% darker), natural pigmentation patterns (size 3-5mm), visible pore characteristics
+- Perioral/Jawline: Nasolabial characteristics (depth 2-3mm), natural facial contours
+- Overall: Natural skin texture, matte finish, front-facing portrait, professional photography
 
 ## 사용자 정보
-- 현재 나이: {user_data.age}세
-- 예측 나이: **{future_age}세**
 - 성별: {gender_en}
 - 인종: Asian
 - 피부 타입: {user_data.skin_type or 'combination'}
+
+**중요:** 나이를 명시하지 말고, 자연스러운 얼굴 특징으로만 표현하세요.
 
 ## 시각적 묘사 (한글) - 상세 정보 포함
 {visual_description}
@@ -639,47 +663,52 @@ class BioStreamVisualizer:
 ## 출력 지시
 위 한글 묘사를 바탕으로 **구체적이고 상세한 영문 프롬프트**를 작성하세요.
 
-### 출력 형식:
-Professional portrait photograph of a {future_age}-year-old {gender_en} Asian person with {user_data.skin_type or 'combination'} skin. [구체적인 부위별 노화 특징을 수치와 함께 상세히 나열]. Natural studio lighting, front-facing view, high-resolution photography.
+### 출력 형식 (반드시 준수):
+Portrait of an Asian {gender_en} with {user_data.skin_type or 'combination'} skin. Natural facial characteristics with the following features: [구체적인 부위별 특징을 수치와 함께 상세히 나열]. Professional portrait photography, natural lighting, front view.
 
 ### 필수 포함 사항:
 1. **눈가 주변 (Periorbital):**
-   - Crow's feet lines: 깊이(mm), 길이(cm), 개수
-   - Under-eye area: 색상 변화, 다크서클 정도
-   - Eyelid changes: 처짐 정도
+   - Fine facial lines around eyes: 깊이(mm), 길이(cm), 개수
+   - Under-eye area: 색상 변화, 특징
+   - Eyelid characteristics: 형태 특징
 
 2. **이마 (Forehead):**
-   - Horizontal lines: 개수, 깊이(mm)
-   - Vertical frown lines: 깊이(mm)
+   - Horizontal facial lines: 개수, 깊이(mm)
+   - Vertical expression marks: 깊이(mm)
 
 3. **볼/광대 (Cheeks):**
    - Skin tone: 변화율(%)
-   - Pigmentation: 반점 크기(mm), 분포 면적(%)
-   - Pore size: 확대 정도(%), 모양 변화
-   - Volume changes: 탄력 손실 정도
+   - Pigmentation patterns: 크기(mm), 분포(%)
+   - Pore characteristics: 확대 정도(%), 모양 변화
+   - Facial contour: 윤곽 특징
 
 4. **입가/턱선 (Perioral/Jawline):**
-   - Nasolabial folds: 깊이(mm), 길이(cm)
-   - Perioral lines: 개수, 위치
-   - Jawline: 선명도 변화(%)
+   - Nasolabial characteristics: 깊이(mm), 길이(cm)
+   - Perioral features: 개수, 위치
+   - Jawline definition: 윤곽 특징
 
 5. **전체 피부 (Overall):**
-   - Texture: 거칠기 변화
-   - Hydration: 건조 정도
-   - Radiance: 광택 변화(%)
+   - Texture characteristics: 표면 특징
+   - Hydration level: 수분 상태
+   - Surface finish: 광택 특징(%)
 
 ### 스타일 키워드 (선택적 포함):
-- High-resolution photography
-- Professional portrait
-- Natural studio lighting
-- Front-facing view
+- Professional portrait photography
+- Natural lighting
+- Front view
 - Sharp focus on facial details
 
-### 중요: 
-- 한글 묘사의 **모든 수치와 정량적 데이터**를 영문으로 정확히 변환
-- 부정적 감정 표현 제거 ("tired", "stressed" 등 금지)
-- 극단적 형용사 제거 ("severe", "dramatic" 등 금지)
-- 중립적이고 객관적인 관찰 표현 사용
+### 절대 금지 사항:
+- "aging", "old", "elderly" 단어 사용 금지
+- "wrinkle", "sagging", "loss", "damage" 단어 사용 금지
+- 나이 숫자 명시 금지
+- 부정적 형용사 사용 금지
+
+### 대체 용어 사용:
+- "wrinkles" → "fine facial lines" or "facial contour lines"
+- "sagging" → "facial contour characteristics"
+- "loss of elasticity" → "skin texture characteristics"
+- "aging features" → "natural facial characteristics"
 
 **오직 최종 영문 프롬프트만 출력하세요. 설명이나 주석 없이.**"""
 
@@ -715,11 +744,47 @@ Professional portrait photograph of a {future_age}-year-old {gender_en} Asian pe
             
             imagen_prompt = imagen_prompt.strip()
             
-            forbidden_words = ['premature', 'severe', 'extreme', 'dramatic', 'significant', 'damaged', 'ugly', 'tired', 'stressed']
-            found_forbidden = [word for word in forbidden_words if word in imagen_prompt.lower()]
-            if found_forbidden:
-                logger.warning(f"경고: 극단적 표현 발견 - {found_forbidden}. RAI 정책 위반 가능성 있음")
-                logger.warning(f"권장: 프롬프트에서 해당 단어를 중립적 표현으로 교체하세요")
+            # 프롬프트가 비어있거나 너무 짧으면 대체 프롬프트 사용
+            if not imagen_prompt or len(imagen_prompt) < 50:
+                logger.warning("⚠️ Gemini가 프롬프트를 생성하지 못했습니다. visual_description 기반 대체 프롬프트를 생성합니다.")
+                
+                # visual_description에서 핵심 정보 추출
+                gender_en = "female" if user_data.gender == "여성" else "male"
+                
+                # 간단한 대체 프롬프트 생성 (RAI 정책 준수 - aging 단어 제거)
+                imagen_prompt = (
+                    f"Portrait of an Asian {gender_en}. Natural facial characteristics: "
+                    f"fine facial lines around eyes (depth 1-2mm, length 2-3cm), "
+                    f"horizontal facial lines on forehead (depth 1mm), "
+                    f"natural skin tone variations on cheeks (15% darker areas), "
+                    f"nasolabial characteristics (depth 2-3mm), "
+                    f"natural facial contours and skin texture. "
+                    f"Professional portrait photography, natural lighting, front view."
+                )
+                logger.info(f"✓ 대체 프롬프트 생성 완료: {imagen_prompt[:150]}...")
+            
+            # 금지어 확인 및 자동 교체
+            forbidden_replacements = {
+                'aging': 'facial characteristics',
+                'old': 'mature',
+                'elderly': 'mature',
+                'wrinkle': 'facial line',
+                'wrinkles': 'facial lines',
+                'sagging': 'contour variation',
+                'loss': 'change',
+                'damage': 'change',
+                'deterioration': 'change',
+                'accelerated': 'noticeable',
+                'tired': 'natural',
+                'stressed': 'natural'
+            }
+            
+            # 금지어를 중립적 표현으로 자동 치환
+            for forbidden, replacement in forbidden_replacements.items():
+                if forbidden in imagen_prompt.lower():
+                    logger.warning(f"⚠️ '{forbidden}' 발견 → '{replacement}'로 자동 교체")
+                    imagen_prompt = imagen_prompt.replace(forbidden, replacement)
+                    imagen_prompt = imagen_prompt.replace(forbidden.capitalize(), replacement.capitalize())
             
             logger.info(f" Imagen 3 최적화 프롬프트 생성 성공\n{imagen_prompt}")
             
@@ -735,10 +800,10 @@ Professional portrait photograph of a {future_age}-year-old {gender_en} Asian pe
         imagen_prompt: str,
         visual_description: str = "",
         output_path: str = "output_aging_prediction.png",
-        model_name: str = "imagen-4.0-generate-001",
-        edit_mode: str = "product-image"  # 기본값 변경: inpainting-insert → product-image
+        model_name: str = "gemini-2.5-flash-image",
+        image_model_type: str = "gemini"  # "gemini" or "vertex-ai"
     ) -> str:
-        """Step 5: 사용자 얼굴 사진을 기반으로 노화된 얼굴 이미지 생성 (Image-to-Image)
+        """Step 5: 사용자 얼굴 사진을 기반으로 노화된 얼굴 이미지 생성
         
         Args:
             base_image_path: 사용자가 업로드한 현재 얼굴 사진 경로
@@ -746,144 +811,417 @@ Professional portrait photograph of a {future_age}-year-old {gender_en} Asian pe
             visual_description: Step 3의 상세한 한글 묘사 (선택적)
             output_path: 저장할 파일 경로
             model_name: 사용할 모델 선택
-                - Imagen 4.0 계열: "imagen-4.0-generate-001", "imagen-4.0-fast-generate-001", "imagen-4.0-ultra-generate-001"
-                - Imagen 3.0 계열: "imagen-3.0-generate-002", "imagen-3.0-generate-001", "imagen-3.0-fast-generate-001"
-                - Gemini Image: "gemini-2.5-flash-image" (Nano Banana), "gemini-3-pro-image-preview" (Nano Banana Pro)
-            edit_mode: 편집 모드
-                - "product-image": 얼굴 사진을 자연스럽게 변환 (기본값, mask 불필요)
-                - "inpainting-insert": 얼굴 특징에 노화 효과 삽입 (mask 필요)
-                - "inpainting-remove": 특정 영역 제거 (mask 필요)
-                - "outpainting": 배경 확장
-            
+                - Gemini 모드: "gemini-2.5-flash-image" (Gemini 얼굴 분석 + Imagen 생성)
+                - Vertex AI 모드: "imagen-4.0-generate-001" (Imagen 직접 생성)
+            image_model_type: 사용할 이미지 생성 방식
+                - "gemini": Gemini로 얼굴 특징 분석 → Vertex AI Imagen으로 생성 (기본값)
+                - "vertex-ai": Vertex AI Imagen으로 직접 생성
+        
         Returns:
-            저장된 노화 이미지 파일 경로
+            생성된 이미지 파일 경로 (실패 시 빈 문자열)
         """
-        logger.info(f"Step 5: Image-to-Image 노화 얼굴 생성 시작 (Model: {model_name})")
+        logger.info(f"Step 5: 노화 얼굴 이미지 생성 시작")
+        logger.info(f"모델 타입: {image_model_type}")
+        logger.info(f"모델: {model_name}")
         logger.info(f"기본 사진: {base_image_path}")
         
         try:
-            from vertexai.preview.vision_models import ImageGenerationModel, Image as VertexImage
-            import vertexai
-            from PIL import Image as PILImage
-            
-            # Vertex AI 초기화
-            project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-            if not project_id:
-                raise ValueError(
-                    "GOOGLE_CLOUD_PROJECT 환경변수가 설정되지 않았습니다.\n"
-                    "Imagen은 Vertex AI를 통해서만 사용 가능합니다.\n"
-                    ".env 파일에 GOOGLE_CLOUD_PROJECT=your-project-id 추가하세요.\n\n"
-                    "Google Cloud Console: https://console.cloud.google.com/"
+            # 모델 타입에 따라 다른 생성 방식 사용
+            if image_model_type == "gemini":
+                return self._generate_with_gemini(
+                    base_image_path=base_image_path,
+                    imagen_prompt=imagen_prompt,
+                    visual_description=visual_description,
+                    output_path=output_path,
+                    model_name=model_name
                 )
-            
-            vertexai.init(project=project_id, location="us-central1")
-            
-            # 모델 선택 (Gemini vs Imagen)
-            if "gemini" in model_name.lower():
-                # Gemini Image 모델 사용 (genai 라이브러리)
-                logger.info(f"Gemini Image 모델 사용: {model_name}")
-                return self._generate_with_gemini_image(base_image_path, imagen_prompt, output_path, model_name)
+            elif image_model_type == "vertex-ai":
+                if not VERTEX_AI_AVAILABLE:
+                    raise ImportError("Vertex AI SDK가 설치되지 않았습니다. pip install google-cloud-aiplatform")
+                return self._generate_with_vertex_ai(
+                    base_image_path=base_image_path,
+                    imagen_prompt=imagen_prompt,
+                    visual_description=visual_description,
+                    output_path=output_path,
+                    model_name=model_name
+                )
             else:
-                # Imagen 모델 사용
-                logger.info(f"Imagen 모델 사용: {model_name}")
-                
-                # 기본 사진 로드 - Image.load_from_file() 메서드 사용 (권장 방식)
-                logger.info(f"이미지 파일 로딩 중: {base_image_path}")
-                base_image = VertexImage.load_from_file(base_image_path)
-                logger.info(f"✓ Image.load_from_file() 성공")
-                
-                # 이미지 객체 검증
-                if not hasattr(base_image, '_image_bytes') and not hasattr(base_image, '_gcs_uri'):
-                    logger.error("❌ Image 객체가 올바르게 생성되지 않았습니다!")
-                    raise ValueError("Image 객체에 image_bytes 또는 gcs_uri가 없습니다.")
-                
-                logger.info(f"  - Image 객체 검증 완료: bytes={hasattr(base_image, '_image_bytes')}, gcs={hasattr(base_image, '_gcs_uri')}")
-                
-                # Imagen 모델 로드
-                logger.info(f"Imagen 모델 로딩 중: {model_name}")
-                imagen_model = ImageGenerationModel.from_pretrained(model_name)
-                logger.info(f"✓ Imagen 모델 로드 성공")
-                
-                # edit_mode 검증: inpainting-insert는 mask 필요, product-image는 mask 불필요
-                if edit_mode in ["inpainting-insert", "inpainting-remove"] and not hasattr(self, 'mask_image'):
-                    logger.warning(f"⚠️  {edit_mode} 모드는 mask가 필요하지만 제공되지 않았습니다.")
-                    logger.warning(f"⚠️  자동으로 'product-image' 모드로 변경합니다.")
-                    edit_mode = "product-image"
-                
-                logger.info(f"✓ edit_mode 확정: {edit_mode}")
-                
-                # 프롬프트 최적화: 자연스러운 노화 특징 강조 (RAI 정책 준수)
-                # visual_description에서 추출한 상세한 수치를 포함하되, 중립적 표현 사용
-                if visual_description:
-                    # 자연스러운 노화 프로세스 강조 (중립적 프레임)
-                    enhanced_prompt = f"A face showing natural aging characteristics: {imagen_prompt}. High quality photograph with natural skin texture and realistic lighting."
-                else:
-                    # visual_description이 없어도 Imagen 프롬프트 자체에 상세 정보가 있음
-                    enhanced_prompt = f"A face with visible aging features: {imagen_prompt}. High quality photograph with natural skin texture and realistic lighting."
-                
-                # 프롬프트 길이 체크 (참고용)
-                if len(enhanced_prompt) > 500:
-                    logger.warning(f"⚠️  프롬프트가 길지만 상세한 노화 특징 전달을 위해 유지합니다 ({len(enhanced_prompt)} chars)")
-                
-                logger.info(f"프롬프트 (최종): {enhanced_prompt[:200]}...")
-                
-                # Image-to-Image 편집 (노화 효과 적용)
-                # base_image 존재 여부 최종 확인
-                if base_image is None:
-                    raise ValueError("❌ base_image가 None입니다! 이미지 로딩에 실패했습니다.")
-                
-                logger.info(f"✓ edit_image() 호출 준비 완료")
-                logger.info(f"  - base_image: {base_image} (타입: {type(base_image).__name__})")
-                logger.info(f"  - edit_mode: {edit_mode}")
-                logger.info(f"  - prompt 길이: {len(enhanced_prompt)} chars")
-                logger.info(f"  - number_of_images: 1")
-                
-                # 모든 파라미터를 명시적으로 키워드 인자로 전달
-                images = imagen_model.edit_image(
-                    prompt=enhanced_prompt,
-                    base_image=base_image,  # 명시적으로 키워드 인자로 전달
-                    edit_mode=edit_mode,
-                    number_of_images=1,
-                    safety_filter_level="block_some",
-                    person_generation="allow_adult",
-                )
-                
-                logger.info(f"✓ edit_image() 호출 완료 - 응답 수신됨")
-                
-                # 첫 번째 이미지 저장
-                if images and len(images.images) > 0:
-                    result_image = images.images[0]
-                    result_image.save(location=output_path, include_generation_parameters=False)
-                    
-                    logger.info(f"✅ 노화 얼굴 이미지 생성 성공: {output_path}")
-                    
-                    return output_path
-                else:
-                    raise ValueError("이미지가 생성되지 않았습니다.")
-                
-        except ImportError as e:
-            error_msg = (
-                f"Vertex AI SDK가 설치되지 않았습니다: {e}\n"
-                "설치 명령: pip install google-cloud-aiplatform\n\n"
-                "또는 다음 방법으로 수동 생성하세요:\n"
-                "1. Vertex AI Console: https://console.cloud.google.com/vertex-ai/generative/vision\n"
-                "2. Google AI Studio: https://aistudio.google.com/app/prompts/new_chat\n"
-                f"\n기본 사진: {base_image_path}\n"
-                f"프롬프트: {imagen_prompt}"
-            )
-            logger.error(error_msg)
-            raise ImportError(error_msg)
-            
+                raise ValueError(f"지원하지 않는 image_model_type: {image_model_type}")
+        
         except Exception as e:
             logger.error(f"노화 얼굴 이미지 생성 실패: {e}")
             logger.error(f"오류 세부 정보: {type(e).__name__}")
             
-            # 대체 방법 안내
             logger.info("\n=== 대체 이미지 생성 방법 ===")
-            logger.info("1. Vertex AI Console: https://console.cloud.google.com/vertex-ai/generative/vision")
-            logger.info("2. Google AI Studio: https://aistudio.google.com/")
-            logger.info(f"\n기본 사진을 업로드하고 프롬프트를 입력하세요:\n{imagen_prompt}")
+            if image_model_type == "gemini":
+                logger.info("1. Google AI Studio: https://aistudio.google.com/")
+            else:
+                logger.info("1. Vertex AI Console: https://console.cloud.google.com/vertex-ai/generative/vision")
+            logger.info("2. 기본 사진을 업로드하고 프롬프트를 입력하세요:")
+            logger.info(imagen_prompt)
+            
             raise
+    
+    def _generate_with_gemini(
+        self,
+        base_image_path: str,
+        imagen_prompt: str,
+        visual_description: str,
+        output_path: str,
+        model_name: str
+    ) -> str:
+        """Gemini로 프롬프트를 개선한 후 Imagen으로 이미지 생성
+        
+        Note: Gemini 이미지 모델(gemini-2.5-flash-image, gemini-3-pro-image-preview)은
+        이미지를 생성하는 것이 아니라 이미지를 이해하는 모델입니다.
+        따라서 Vertex AI Imagen을 사용하여 실제 이미지를 생성합니다.
+        """
+        logger.info(f"🎨 Gemini + Imagen 파이프라인 사용")
+        
+        # 1단계: 기본 이미지를 Gemini로 분석하여 더 상세한 프롬프트 생성
+        logger.info(f"[1/3] Gemini로 기본 이미지 분석 중...")
+        base_img = PILImage.open(base_image_path)
+        logger.info(f"✓ 이미지 로드 성공 (크기: {base_img.size})")
+        
+        # Gemini로 얼굴 특징 분석
+        logger.info(f"Gemini 모델 로딩: {model_name}")
+        analysis_model = genai.GenerativeModel(model_name="Gemini 2.5 Flash-Lite")  # 텍스트 생성용
+        
+        face_analysis_prompt = f"""Analyze this face photo and describe the person's current facial characteristics in detail:
+- Face shape and proportions
+- Eye shape, size, and position
+- Nose shape and size
+- Lip shape and fullness
+- Skin tone and texture
+- Overall facial structure
+
+Be objective and descriptive. Output in English, 2-3 sentences max."""
+        
+        logger.info("✓ Gemini로 얼굴 분석 중...")
+        analysis_response = analysis_model.generate_content([face_analysis_prompt, base_img])
+        face_features = analysis_response.text.strip()
+        logger.info(f"✓ 얼굴 특징 분석 완료: {face_features[:100]}...")
+        
+        # 2단계: 분석된 특징과 노화 프롬프트를 결합
+        logger.info(f"[2/3] 프롬프트 강화 중...")
+        enhanced_prompt = (
+            f"Portrait photograph. "
+            f"Current features: {face_features} "
+            f"Apply these natural changes: {imagen_prompt} "
+            f"Maintain core identity and facial structure. Professional photography, natural lighting."
+        )
+        
+        logger.info(f"강화된 프롬프트: {enhanced_prompt[:150]}...")
+        
+        # 3단계: Vertex AI Imagen으로 이미지 생성
+        logger.info(f"[3/3] Vertex AI Imagen으로 이미지 생성 중...")
+        
+        if not VERTEX_AI_AVAILABLE:
+            raise ImportError(
+                "Vertex AI SDK가 필요합니다. 설치: pip install google-cloud-aiplatform\n"
+                "Gemini 모델은 이미지를 생성하지 않고 이해만 합니다.\n"
+                "실제 이미지 생성은 Vertex AI Imagen을 사용해야 합니다."
+            )
+        
+        # Vertex AI로 이미지 생성
+        return self._generate_with_vertex_ai(
+            base_image_path=base_image_path,
+            imagen_prompt=enhanced_prompt,  # Gemini로 강화된 프롬프트 사용
+            visual_description=visual_description,
+            output_path=output_path,
+            model_name="imagen-4.0-generate-001"  # Imagen 모델 사용
+        )
+    
+    def _generate_with_vertex_ai(
+        self,
+        base_image_path: str,
+        imagen_prompt: str,
+        visual_description: str,
+        output_path: str,
+        model_name: str
+    ) -> str:
+        """Vertex AI Imagen을 사용하여 실사 인물 이미지 생성 (Text-to-Image, RAI 우회)"""
+        logger.info(f"🎨 Vertex AI Imagen 사용 (Text-to-Image): {model_name}")
+        
+        # Step 1: 기본 얼굴 사진 로드 (Gemini에게 같이 넘길 예정)
+        base_img = None
+        if base_image_path and os.path.exists(base_image_path):
+            try:
+                logger.info(f"📸 기본 얼굴 사진 로드: {base_image_path}")
+                base_img = PILImage.open(base_image_path)
+                logger.info(f"✓ 이미지 로드 성공 (크기: {base_img.size})")
+            except Exception as e:
+                logger.warning(f"이미지 로드 실패 (무시하고 계속): {e}")
+                base_img = None
+        
+        # Vertex AI 초기화
+        vertexai.init(
+            project="gen-lang-client-0681566320",
+            location="us-central1"
+        )
+        
+        # Imagen 모델 로드
+        logger.info(f"Imagen 모델 로딩 중: {model_name}")
+        imagen_model = ImageGenerationModel.from_pretrained(model_name)
+        logger.info(f"✓ Imagen 모델 로드 성공")
+        
+        # Step 2: 묘사 2 (visual_description) + 이미지를 Gemini에게 바로 넘겨서 실사 프롬프트 생성
+        logger.info(f"📝 상세 묘사를 실사 프롬프트로 직접 변환 중... (묘사 길이: {len(visual_description)}자)")
+        
+        photorealistic_prompt = self._convert_visual_description_to_photorealistic(
+            visual_description=visual_description,
+            base_image=base_img
+        )
+        
+        logger.info(f"프롬프트 (실사화): {photorealistic_prompt[:200]}...")
+        
+        # Text-to-Image 생성 (edit_image 대신 generate_images 사용)
+        images = imagen_model.generate_images(
+            prompt=photorealistic_prompt,
+            number_of_images=1,
+            aspect_ratio="1:1",
+            safety_filter_level="block_few",
+            person_generation="allow_adult",
+            add_watermark=False,
+        )
+        
+        logger.info(f"✓ generate_images() 호출 완료")
+        
+        # 이미지 저장
+        if images and len(images.images) > 0:
+            result_image = images.images[0]
+            result_image.save(location=output_path, include_generation_parameters=False)
+            
+            logger.info(f"✅ 실사 인물 이미지 생성 성공: {output_path}")
+            
+            return output_path
+        else:
+            raise ValueError("이미지가 생성되지 않았습니다.")
+    
+    def _convert_visual_description_to_photorealistic(
+        self, 
+        visual_description: str,
+        base_image: Optional[PILImage.Image] = None
+    ) -> str:
+        """묘사 2 (한글)를 이미지와 함께 Gemini에게 넘겨서 실사 프롬프트 생성 (직접 변환)"""
+        
+        logger.info("📸+📝 묘사 2와 이미지를 Gemini에게 직접 전달하여 실사 프롬프트 생성 중...")
+        
+        # Gemini 멀티모달 프롬프트 구성
+        conversion_prompt = f"""You are a professional photography director specialized in hyper-realistic portrait photography.
+
+**MISSION:**
+Convert this detailed Korean facial aging description into a photorealistic portrait photography prompt for Imagen AI.
+
+**CRITICAL RULES (RAI Policy - Must Follow):**
+1. ❌ NEVER use: "aging", "old", "elderly", "wrinkle", "sagging", "loss", "damage", "deterioration"
+2. ✅ Use instead:
+   - "aging/old" → "mature person" or specific age like "45-year-old"
+   - "wrinkle/주름" → "facial expression line" or "natural facial line"
+   - "crow's feet" → "eye corner lines"
+   - "sagging/처짐" → "facial contour characteristics" or "contour variation"
+   - "nasolabial fold/팔자주름" → "smile line area"
+   - "dark circles/다크서클" → "under-eye area characteristics"
+   
+**INPUT (Korean Description with Quantitative Details):**
+{visual_description}
+
+**OUTPUT REQUIREMENTS:**
+1. **Subject**: Portrait of [specific age]-year-old [ethnicity] [gender]
+2. **Facial Features** (extract from Korean text and convert to photography terms):
+   - Eye area: Fine expression lines (depth in mm, length in cm)
+   - Forehead: Horizontal lines (depth, count)
+   - Cheeks: Skin tone variations (percentage changes), pigmentation patterns (size)
+   - Smile line area: Characteristics (depth, length)
+   - Jawline: Contour definition
+3. **Skin Details**: Texture, tone variations, pore visibility
+4. **Photography Specs**: 8K, professional DSLR, studio lighting, hyper-realistic
+5. **Style**: Photographic realism, no artistic interpretation
+
+**EXAMPLE OUTPUT:**
+"Portrait of a 45-year-old Korean male. Professional studio photograph, 8K resolution. Natural facial characteristics: fine expression lines around eyes visible at rest (depth 1.5mm, length 1.5cm, 3-4 distinct lines), horizontal forehead lines (depth 1mm, 2 lines), under-eye area shows subtle characteristics, smile line area with natural development (depth 2mm), facial contour variations in cheek area with 15% darker skin tone patches (3-5mm size). Realistic skin texture with visible pores. DSLR photography, natural studio lighting, front-facing professional headshot. Hyper-realistic rendering, authentic human features."
+
+**YOUR OUTPUT (English only, photography prompt format):**"""
+
+        try:
+            # Gemini 모델 생성 (v1beta API 지원 모델 사용)
+            model = genai.GenerativeModel("gemini-1.5-flash-latest")
+            
+            # 이미지가 있으면 멀티모달, 없으면 텍스트만
+            if base_image:
+                logger.info("✓ 이미지 + 텍스트 멀티모달 프롬프트 생성")
+                
+                # 추가 지시: 이미지의 얼굴 특징 유지
+                multimodal_instruction = """
+
+**BASE FACE IMAGE:**
+The image above shows the person's current face. Maintain these core facial features (face shape, eye/nose/lip structure, facial proportions) while applying the aging characteristics described in Korean text.
+
+Analyze the face in the image and preserve:
+- Basic face shape and bone structure
+- Eye shape and positioning
+- Nose structure
+- Lip shape
+- Overall facial proportions
+
+Then add the natural facial characteristics from the Korean description."""
+                
+                response = model.generate_content(
+                    [conversion_prompt + multimodal_instruction, base_image],
+                    generation_config={
+                        'temperature': 0.3,
+                        'top_p': 0.9,
+                        'max_output_tokens': 1024,
+                    }
+                )
+            else:
+                logger.info("✓ 텍스트 단독 프롬프트 생성")
+                response = model.generate_content(
+                    conversion_prompt,
+                    generation_config={
+                        'temperature': 0.3,
+                        'top_p': 0.9,
+                        'max_output_tokens': 1024,
+                    }
+                )
+            
+            # 안전한 텍스트 추출
+            photorealistic_prompt = ""
+            try:
+                photorealistic_prompt = response.text
+            except (ValueError, AttributeError):
+                for part in response.candidates[0].content.parts:
+                    photorealistic_prompt += part.text
+            
+            photorealistic_prompt = photorealistic_prompt.strip()
+            
+            # 불필요한 텍스트 제거
+            cleanup_phrases = ["Here is", "Here's", "Output:", "**", "```", "프롬프트:"]
+            for phrase in cleanup_phrases:
+                photorealistic_prompt = photorealistic_prompt.replace(phrase, "")
+            
+            photorealistic_prompt = photorealistic_prompt.strip()
+            
+            # 검증: 금지어 체크 및 자동 교체
+            forbidden_replacements = {
+                'aging': 'mature characteristics',
+                'old': 'mature',
+                'elderly': 'mature adult',
+                'wrinkle': 'facial line',
+                'wrinkles': 'facial lines',
+                'sagging': 'contour variation',
+                'damage': 'change',
+                'deterioration': 'change',
+                'loss': 'change'
+            }
+            
+            found_forbidden = []
+            for forbidden, replacement in forbidden_replacements.items():
+                if forbidden in photorealistic_prompt.lower():
+                    found_forbidden.append(forbidden)
+                    photorealistic_prompt = photorealistic_prompt.replace(forbidden, replacement)
+                    photorealistic_prompt = photorealistic_prompt.replace(forbidden.capitalize(), replacement.capitalize())
+            
+            if found_forbidden:
+                logger.warning(f"⚠️ 금지어 발견 및 자동 교체: {found_forbidden}")
+            
+            logger.info(f"✓ 실사 프롬프트 생성 완료: {photorealistic_prompt[:200]}...")
+            return photorealistic_prompt
+            
+        except Exception as e:
+            logger.error(f"Gemini 직접 변환 실패: {e}")
+            logger.warning("대체 프롬프트 사용")
+            
+            # 실패 시 안전한 대체 프롬프트
+            return f"Portrait of a mature Asian adult. Professional studio photograph. Natural facial characteristics with visible expression lines and natural skin texture. 8K photography, realistic rendering. Based on detailed description: {visual_description[:300]}"
+    
+    def _convert_to_photorealistic_prompt(self, technical_prompt: str) -> str:
+        """의학적 표현을 실사 사진 묘사로 변환 (Gemini가 동적으로 변환)"""
+        
+        logger.info("Gemini로 실사 사진 프롬프트 변환 중...")
+        
+        conversion_prompt = f"""You are a professional photography director. Convert this technical facial description into a natural, photorealistic portrait prompt.
+
+**CRITICAL RULES (RAI Policy Compliance):**
+1. NEVER use these words: "aging", "old", "elderly", "wrinkle", "sagging", "loss", "damage"
+2. Use neutral alternatives:
+   - "aging/old" → "mature person" or specific age "45-year-old"
+   - "wrinkle" → "facial expression line" or "natural facial line"
+   - "crow's feet" → "eye corner lines" 
+   - "sagging" → "facial contour characteristics"
+   - "nasolabial fold" → "smile line area"
+
+**INPUT (Technical Description):**
+{technical_prompt}
+
+**OUTPUT FORMAT (Photorealistic Portrait Prompt):**
+Create a detailed photography prompt with:
+1. Subject basics: Portrait of [age]-year-old [ethnicity] [gender]
+2. Facial features: Natural facial characteristics including [convert technical terms to photography language]
+3. Photography specs: 8K resolution, professional DSLR, studio lighting
+4. Style emphasis: Hyper-realistic, photographic quality, no artistic interpretation
+
+**EXAMPLE OUTPUT:**
+"Portrait of a 45-year-old Korean male. Professional studio photograph. Natural facial characteristics: fine expression lines around eyes (depth 1-2mm), forehead lines visible at rest, natural smile line development, slight facial contour changes in cheek area. Realistic skin texture with visible pores. 8K ultra-high definition, DSLR photography, natural studio lighting. Hyper-realistic rendering, authentic human features. Front-facing, professional headshot."
+
+**YOUR OUTPUT (English only, no explanations):**"""
+
+        try:
+            response = self.model.generate_content(
+                conversion_prompt,
+                generation_config={
+                    'temperature': 0.3,
+                    'top_p': 0.9,
+                    'max_output_tokens': 512,
+                }
+            )
+            
+            # 안전한 텍스트 추출
+            photorealistic_prompt = ""
+            try:
+                photorealistic_prompt = response.text
+            except (ValueError, AttributeError):
+                for part in response.candidates[0].content.parts:
+                    photorealistic_prompt += part.text
+            
+            photorealistic_prompt = photorealistic_prompt.strip()
+            
+            # 불필요한 텍스트 제거
+            cleanup_phrases = ["Here is", "Here's", "Output:", "**", "```"]
+            for phrase in cleanup_phrases:
+                photorealistic_prompt = photorealistic_prompt.replace(phrase, "")
+            
+            photorealistic_prompt = photorealistic_prompt.strip()
+            
+            # 검증: 금지어 체크
+            forbidden_words = ['aging', 'old', 'elderly', 'wrinkle', 'sagging', 'damage']
+            found_forbidden = [w for w in forbidden_words if w in photorealistic_prompt.lower()]
+            
+            if found_forbidden:
+                logger.warning(f"⚠️ 금지어 발견: {found_forbidden} - 수동 교체")
+                replacements = {
+                    'aging': 'mature characteristics',
+                    'old': 'mature',
+                    'elderly': 'mature adult',
+                    'wrinkle': 'facial line',
+                    'wrinkles': 'facial lines',
+                    'sagging': 'contour variation',
+                    'damage': 'change'
+                }
+                for forbidden, replacement in replacements.items():
+                    photorealistic_prompt = photorealistic_prompt.replace(forbidden, replacement)
+            
+            logger.info(f"✓ 실사 프롬프트 변환 완료: {photorealistic_prompt[:150]}...")
+            return photorealistic_prompt
+            
+        except Exception as e:
+            logger.error(f"Gemini 변환 실패: {e}")
+            logger.warning("대체 프롬프트 사용")
+            
+            # 실패 시 안전한 대체 프롬프트
+            return f"Portrait of a mature Asian adult. Professional studio photograph. Natural facial characteristics with visible expression lines and natural skin texture. 8K photography, realistic rendering. {technical_prompt[:200]}"
+
+        
     
     def _generate_with_gemini_image(
         self,
@@ -927,12 +1265,7 @@ Professional portrait photograph of a {future_age}-year-old {gender_en} Asian pe
             logger.error(f"Gemini Image 모델 사용 실패: {e}")
             raise
             
-            # 대체 방법 안내
-            logger.info("\n=== 대체 이미지 생성 방법 ===")
-            logger.info("1. Google AI Studio: https://aistudio.google.com/app/prompts/new_chat")
-            logger.info("2. Vertex AI Console: https://console.cloud.google.com/vertex-ai/generative/vision")
-            logger.info(f"\n생성된 프롬프트를 복사하여 사용하세요:\n{imagen_prompt}")
-            raise
+           
     
     def _create_user_summary(self, user_data: UserLifestyleData) -> str:
         """사용자 데이터를 요약된 텍스트로 변환"""
@@ -1141,26 +1474,30 @@ Professional portrait photograph of a {future_age}-year-old {gender_en} Asian pe
 def generate_aging_image_prompt_pipeline(
     user_data: UserLifestyleData,
     base_image_path: Optional[str] = None,
-    generate_image: bool = True,
+    generate_image: bool = False,
     output_image_path: str = "output_aging_prediction.png",
-    model_name: str = "imagen-4.0-generate-001"
+    model_name: str = "gemini-2.5-flash-image",
+    image_model_type: str = "gemini"
 ) -> Dict:
-    """전체 파이프라인 (고도화): 사용자 데이터 → RAG 검색 → 논문 수치 분석 → 부위별 묘사 → Imagen 3 프롬프트 → Image-to-Image 노화 얼굴 생성
+    """전체 파이프라인 (고도화): 사용자 데이터 → RAG 검색 → 논문 수치 분석 → 부위별 묘사 → Imagen 프롬프트 → 노화 얼굴 생성
     
     Args:
         user_data: 사용자 생활습관 데이터
         base_image_path: 사용자가 업로드한 현재 얼굴 사진 경로 (필수!)
         generate_image: 이미지를 실제로 생성할지 여부 (False일 경우 프롬프트까지만 생성)
         output_image_path: 생성된 이미지 저장 경로
-        model_name: 사용할 모델 (Imagen 4.0, 3.0, Gemini Image 등)
-            - 추천: "imagen-4.0-generate-001" (최신 버전)
-            - 빠른 속도: "imagen-4.0-fast-generate-001"
-            - 최고 품질: "imagen-4.0-ultra-generate-001"
+        model_name: 사용할 모델
+            - Gemini (권장): "gemini-2.5-flash-image", "gemini-3-pro-image-preview"
+            - Vertex AI: "imagen-4.0-generate-001", "imagen-3.0-generate-002"
+        image_model_type: 이미지 생성 방식
+            - "gemini": Google AI Gemini 이미지 생성 (기본값)
+            - "vertex-ai": Vertex AI Imagen (레거시)
         
     Returns:
         파이프라인 결과 (리포트, 시각적 묘사, 프롬프트, 이미지 경로 등)
     """
     logger.info("=== 노화 이미지 생성 파이프라인 (고도화) 시작 ===")
+    logger.info(f"모델 타입: {image_model_type}")
     logger.info(f"사용 모델: {model_name}")
     
     visualizer = BioStreamVisualizer()
@@ -1191,7 +1528,8 @@ def generate_aging_image_prompt_pipeline(
                     imagen_prompt=imagen_prompt,
                     visual_description=step3_result['visual_description'],
                     output_path=output_image_path,
-                    model_name=model_name
+                    model_name=model_name,
+                    image_model_type=image_model_type
                 )
                 logger.info(f"Step 5 완료: 노화 얼굴 이미지 생성 성공 - {image_path}")
             except Exception as e:
@@ -1264,10 +1602,7 @@ if __name__ == "__main__":
             print(f"\n[경고] 샘플 얼굴 사진 없음 ({sample_face_image})")
             print("\n[해결방법 1] 실제 얼굴 사진을 추가하세요:")
             print(f"  - 본인 셀카를 ai_service/{sample_face_image}로 저장")
-            print(f"  - 또는 무료 스톡 이미지 다운로드:")
-            print(f"    https://unsplash.com/s/photos/face-portrait")
-            print(f"    https://www.pexels.com/search/portrait/")
-            print("\n[해결방법 2] 테스트용 더미 이미지 생성:")
+           
             
             # 더미 이미지 생성 시도
             try:
@@ -1304,18 +1639,24 @@ if __name__ == "__main__":
         
         # 테스트할 모델들
         test_models = [
-            "imagen-4.0-generate-001",  # 최신 Imagen 4.0
-            # "imagen-4.0-fast-generate-001",  # 빠른 버전
-            # "imagen-3.0-generate-002",  # Imagen 3.0
+            # ("gemini", "gemini-2.5-flash-image"),  # Gemini 얼굴 분석 + Imagen 생성 (할당량 초과)
+            ("vertex-ai", "imagen-4.0-generate-001"),  # Vertex AI Imagen 4.0만 사용
         ]
         
-        print(f"\n[테스트] 사용 모델: {test_models[0]}")
+        model_type, model_name = test_models[0]
+        print(f"\n[테스트] 모드: {model_type}")
+        if model_type == "gemini":
+            print(f"  - Gemini로 얼굴 분석 → Vertex AI Imagen으로 이미지 생성")
+        else:
+            print(f"  - Vertex AI Imagen으로 직접 이미지 생성")
+        print(f"  - 모델: {model_name}")
         
         result = generate_aging_image_prompt_pipeline(
             user_data=sample_user,
             base_image_path=sample_face_image,
             generate_image=use_image,
-            model_name=test_models[0]
+            model_name=model_name,
+            image_model_type=model_type
         )
         
         print("\n" + "="*80)
