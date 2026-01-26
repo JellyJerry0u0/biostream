@@ -383,7 +383,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 # 커스텀 LLM 초기화
 custom_llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-pro",
+    model="gemini-1.5-flash",
     google_api_key="your_key",
     temperature=0.1,  # 더 일관된 결과
     max_tokens=4096
