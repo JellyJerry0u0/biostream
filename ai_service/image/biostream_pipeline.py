@@ -208,7 +208,7 @@ class BioStreamPipeline:
             search_results = self.qdrant_client.query_points(
                 collection_name=self.collection_name,
                 query=query_vector,
-                limit=5,
+                limit=10,
                 with_payload=True,
                 with_vectors=False
             ).points
@@ -334,14 +334,16 @@ class BioStreamPipeline:
 - 운동 빈도: 주 {exercise}회
 
 ##[지침 1:논문 기반 분석 및 리포트 작성]
+0. 기미, 색소 침착, 검버섯, 주름, 피부 처짐 등 피부 노화 상세 묘사에 집중하세요
 1. 논문에 명시된 수치(mm, cm, %)를 바탕으로 사용자의 피부 노화 양상을 분석하세요.
 2. 사실적으로 객관적인 톤을 유지하며, 근거 없는 미화나 과장된 공포는 배제하세요.
+3. 피부 노화에 집중하며, 다른 건강 문제는 다루지 마세요
 3. [한글 리포트]에는 다음을 포함합니다:
   - 현재 생활습관이 피부 노화에 미치는 영향 요약
   - 각 생활습관별 노화 기여도 분석
   - 논문 근거 기반 예상 노화 양상 (주름, 탄력, 색소 침착 등)
   - 논문에서 예측하는 부위별 정밀 변화 (주름 깊이 mm, 색소 농도 % 등 시각화 가능한 수치 언급)
-  - 과학적 근거에 기반한 개인 맞춤형 예방 솔루션
+ 
 
 ##[지침 2: SDXL 기술 지침서(영문 프롬프트) 작성]
 1. 프롬프트 구조 및 순서 (중요도 순):
@@ -567,12 +569,19 @@ class BioStreamPipeline:
             logger.info(f"   - High Noise Frac: {high_noise_frac}")
             logger.info(f"   - Negative Prompt: {negative_prompt[:80]}...")
             
+            # Replicate에 전달되는 실제 프롬프트 전체 출력
+            logger.info(f"\n{'='*80}")
+            logger.info(f"🎨 Replicate SDXL에 전달되는 실제 프롬프트 (Gemini 생성):")
+            logger.info(f"{'='*80}")
+            logger.info(f"{prompt}")
+            logger.info(f"{'='*80}\n")
+            
             # Replicate SDXL 호출 (동적 파라미터 적용)
             output = replicate.run(
                 "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
                 input={
                     "image": image_uri,
-                    "prompt": prompt,
+                    "prompt": prompt,  # Gemii가 생성한 영문 프롬프트가 여기 들어감
                     "negative_prompt": negative_prompt,
                     "prompt_strength": prompt_strength,  # 동적 계산됨
                     "num_outputs": 1,

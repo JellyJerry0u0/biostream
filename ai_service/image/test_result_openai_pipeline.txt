@@ -1,0 +1,138 @@
+================================================================================
+ImagePipeline 테스트 결과 (OPENAI)
+================================================================================
+
+================================================================================
+1. 한글 리포트
+================================================================================
+## 의료 노화 분석 리포트
+
+****
+
+**제목: 35세 남성 흡연자의 가속화된 생물학적 노화 분석**
+
+35세 남성에게서 관찰되는 생물학적 노화 양상은 연령 표준 대비 현저히 가속화된 형태로 나타나며, 이는 만성적인 흡연, 수면 부족, 높은 스트레스 수준 등 복합적인 외인성 요인에 기인합니다. 피부 조직학적으로는 진피층의 콜라겐(Type I) 분해율이 증가하고, 탄력 섬유(엘라스틴)가 불규칙하게 축적되는 광탄력섬유증(Elastosis)이 두드러지게 진행되었을 것으로 추정됩니다.
+
+**1. 안면 해부학적 변화 및 측정치**
+
+*   **이마 및 미간:** 활동성 근육 주름(dynamic rhytides)이 정적인 주름(static rhytides)으로 이행되는 단계입니다. 이마의 수평 주름(rhytides)은 평균 2.0mm에서 3.5mm 깊이로 측정되며, 흡연으로 인한 혈관 수축 및 콜라겐 감소가 주름의 깊이를 비흡연자 대비 약 15~20% 가속화시킵니다.
+*   **눈가 (Periorbital Area):** 만성적인 수면 부족(5시간)은 미세 순환 장애를 심화시켜 안와 하방의 부종 및 색소 침착(infraorbital hyperpigmentation)을 유발합니다. 외안각의 주름(Crow’s feet)은 초기 단계보다 깊게 확장되어 있으며, 안와 지방 패드(orbital fat pad)의 미세한 밀도 감소로 인해 눈물 고랑(tear trough deformity)이 나타나기 시작합니다.
+*   **중안면 및 팔자 주름 (Nasolabial Folds):** 중력의 영향과 진피 지지 구조의 약화로 인해 양측 팔자 주름이 심화되었으며, 이는 약 3.0mm에서 4.0mm 깊이로 관찰됩니다. 이는 볼 지방 패드(malar fat pad)의 초기 하강 징후와 관련됩니다.
+*   **피부 구조 및 질감:** T-존 부위의 모공 확장이 두드러지며, 만성적인 자외선 노출로 인한 불규칙한 멜라닌 분포(mottled hyperpigmentation)와 광노화성 반점(solar lentigines)이 관찰됩니다. 흡연으로 인해 미세 혈관이 손상되고 진피층의 수분 보유 능력이 감소하여 피부 건조증(xerosis) 및 거칠음(rough texture)이 증가합니다.
+
+**2. 생활 습관 노화 영향 분석**
+
+| 요인 | 생물학적 영향 | 예상 가속화 비율 |
+| :--- | :--- | :--- |
+| **흡연** | 콜라겐 분해 효소(MMPs) 활성화, 혈관 수축, 피부 저산소증 | 주름 형성 25-30% 증가 |
+| **수면 부족 (5시간)** | 야간 세포 복구 능력 저하, 코르티솔 증가, 만성 염증 유발 | 피부 장벽 기능 저하 (TEWL 증가) |
+| **높은 스트레스 (8/10)** | 코르티솔 분비 증가, 피부 면역 반응 억제, 텔로미어 단축 가속화 | 상처 치유 지연 및 홍반 증가 |
+| **음주** | 전신 염증 반응 유발, 안면 혈관 확장(Vasodilation), 주사(Rosacea) 유사 증상 유발 가능 | 안면 홍반 및 모세혈관 확장증 (Telangiectasia) 증가 |
+
+**3. 예방 및 관리 권고사항**
+
+생물학적 노화 속도를 늦추기 위해서는 외인성 유발 요인에 대한 적극적인 개입이 필수적입니다.
+1.  **금연 및 금주:** MMPs 활성화를 억제하고 피부의 미세 순환을 정상화하여 진피층의 회복을 유도해야 합니다.
+2.  **수면 위생 확립:** 최소 7시간의 수면 시간을 확보하여 피부 세포의 야간 복구 사이클을 정상화하고, 다크 서클의 혈관성/색소성 요인을 완화해야 합니다.
+3.  **광보호 강화:** 광노화 방지를 위해 UVA/UVB 차단 지수 SPF 50 이상의 광범위 자외선 차단제 사용을 생활화해야 합니다.
+4.  **국소 레티노이드 요법:** 진피층 콜라겐 합성을 촉진하고 표피 세포 회전율을 개선하여 주름 깊이 감소에 기여합니다.
+
+---
+
+**
+
+================================================================================
+2. Gemini 팩트 (순수 노화 묘사)
+================================================================================
+**
+
+The 35-year-old male exhibits clinical markers of accelerated extrinsic aging, primarily driven by chronic smoking, sleep deprivation, and high stress levels. Histologically, there is evidence of early but aggressive elastosis characterized by irregular, fragmented elastin fiber deposition within the papillary dermis, substantially reducing skin recoil capacity.
+
+**Anatomical and Structural Changes:**
+
+**Forehead and Glabella:** Significant static rhytides are present, with horizontal furrows reaching depths between 2.5 mm and 3.5 mm. Glabellar lines are pronounced, reflecting increased muscle tone and underlying collagen degradation accelerated by nicotine-induced vasoconstriction.
+
+**Periorbital Region:** Chronic sleep restriction results in impaired lymphatic drainage, leading to infraorbital edema and notable hyperpigmentation (dark circles) due to vascular stasis. Dynamic periorbital rhytides (crow's feet) extend laterally, showing premature fixation. Reduced orbital septum integrity contributes to early tear trough hollowing.
+
+**Mid-Face and Volume Loss:** Bilateral nasolabial folds are deepened, clinically measured at approximately 3.0 mm to 4.0 mm, indicative of early facial volume recession and gravitational descent of the subcutaneous fat pads.
+
+**Skin Texture and Integrity:** The skin surface displays visible xerosis and a roughened texture attributed to compromised epidermal barrier function (increased Transepidermal Water Loss – TEWL). Scattered solar lentigines and mottled hyperpigmentation reflect cumulative photodamage. Pore size is visibly enlarged, particularly across the T-zone.
+
+**Vascular Manifestations:** Chronic alcohol consumption contributes to persistent facial erythema and prominent telangiectasia, visible as fine, dilated blood vessels, primarily over the malar eminences, reflecting underlying microcirculatory instability.
+
+**Dermal Matrix:** The degradation rate of Type I and Type III collagen exceeds the synthesis rate, estimated to be declining by 1% annually, compounded by smoking-induced Matrix Metalloproteinase (MMP) activation. This results in reduced dermal density and increased skin laxity, subtly defining early jowling along the mandibular border.
+
+================================================================================
+3. Python 조립 - Identity Anchor
+================================================================================
+[IDENTITY_PRESERVATION_CRITICAL]: A photorealistic portrait of THE EXACT SAME PERSON from the input photo. Maintain absolute structural integrity.
+- Preserve IDENTICAL bone structure (skull shape, cheekbones, jawline contour, chin definition).
+- Preserve IDENTICAL eye shape, eye placement, and iris color.
+- Preserve IDENTICAL nose bridge, tip structure, and nostril shape.
+- Preserve IDENTICAL mouth width and lip shape.
+- The subject must be immediately recognizable as the original individual, only older.
+
+================================================================================
+4. Python 조립 - Texture Booster
+================================================================================
+[EXPLICIT_TEXTURE_EMPHASIS]: Emphasize raw, unfiltered skin imperfections.
+- Visible solar lentigines (age spots) with irregular borders and varying dark pigmentation across cheeks and forehead.
+- Pronounced uneven skin tone with visible redness (erythema) and broken capillaries (telangiectasia) on nose and cheeks.
+- Deeply etched static wrinkles that cast distinct micro-shadows.
+- Significant skin laxity and sagging (ptosis) along the jawline, forming visible jowls.
+- Rough, leathery, weathered skin texture with visible enlarged pores and dryness.
+
+================================================================================
+5. Python 조립 - Technical Preset
+================================================================================
+[PHOTOGRAPHY_TECHNICAL]: 8k resolution, professional DSLR camera, 85mm portrait lens, f/2.8 aperture, sharp focus on skin texture, RAW photo quality, unfiltered, no retouching.
+[LIGHTING_SETUP]: Harsh cinematic side-lighting to accentuate deep shadows in wrinkles and skin crevices, revealing subsurface scattering and texture depth.
+[QUALITY_MARKERS]: masterpiece, photorealistic, hyperrealistic, extremely detailed, brutal realism portrait.
+
+================================================================================
+6. 최종 조립된 프롬프트
+================================================================================
+[IMAGE_EDIT_TASK]: Aged version of the provided subject.
+    
+[STRICT_IDENTITY_CONSTRAINT]: 
+- THIS IS NOT A NEW CHARACTER. This is the SPECIFIC PERSON from the input image.
+- DO NOT change the person's ethnicity, eye color, or basic facial geometry.
+[STRICT_IDENTITY_LOCK - DO NOT ALTER]: 
+- Maintain the EXACT original facial bone structure and skull shape (zygomatic arch, mandibular angle, mental protuberance).
+- Keep the identical eye color, epicanthic fold configuration, and interpupillary distance.
+- Preserve the specific nasal bone structure: bridge height, cartilage shape, nostril width from the source.
+- Do not change the jawline's skeletal width (bigonial distance) or the chin's bony protrusion.
+- CRITICAL: Keep the youth base structure intact, only overlay aging textures additively.
+
+[AGING_SPECIFICATIONS - APPLY AS TEXTURE OVERLAY]:
+**
+
+The 35-year-old male exhibits clinical markers of accelerated extrinsic aging, primarily driven by chronic smoking, sleep deprivation, and high stress levels. Histologically, there is evidence of early but aggressive elastosis characterized by irregular, fragmented elastin fiber deposition within the papillary dermis, substantially reducing skin recoil capacity.
+
+**Anatomical and Structural Changes:**
+
+**Forehead and Glabella:** Significant static rhytides are present, with horizontal furrows reaching depths between 2.5 mm and 3.5 mm. Glabellar lines are pronounced, reflecting increased muscle tone and underlying collagen degradation accelerated by nicotine-induced vasoconstriction.
+
+**Periorbital Region:** Chronic sleep restriction results in impaired lymphatic drainage, leading to infraorbital edema and notable hyperpigmentation (dark circles) due to vascular stasis. Dynamic periorbital rhytides (crow's feet) extend laterally, showing premature fixation. Reduced orbital septum integrity contributes to early tear trough hollowing.
+
+**Mid-Face and Volume Loss:** Bilateral nasolabial folds are deepened, clinically measured at approximately 3.0 mm to 4.0 mm, indicative of early facial volume recession and gravitational descent of the subcutaneous fat pads.
+
+**Skin Texture and Integrity:** The skin surface displays visible xerosis and a roughened texture attributed to compromised epidermal barrier function (increased Transepidermal Water Loss – TEWL). Scattered solar lentigines and mottled hyperpigmentation reflect cumulative photodamage. Pore size is visibly enlarged, particularly across the T-zone.
+
+**Vascular Manifestations:** Chronic alcohol consumption contributes to persistent facial erythema and prominent telangiectasia, visible as fine, dilated blood vessels, primarily over the malar eminences, reflecting underlying microcirculatory instability.
+
+**Dermal Matrix:** The degradation rate of Type I and Type III collagen exceeds the synthesis rate, estimated to be declining by 1% annually, compounded by smoking-induced Matrix Metalloproteinase (MMP) activation. This results in reduced dermal density and increased skin laxity, subtly defining early jowling along the mandibular border.
+
+[VISUAL_STYLE]: 
+- Brutal realism, raw photography. 
+- Side-lighting to emphasize skin texture. 
+- 8k resolution, macro-lens detail of the existing face.
+- NO AI smoothing, NO facial reconstruction.
+
+================================================================================
+7. 생성 정보
+================================================================================
+이미지 모델: OPENAI
+이미지 URL: None
+로컬 경로: result_gpt_image_20260130_210831.png
+논문 근거: 5개

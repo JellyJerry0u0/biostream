@@ -1,0 +1,108 @@
+================================================================================
+ImagePipeline 테스트 결과 (역할 분리 아키텍처)
+================================================================================
+
+================================================================================
+1. 한글 리포트
+================================================================================
+## 35세 남성 흡연자의 생물학적 노화 분석 보고서
+
+본 분석은 35세 남성 흡연자의 생활 습관(흡연, 음주, 만성 수면 부족, 고스트레스)이 가속화시킨 외인성 노화 패턴을 중심으로 생물학적 변화를 기술합니다.
+
+### 1. 전반적인 피부 및 조직 변화
+
+사용자의 높은 외인성 위험 요인(흡연 및 만성 스트레스)으로 인해 정상적인 연령 대비 콜라겐 분해율이 가속화되었습니다. 흡연은 Matrix Metalloproteinases (MMPs) 활성도를 증가시켜 진피 내 Type I 및 Type III 콜라겐의 연간 손실률(평균 1%)을 최대 50% 이상 증가시킬 수 있습니다. 이는 조기 진피 위축(Dermal Atrophy)과 탄력 섬유 변성(Elastosis)을 유발합니다. 피부 탄력 측정 지수(Cutometer R5/R7)는 10-15% 가량 저하되었을 것으로 추정됩니다.
+
+### 2. 해부학적 부위별 노화 현상 및 측정 데이터
+
+**A. 전두부 및 안와 주위 (Forehead & Periorbital Region)**
+*   **Rhytides (주름):** 만성적인 표정 근육 사용과 탄력 저하로 인해 전두부의 수평 잔주름(Transverse Rhytides)이 초기 정적 주름으로 전환되고 있습니다. 깊이는 **1.5mm에서 2.5mm** 사이로 관찰되며, 이는 정상적인 35세 비흡연자 대비 깊은 수준입니다.
+*   **Periorbital Lines:** 측면 안와 주위(Crow's Feet)의 동적 주름이 휴식 시에도 부분적으로 남아 있으며, 이는 탄력 섬유의 파편화로 인한 결과입니다.
+*   **Infraorbital Area:** 만성적인 5시간 수면 습관은 눈 밑 고랑(Tear Trough Deformity)의 초기 심화와 함께, 혈관 확장 및 정체로 인한 **하안검 주변 과색소침착(Periorbital Hyperpigmentation)**, 즉 다크 서클을 유발합니다.
+
+**B. 중안면 및 구강 주위 (Midface & Perioral Region)**
+*   **Nasolabial Folds (팔자 주름):** 중안면부 지방 패드의 하방 이동 및 진피 위축이 복합적으로 작용하여 비순구 주름이 심화되었습니다. 평균 깊이는 **3.0mm에서 4.0mm**로, 흡연으로 인한 구강 주위 근육의 반복적인 사용과 콜라겐 손실이 깊이를 가중시킵니다.
+*   **Cheek Texture:** 누적된 자외선 노출과 흡연으로 인해 진피의 투명도가 감소하고 표피 두께의 불규칙성(Epidermal Irregularity)이 증가하여 거칠고 가죽 같은 외형(Leathery Texture)을 보입니다. 광범위한 **태양 흑자(Solar Lentigines)**가 관찰됩니다.
+
+### 3. 생활 습관에 따른 병리학적 영향 분석
+
+*   **흡연:** 니코틴은 말초 혈관 수축을 유발하여 피부 영양 공급을 저해하고, 활성 산소 종(ROS) 생성을 촉진하여 산화 스트레스를 극대화합니다. 이는 콜라겐과 엘라스틴의 변성을 유발하며, 피부의 조기 노화 지표를 20% 이상 가속화시킵니다.
+*   **음주:** 습관적인 음주는 모세혈관 확장(Vasodilation)을 유발하여 볼과 코 주변에 영구적인 **모세혈관 확장증(Telangiectasia)** 및 지속적인 홍반(Persistent Erythema)을 야기합니다.
+*   **스트레스 및 수면 부족:** 높은 스트레스 수치(8/10)와 5시간 수면은 코르티솔 수치를 만성적으로 증가시켜 콜라겐 분해를 촉진하고, 야간 피부 재생 및 회복 과정을 방해합니다. 이는 피부 장벽 기능(Skin Barrier Function) 약화 및 경피 수분 손실(TEWL)의 15% 증가로 이어집니다.
+
+### 4. 노화 방지 권고 사항 (Prevention Recommendations)
+
+1.  **진피 재건:** 콜라겐 및 엘라스틴 합성을 촉진하는 국소 레티노이드 또는 레티놀 유도체 사용.
+2.  **산화 스트레스 관리:** 비타민 C, E 등의 강력한 항산화제 병행 적용.
+3.  **생활 습관 교정:** 즉각적인 금연 및 주간 수면 시간을 최소 7시간 이상으로 확보하여 호르몬 균형(코르티솔) 정상화 및 피부 회복 기전 활성화.
+4.  **UV 차단:** 광노화 징후의 심화를 막기 위해 광범위 스펙트럼의 자외선 차단제(SPF 30 이상)를 매일 사용.
+
+***
+
+================================================================================
+2. Gemini 팩트 (순수 노화 묘사)
+================================================================================
+A 35-year-old male exhibiting significant signs of accelerated extrinsic aging, primarily driven by chronic smoking, sleep debt, and high stress. This profile presents advanced dermal pathology characterized by pronounced elastosis and collagen degradation.
+
+**Forehead:** Bilateral horizontal rhytides are transitioning from dynamic to static lines, presenting depths measured between 1.5mm and 2.5mm. The glabella displays nascent vertical frown lines (Glabellar Rhytides) associated with chronic muscle strain.
+
+**Periorbital Region:** Marked infraorbital hollowing and vascular stasis contribute to significant periorbital hyperpigmentation (dark circles), directly attributable to chronic sleep deprivation (5 hours). Lateral canthal lines (crow's feet) are evident upon animation and show persistent etched lines at rest, reflecting underlying fragmented elastin fibers.
+
+**Midface and Dermis:** The skin exhibits a rough, leathery texture consistent with solar elastosis and cumulative UV damage, often exacerbated by smoking. Scattered solar lentigines and mottled pigmentation indicate uneven melanin distribution. Nasolabial folds are structurally deepened, measuring approximately 3.0mm to 4.0mm in depth due to accelerated mid-dermal volume loss and gravitational pull. Dermal atrophy, characterized by a hypothesized 5-8% reduction in thickness compared to age-matched non-smokers, contributes to overall skin fragility.
+
+**Vascular and Metabolic:** Chronic alcohol consumption has induced persistent erythema and observable telangiectasia on the malar and nasal areas due to prolonged vasodilation. The combination of smoking and chronic stress elevates oxidative stress markers, hindering necessary cellular repair and increasing transepidermal water loss (TEWL), leading to compromised skin barrier function. Early signs of mandibular laxity (jowling) are observed due to structural breakdown of the retinacular cutis and deep fat compartment atrophy.
+
+================================================================================
+3. Python 조립 - Identity Anchor
+================================================================================
+[IDENTITY_PRESERVATION_CRITICAL]: A photorealistic portrait of THE EXACT SAME PERSON from the input photo. Maintain absolute structural integrity.
+- Preserve IDENTICAL bone structure (skull shape, cheekbones, jawline contour, chin definition).
+- Preserve IDENTICAL eye shape, eye placement, and iris color.
+- Preserve IDENTICAL nose bridge, tip structure, and nostril shape.
+- Preserve IDENTICAL mouth width and lip shape.
+- The subject must be immediately recognizable as the original individual, only older.
+
+================================================================================
+4. Python 조립 - Technical Preset
+================================================================================
+[PHOTOGRAPHY_TECHNICAL]: 8k resolution, professional DSLR camera, 85mm portrait lens, f/2.8 aperture, sharp focus on skin texture, RAW photo quality, unfiltered, no retouching.
+[LIGHTING_SETUP]: Harsh cinematic side-lighting to accentuate deep shadows in wrinkles and skin crevices, revealing subsurface scattering and texture depth.
+[QUALITY_MARKERS]: masterpiece, photorealistic, hyperrealistic, extremely detailed, brutal realism portrait.
+
+================================================================================
+5. 최종 조립된 프롬프트
+================================================================================
+[IDENTITY_PRESERVATION_CRITICAL]: A photorealistic portrait of THE EXACT SAME PERSON from the input photo. Maintain absolute structural integrity.
+- Preserve IDENTICAL bone structure (skull shape, cheekbones, jawline contour, chin definition).
+- Preserve IDENTICAL eye shape, eye placement, and iris color.
+- Preserve IDENTICAL nose bridge, tip structure, and nostril shape.
+- Preserve IDENTICAL mouth width and lip shape.
+- The subject must be immediately recognizable as the original individual, only older.
+
+[BIOLOGICAL_AGING_FACTS]: A 35-year-old male exhibiting significant signs of accelerated extrinsic aging, primarily driven by chronic smoking, sleep debt, and high stress. This profile presents advanced dermal pathology characterized by pronounced elastosis and collagen degradation.
+
+**Forehead:** Bilateral horizontal rhytides are transitioning from dynamic to static lines, presenting depths measured between 1.5mm and 2.5mm. The glabella displays nascent vertical frown lines (Glabellar Rhytides) associated with chronic muscle strain.
+
+**Periorbital Region:** Marked infraorbital hollowing and vascular stasis contribute to significant periorbital hyperpigmentation (dark circles), directly attributable to chronic sleep deprivation (5 hours). Lateral canthal lines (crow's feet) are evident upon animation and show persistent etched lines at rest, reflecting underlying fragmented elastin fibers.
+
+**Midface and Dermis:** The skin exhibits a rough, leathery texture consistent with solar elastosis and cumulative UV damage, often exacerbated by smoking. Scattered solar lentigines and mottled pigmentation indicate uneven melanin distribution. Nasolabial folds are structurally deepened, measuring approximately 3.0mm to 4.0mm in depth due to accelerated mid-dermal volume loss and gravitational pull. Dermal atrophy, characterized by a hypothesized 5-8% reduction in thickness compared to age-matched non-smokers, contributes to overall skin fragility.
+
+**Vascular and Metabolic:** Chronic alcohol consumption has induced persistent erythema and observable telangiectasia on the malar and nasal areas due to prolonged vasodilation. The combination of smoking and chronic stress elevates oxidative stress markers, hindering necessary cellular repair and increasing transepidermal water loss (TEWL), leading to compromised skin barrier function. Early signs of mandibular laxity (jowling) are observed due to structural breakdown of the retinacular cutis and deep fat compartment atrophy.
+
+[EXPLICIT_TEXTURE_EMPHASIS]: Emphasize raw, unfiltered skin imperfections.
+- Visible solar lentigines (age spots) with irregular borders and varying dark pigmentation across cheeks and forehead.
+- Pronounced uneven skin tone with visible redness (erythema) and broken capillaries (telangiectasia) on nose and cheeks.
+- Deeply etched static wrinkles that cast distinct micro-shadows.
+- Significant skin laxity and sagging (ptosis) along the jawline, forming visible jowls.
+- Rough, leathery, weathered skin texture with visible enlarged pores and dryness.
+
+[PHOTOGRAPHY_TECHNICAL]: 8k resolution, professional DSLR camera, 85mm portrait lens, f/2.8 aperture, sharp focus on skin texture, RAW photo quality, unfiltered, no retouching.
+[LIGHTING_SETUP]: Harsh cinematic side-lighting to accentuate deep shadows in wrinkles and skin crevices, revealing subsurface scattering and texture depth.
+[QUALITY_MARKERS]: masterpiece, photorealistic, hyperrealistic, extremely detailed, brutal realism portrait.
+
+================================================================================
+6. 생성 정보
+================================================================================
+이미지 URL: https://replicate.delivery/xezq/maq4c1heGLTXAiHgLRugKbcUYmQFi3Dx68TS0d9hXheZwjCWA/out-0.png
+로컬 경로: C:\Users\82102\BioStream\ai_service\image\aged_sample_face_20260130_193818.png
+논문 근거: 5개
