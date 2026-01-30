@@ -73,6 +73,9 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+
+
 volumes:
   postgres_data:
   qdrant_data:
+ 
