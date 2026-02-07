@@ -43,7 +43,15 @@ app.include_router(data.router, prefix="/data", tags=["Data Collection"])
 from .api import lifestyle_survey
 app.include_router(lifestyle_survey.router, prefix="/api", tags=["Lifestyle Survey"])
 
+# 건강 리포트 생성 API (Qdrant 중심 RAG + LangGraph 기반)
+from .api import report
+app.include_router(report.router, prefix="/api", tags=["Health Report"])
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "BioStream API is running"}
 
+@app.get("/health")
+def health_check():
+    """헬스 체크 엔드포인트"""
+    return {"status": "healthy", "message": "BioStream API is running"}

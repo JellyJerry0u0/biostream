@@ -43,5 +43,62 @@ async def get_user_health_report(user_id: int):
     """유저의 최신 건강 데이터를 카테고리별로 가져와 노화 분석 맥락을 제공합니다."""
     return fetch_user_aging_context(user_id)
 
+# 검증 도구 import
+try:
+    from mcp_server.tools.validation_tools import validate_section_structure
+except ImportError:
+    try:
+        import importlib.util
+        validation_path = mcp_server_dir / "tools" / "validation_tools.py"
+        spec = importlib.util.spec_from_file_location("validation_tools", validation_path)
+        validation_tools = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(validation_tools)
+        validate_section_structure = validation_tools.validate_section_structure
+    except Exception as e:
+        raise ImportError(f"Could not import validate_section_structure: {e}")
+
+@mcp.tool()
+async def validate_report_section(section_content: str, section_type: str):
+    """
+    리포트 섹션이 구조화된 형식인지 검증합니다.
+    
+    Args:
+        section_content: 검증할 섹션 내용
+        section_type: 섹션 타입 (goals, sleep, uv, lifestyle, activity)
+    
+    Returns:
+        검증 결과 딕셔너리
+    """
+    return validate_section_structure(section_content, section_type)
+
+# 시각자료 도구 import
+try:
+    from mcp_server.tools.visualization_tools import generate_visualization
+except ImportError:
+    try:
+        import importlib.util
+        viz_path = mcp_server_dir / "tools" / "visualization_tools.py"
+        spec = importlib.util.spec_from_file_location("visualization_tools", viz_path)
+        viz_tools = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(viz_tools)
+        generate_visualization = viz_tools.generate_visualization
+    except Exception as e:
+        raise ImportError(f"Could not import generate_visualization: {e}")
+
+@mcp.tool()
+async def create_section_visualization(section_type: str, section_content: str, lifestyle_data: dict):
+    """
+    리포트 섹션에 대한 시각자료(차트/표)를 생성합니다.
+    
+    Args:
+        section_type: 섹션 타입 (goals, sleep, uv, lifestyle, activity)
+        section_content: 섹션 내용
+        lifestyle_data: 사용자 생활습관 데이터 (딕셔너리)
+    
+    Returns:
+        시각자료 정보 (base64 인코딩된 이미지)
+    """
+    return generate_visualization(section_type, section_content, lifestyle_data)
+
 if __name__ == "__main__":
     mcp.run() # 이 줄이 있어야 Inspector와 통신이 가능합니다.

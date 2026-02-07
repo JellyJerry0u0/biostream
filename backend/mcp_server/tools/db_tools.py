@@ -90,6 +90,7 @@ def fetch_user_aging_context(user_id:int):
         
         #LLM이 이해하기 쉬운 형식으로 데이터 구성 (새로운 모델 구조에 맞게 수정)
         result = {
+            "lifestyle_id": lifestyle.id,  # lifestyle_id 추가
             "profile":{ #User 테이블에서 가져온 변하지 않는 정보
                 "age": f"{calculate_age(user.birthdate)} years" if user.birthdate else None,
                 "gender": user.gender

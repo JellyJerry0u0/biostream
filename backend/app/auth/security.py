@@ -27,7 +27,16 @@ def verify_token(token: str):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
+            print("[토큰 검증] payload에 'sub' 키가 없습니다.")
             return None
+        print(f"[토큰 검증] 성공: {email}")
         return email
-    except jwt.JWTError:
+    except jwt.ExpiredSignatureError:
+        print("[토큰 검증] 토큰이 만료되었습니다.")
+        return None
+    except jwt.JWTError as e:
+        print(f"[토큰 검증] JWT 오류: {str(e)}")
+        return None
+    except Exception as e:
+        print(f"[토큰 검증] 예상치 못한 오류: {str(e)}")
         return None

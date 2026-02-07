@@ -42,7 +42,7 @@ class Lifestyle(Base):
     generated_image_url = Column(String, nullable=True) # Gemini가 생성한 미래 얼굴 사진 경로
       
     # A. 주요 목표 (리포트 톤 라우팅) - multi choice
-    outcomes = Column(JSON, nullable=True)  # ["wrinkle", "pigmentation", "hydration", "acne", "redness", "general_aging"]
+    outcomes = Column(JSON, nullable=True)  # ["wrinkle", "elasticity", "pigmentation", "hydration", "hydration_barrier", "acne", "redness", "general_aging"]
 
     # B. Sleep & Rhythm (5)
     sleep_hours_weekday = Column(Float, nullable=True)  # 평균 수면시간(평일) 3~10h
@@ -82,6 +82,10 @@ class Lifestyle(Base):
     
     #몇년후로 가고 싶은지 설정
     target_years = Column(Integer)
+    
+    # 건강 리포트 (LangGraph로 생성된 리포트 저장)
+    health_report = Column(JSON, nullable=True)  # 리포트 섹션별 데이터 및 통합 리포트
+    health_report_generated_at = Column(DateTime(timezone=True), nullable=True)  # 리포트 생성 시간
 
 
     # Lifestyle과 User 간의 다대일 관계 설정
