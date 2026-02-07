@@ -26,13 +26,18 @@ def get_embedding(text: str, max_retries: int = 3, retry_delay: int = 60) -> Lis
     
     import time
     
+    # 모델명에 models/ 접두사 추가 (없는 경우)
+    model_name = GEMINI_EMBED_MODEL
+    if not model_name.startswith("models/") and not model_name.startswith("tunedModels/"):
+        model_name = f"models/{model_name}"
+    
     for attempt in range(max_retries):
         try:
             # google-generativeai 또는 google-genai 중 하나 사용
             try:
                 genai.configure(api_key=GEMINI_API_KEY)
                 result = genai.embed_content(
-                    model=GEMINI_EMBED_MODEL,
+                    model=model_name,
                     content=text,
                     task_type="retrieval_document"
                 )
@@ -42,7 +47,7 @@ def get_embedding(text: str, max_retries: int = 3, retry_delay: int = 60) -> Lis
                 import google.genai as genai_alt
                 genai_alt.configure(api_key=GEMINI_API_KEY)
                 result = genai_alt.embed_content(
-                    model=GEMINI_EMBED_MODEL,
+                    model=model_name,
                     content=text,
                     task_type="retrieval_document"
                 )
