@@ -30,7 +30,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION = os.getenv("QDRANT_QUANT_COLLECTION", "quant_evidence")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
-EMBED_DIM = 3072  # quant_evidence는 3072 차원 고정
+EMBED_DIM = 768  # quant_evidence는 3072 차원 고정
 
 
 def get_embedding(text: str, max_retries: int = 3, retry_delay: int = 60) -> List[float]:

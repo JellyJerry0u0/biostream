@@ -29,7 +29,7 @@ python -m app.services.quant_evidence_indexer backend/data/quant_corpus_v0_3_cle
 - `QDRANT_URL`: Qdrant 서버 주소 (기본값: `http://localhost:6333`)
 - `QDRANT_QUANT_COLLECTION`: 컬렉션 이름 (기본값: `quant_evidence`)
 - `GEMINI_API_KEY`: Gemini API 키 (필수)
-- `GEMINI_EMBED_MODEL`: 임베딩 모델 (기본값: `gemini-embedding-001`)
+- `GEMINI_EMBED_MODEL`: 임베딩 모델 (기본값: `text-embedding-004`)
 
 ### 인덱싱 결과 확인
 
