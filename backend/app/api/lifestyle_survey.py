@@ -12,7 +12,7 @@ router = APIRouter()
 # 입력을 위한 데이터 모델 (새로운 설문 구조)
 class LifestyleSurveyCreate(BaseModel):
     # A. 주요 목표 (리포트 톤 라우팅) - multi choice
-    outcomes: Optional[List[str]] = None  # ["wrinkle", "pigmentation", "hydration", "acne", "redness", "general_aging"]
+    outcomes: Optional[List[str]] = None  # ["wrinkle", "elasticity", "pigmentation", "hydration", "hydration_barrier", "acne", "redness", "general_aging"]
     
     # B. Sleep & Rhythm (5)
     sleep_hours_weekday: Optional[float] = None  # 평균 수면시간(평일) 3~10h

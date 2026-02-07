@@ -1,4 +1,19 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: biostream_qdrant
+    restart: always
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   db:
     image: postgres:15-alpine
     container_name: biostream_db
@@ -32,6 +47,13 @@ services:
     environment:
       - DATABASE_URL=postgresql://myuser:mypassword@db:5432/biostream
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}  # Gemini API 키 (선택적, .env 파일에서 로드)
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}  # Google API 키 (LangGraph용)
+      - QDRANT_URL=http://qdrant:6333  # Docker 내부 네트워크에서 Qdrant 접근
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-biostream_corpus_v1}
+      - QDRANT_QUANT_COLLECTION=${QDRANT_QUANT_COLLECTION:-quant_evidence}  # 정량 근거 컬렉션
+      - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-gemini-embedding-001}
+      - EMBED_DIM=${EMBED_DIM:-768}
+      - REPORT_DEBUG=${REPORT_DEBUG:-0}  # 리포트 생성 디버그 모드 (1로 설정 시 상세 로그)
       # MCP 서버 도구를 사용하기 위한 환경변수
       - RUNNING_IN_DOCKER=true
       - DB_HOST_DOCKER=db
@@ -42,6 +64,8 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app:/app/app  # 코드 변경 시 자동 반영 (개발 환경)
+      - ./backend/langgraph_modules:/app/langgraph_modules  # LangGraph 모듈 마운트
+      - ./backend/tools:/app/tools  # tools 모듈 마운트
       - ./backend/mcp_server:/app/mcp_server  # MCP 서버 코드도 반영
 
   mcp_server:
@@ -65,3 +89,4 @@ services:
 
 volumes:
   postgres_data:
+  qdrant_data:

@@ -392,8 +392,10 @@ def _create_health_report_prompt(lifestyle_data: dict) -> str:
     outcomes = lifestyle.get('outcomes')
     outcomes_labels = {
         'wrinkle': '주름',
+        'elasticity': '탄력',
         'pigmentation': '색소',
         'hydration': '수분',
+        'hydration_barrier': '장벽',
         'acne': '여드름',
         'redness': '홍조',
         'general_aging': '전체 노화',

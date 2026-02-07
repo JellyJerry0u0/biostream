@@ -26,6 +26,14 @@ class LifestyleService {
 
       if (response.statusCode == 200) {
         return {"success": true, "message": "생활습관 정보가 저장되었습니다."};
+      } else if (response.statusCode == 401) {
+        // 토큰 만료 또는 유효하지 않은 토큰
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
       } else {
         final errorData = jsonDecode(response.body);
         return {"success": false, "message": errorData['detail'] ?? "저장에 실패했습니다."};
@@ -55,6 +63,14 @@ class LifestyleService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return {"success": true, "data": data['data']};
+      } else if (response.statusCode == 401) {
+        // 토큰 만료 또는 유효하지 않은 토큰
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
       } else {
         final errorData = jsonDecode(response.body);
         return {
@@ -67,8 +83,8 @@ class LifestyleService {
     }
   }
 
-  // 건강 리포트 생성 (LLM 호출, MCP tool 사용)
-  Future<Map<String, dynamic>> generateHealthReport() async {
+  // 건강 리포트 생성 (LangGraph 기반, MCP tool 사용)
+  Future<Map<String, dynamic>> generateHealthReport(int lifestyleId, {bool force = false}) async {
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) {
@@ -76,8 +92,12 @@ class LifestyleService {
       }
 
       final origin = await ApiConfig.getBaseOrigin();
+      final uri = force 
+          ? Uri.parse('$origin/api/generate-report/$lifestyleId?force=true')
+          : Uri.parse('$origin/api/generate-report/$lifestyleId');
+      
       final response = await http.post(
-        Uri.parse('$origin/data/generate-health-report'),
+        uri,
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -89,13 +109,66 @@ class LifestyleService {
         return {
           "success": true,
           "report": data['report'],
-          "lifestyle_data": data['lifestyle_data'],  // Dart Map은 get() 메서드 없음
+          "cards": data['cards'],
+          "already_exists": data['already_exists'] ?? false,  // 이미 존재하는 리포트 플래그
+          "message": data['message'],
+        };
+      } else if (response.statusCode == 401) {
+        // 토큰 만료 또는 유효하지 않은 토큰
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
         };
       } else {
         final errorData = jsonDecode(response.body);
         return {
           "success": false,
           "message": errorData['detail'] ?? "리포트 생성에 실패했습니다."
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "서버 연결 실패: $e"};
+    }
+  }
+
+  // 건강 리포트 조회
+  Future<Map<String, dynamic>> getHealthReport(int lifestyleId) async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) {
+        return {"success": false, "message": "로그인이 필요합니다."};
+      }
+
+      final origin = await ApiConfig.getBaseOrigin();
+      final response = await http.get(
+        Uri.parse('$origin/api/report/$lifestyleId'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          "success": true,
+          "report": data['report'],
+        };
+      } else if (response.statusCode == 401) {
+        // 토큰 만료 또는 유효하지 않은 토큰
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          "success": false,
+          "message": errorData['detail'] ?? "리포트 조회에 실패했습니다."
         };
       }
     } catch (e) {

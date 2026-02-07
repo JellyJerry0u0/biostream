@@ -72,8 +72,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
     super.dispose();
   }
 
-  Future<void> _submitSurvey() async {
-    final lifestyleData = {
+  Map<String, dynamic> _buildLifestyleData() {
+    return {
       "outcomes": _outcomes,
       "sleep_hours_weekday": _sleepHoursWeekday,
       "sleep_hours_weekend": _sleepHoursWeekend,
@@ -103,6 +103,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
       if (widget.originalImageUrl != null)
         "original_image_url": widget.originalImageUrl,
     };
+  }
+
+  Future<void> _submitSurvey() async {
+    final lifestyleData = _buildLifestyleData();
 
     debugPrint('[SurveyScreen] 설문 데이터 제출 시작');
     final result = await _lifestyleService.saveLifestyleProfile(lifestyleData);
@@ -304,8 +308,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
   Widget _buildOutcomesPage(bool isDark) {
     final options = [
       {'value': 'wrinkle', 'label': '주름'},
+      {'value': 'elasticity', 'label': '탄력'},
       {'value': 'pigmentation', 'label': '색소'},
       {'value': 'hydration', 'label': '수분'},
+      {'value': 'hydration_barrier', 'label': '장벽'},
       {'value': 'acne', 'label': '여드름'},
       {'value': 'redness', 'label': '홍조'},
       {'value': 'general_aging', 'label': '전체 노화'},
@@ -1232,8 +1238,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
                 : _outcomes.map((o) {
                     final labels = {
                       'wrinkle': '주름',
+                      'elasticity': '탄력',
                       'pigmentation': '색소',
                       'hydration': '수분',
+                      'hydration_barrier': '장벽',
                       'acne': '여드름',
                       'redness': '홍조',
                       'general_aging': '전체 노화',
