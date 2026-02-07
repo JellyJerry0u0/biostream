@@ -17,7 +17,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchAny
 import google.generativeai as genai
 
-from .schemas import QdrantSearchInput, QdrantSearchOutput, EvidenceItem
+try:
+    from tools.schemas import QdrantSearchInput, QdrantSearchOutput, EvidenceItem
+except ImportError:
+    from schemas import QdrantSearchInput, QdrantSearchOutput, EvidenceItem
 
 # .env 파일 로드 (있는 경우)
 try:
@@ -34,7 +37,7 @@ except ImportError:
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "biostream_corpus_v1")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL","models/gemini-embedding-001")
 
 # genai configure는 프로세스당 1회만
 if GEMINI_API_KEY:
@@ -57,9 +60,14 @@ def get_embedding(text: str) -> List[float]:
     if text in _embedding_cache:
         return _embedding_cache[text]
 
+    # 모델명에 models/ 접두사 추가 (없는 경우)
+    model_name = GEMINI_EMBED_MODEL
+    if not model_name.startswith("models/") and not model_name.startswith("tunedModels/"):
+        model_name = f"models/{model_name}"
+
     try:
         result = genai.embed_content(
-            model=GEMINI_EMBED_MODEL,
+            model=model_name,
             content=text,
             task_type="retrieval_query",
         )

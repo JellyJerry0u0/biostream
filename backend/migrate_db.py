@@ -17,6 +17,13 @@ def migrate():
     
     with engine.connect() as conn:
         try:
+            # outcomes 컬럼 추가 (주요 목표)
+            conn.execute(text("""
+                ALTER TABLE lifestyles 
+                ADD COLUMN IF NOT EXISTS outcomes JSON;
+            """))
+            print("✅ outcomes 컬럼 추가 완료")
+            
             # health_report 컬럼 추가
             conn.execute(text("""
                 ALTER TABLE lifestyles 

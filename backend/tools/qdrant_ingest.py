@@ -6,15 +6,19 @@ biostream_corpus_final.csv를 읽어서 Qdrant에 업로드합니다.
 import os
 import csv
 from typing import List, Dict, Any
+from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, CollectionStatus
 import google.generativeai as genai
+
+# .env 파일 로드
+load_dotenv(override=True)
 
 # 환경 변수
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "biostream_corpus_v1")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
 EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
 CSV_FILE = os.getenv("CORPUS_CSV", "data/biostream_corpus_final.csv")
 

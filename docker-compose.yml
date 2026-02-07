@@ -51,7 +51,7 @@ services:
       - QDRANT_URL=http://qdrant:6333  # Docker 내부 네트워크에서 Qdrant 접근
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-biostream_corpus_v1}
       - QDRANT_QUANT_COLLECTION=${QDRANT_QUANT_COLLECTION:-quant_evidence}  # 정량 근거 컬렉션
-      - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-gemini-embedding-001}
+      - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-gemini-embedding-001}  # 임베딩 모델명
       - EMBED_DIM=${EMBED_DIM:-768}
       - REPORT_DEBUG=${REPORT_DEBUG:-0}  # 리포트 생성 디버그 모드 (1로 설정 시 상세 로그)
       # MCP 서버 도구를 사용하기 위한 환경변수
