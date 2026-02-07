@@ -68,3 +68,6 @@ backend/uploads/
 .env
 .env.local
 .env.*.local
+
+# Google Cloud Service Account Credentials
+ai_service/gen-lang-client-*.json
