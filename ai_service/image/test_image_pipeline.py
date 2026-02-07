@@ -30,10 +30,12 @@ def test_new_architecture():
     print("-" * 80)
     print("1. Replicate SDXL (Image-to-Image, 고품질, 권장)")
     print("2. OpenAI gpt-image-1 (Image-to-Image, 원본 이미지 편집)")
-    print("3. Gemini 3.0 Pro (Image Generation, Visual Anchoring)")
-    print("4. Gemini 2.5 Flash (Image Generation, 빠른 처리)")
+    print("3. Gemini 3.0 Pro (Vertex AI Imagen, GCP 결제 필요)")
+    print("4. Gemini 2.5 Flash (Vertex AI Imagen, GCP 결제 필요)")
+    print("5. Gemini 2.5 Flash Image (Gemini API 직접, ⚠️ 실험적)")
+    print("6. Gemini 3.0 Pro Image Preview (Gemini API, 이미지 생성 지원)")
     
-    choice = input("\n선택 (1/2/3/4): ").strip()
+    choice = input("\n선택 (1/2/3/4/5/6): ").strip()
     
     if choice == "1":
         image_model = "replicate"
@@ -43,10 +45,17 @@ def test_new_architecture():
         print("✅ OpenAI gpt-image-1 선택")
     elif choice == "3":
         image_model = "gemini-imagen"
-        print("✅ Gemini 3.0 Pro Image Preview 선택")
+        print("✅ Gemini 3.0 Pro Image (Vertex AI) 선택")
     elif choice == "4":
         image_model = "gemini-flash-imagen"
-        print("✅ Gemini 2.5 Flash Image 선택")
+        print("✅ Gemini 2.5 Flash Image (Vertex AI) 선택")
+    elif choice == "5":
+        image_model = "gemini-2.5-flash-image"
+        print("✅ Gemini 2.5 Flash (Gemini API 직접) 선택")
+        print("⚠️  실험적 모델입니다. 이미지 생성이 제한적일 수 있습니다.")
+    elif choice == "6":
+        image_model = "gemini-3-pro-image"
+        print("✅ Gemini 3.0 Pro Image Preview (이미지 생성 지원) 선택")
     else:
         print("❌ 잘못된 선택입니다. 기본값(Replicate) 사용")
         image_model = "replicate"
@@ -96,7 +105,7 @@ def test_new_architecture():
         
         print(f"\n🎨 최종 프롬프트 구조:")
         print("-" * 80)
-        if image_model in ["gemini-imagen", "gemini-flash-imagen"]:
+        if image_model in ["gemini-imagen", "gemini-flash-imagen", "gemini-2.5-flash-image", "gemini-3-pro-image"]:
             print(f"   - Gemini Visual Anchoring 구조")
             print(f"   - System Instruction: 텍스처 리터칭 전문가")
             print(f"   - Identity Lock: 픽셀 단위 보존")

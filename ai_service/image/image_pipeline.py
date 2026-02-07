@@ -95,7 +95,7 @@ heavy makeup, excessive makeup, filters, beauty filter, instagram filter,
 distorted face, deformed, disfigured, mutated, extra limbs, missing features,
 blur, blurry, soft focus, out of focus, low quality, low resolution, pixelated"""
 
-    def __init__(self, image_model: Literal["replicate", "openai", "gemini-imagen", "gemini-flash-imagen"] = "replicate"):
+    def __init__(self, image_model: Literal["replicate", "openai", "gemini-imagen", "gemini-flash-imagen", "gemini-2.5-flash-image", "gemini-3-pro-image"] = "replicate"):
         """
         파이프라인 초기화 및 API 설정
         
@@ -103,8 +103,10 @@ blur, blurry, soft focus, out of focus, low quality, low resolution, pixelated""
             image_model: 이미지 생성 모델 선택 
                 - "replicate": Replicate SDXL
                 - "openai": OpenAI gpt-image-1
-                - "gemini-imagen": Gemini 3.0 Pro Image Preview
-                - "gemini-flash-imagen": Gemini 2.5 Flash Image
+                - "gemini-imagen": Gemini 3.0 Pro Image Preview (Vertex AI)
+                - "gemini-flash-imagen": Gemini 2.5 Flash Image (Vertex AI)
+                - "gemini-2.5-flash-image": Gemini 2.5 Flash Image (Gemini API 직접 사용)
+                - "gemini-3-pro-image": Gemini 3.0 Pro Image Preview (Gemini API 직접 이미지 생성)
         """
         self.image_model = image_model
         
@@ -127,6 +129,18 @@ blur, blurry, soft focus, out of focus, low quality, low resolution, pixelated""
                 raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
             self.openai_client = OpenAI(api_key=self.openai_api_key)
             logger.info("🎨 이미지 생성 모델: OpenAI gpt-image-1 (Image Edit)")
+        elif image_model == "gemini-2.5-flash-image":
+            # Gemini API 직접 사용 (Vertex AI 불필요)
+            genai.configure(api_key=self.google_api_key)
+            # gemini-2.5-flash-image 모델 초기화
+            self.gemini_image_model = genai.GenerativeModel("gemini-2.5-flash-preview-0205")
+            logger.info("🎨 이미지 생성 모델: Gemini 2.5 Flash (Gemini API 직접)")
+            logger.info("⚠️  실험적 모델입니다. 이미지 생성 기능이 제한적일 수 있습니다.")
+        elif image_model == "gemini-3-pro-image":
+            # Gemini 3.0 Pro Image Preview (이미지 생성 지원)
+            genai.configure(api_key=self.google_api_key)
+            self.gemini_image_model = genai.GenerativeModel("gemini-3-pro-image-preview")
+            logger.info("🎨 이미지 생성 모델: Gemini 3.0 Pro Image Preview (이미지 생성 지원)")
         elif image_model in ["gemini-imagen", "gemini-flash-imagen"]:
             # Gemini 이미지 생성 모델 (Vertex AI Imagen 3)
             self.gcp_project = os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -238,7 +252,7 @@ blur, blurry, soft focus, out of focus, low quality, low resolution, pixelated""
                 logger.info(f"   - RAG_BASED_AGING_LAYERS: {len(aging_facts)}자")
                 logger.info(f"   - TEXTURE_&_DETAIL + PHOTOGRAPHY: 질감+촬영")
                 logger.info(f"   - 최종 프롬프트: {len(final_prompt)}자")
-            elif self.image_model in ["gemini-imagen", "gemini-flash-imagen"]:
+            elif self.image_model in ["gemini-imagen", "gemini-flash-imagen", "gemini-2.5-flash-image", "gemini-3-pro-image"]:
                 # Gemini 전용 Visual Anchoring 프롬프트
                 final_prompt = self.assemble_gemini_prompt(aging_facts)
                 logger.info(f"✅ Gemini 프롬프트 조립 완료 (Visual Anchoring)")
@@ -290,9 +304,27 @@ blur, blurry, soft focus, out of focus, low quality, low resolution, pixelated""
                     image_path,
                     final_prompt
                 )
+            elif self.image_model == "gemini-2.5-flash-image":
+                # Gemini API 직접 사용 (이미지 생성)
+                logger.info(f"Gemini 2.5 Flash 이미지 생성 (Gemini API)")
+                logger.info(f"  - Target Years: {target_years}년")
+                
+                image_url, local_path = self.generate_image_with_gemini_api(
+                    image_path,
+                    final_prompt
+                )
+            elif self.image_model == "gemini-3-pro-image":
+                # Gemini 3 Pro Image Preview 사용 (이미지 생성 지원)
+                logger.info(f"Gemini 3.0 Pro Image 생성 (Gemini API)")
+                logger.info(f"  - Target Years: {target_years}년")
+                
+                image_url, local_path = self.generate_image_with_gemini_pro_image(
+                    image_path,
+                    final_prompt
+                )
             else:
-                # Gemini 이미지 생성 모델 사용
-                logger.info(f"Gemini 이미지 생성 모드 (Visual Anchoring)")
+                # Vertex AI Imagen 모델 사용
+                logger.info(f"Gemini 이미지 생성 모드 (Vertex AI Imagen)")
                 logger.info(f"  - Target Years: {target_years}년")
                 
                 image_url, local_path = self.generate_image_with_gemini(
@@ -850,6 +882,142 @@ Generate an aged version of the input photo. The result must be:
                 logger.error("   - GCP 결제 계정 연결 필요")
                 logger.error("=" * 80)
             
+            raise
+
+    def generate_image_with_gemini_api(self, image_path: str, prompt: str) -> tuple[str, str]:
+        """
+        Step 4-E: Gemini API 직접 사용한 이미지 생성
+        
+        Gemini 2.5 Flash 모델을 사용하여 이미지를 생성합니다.
+        주의: Gemini API는 현재 이미지 생성보다는 이미지 이해에 특화되어 있습니다.
+        """
+        try:
+            logger.info(f"원본 이미지 로드: {image_path}")
+            logger.info(f"\n{'='*80}")
+            logger.info(f"🎨 Gemini API에 전달되는 최종 프롬프트:")
+            logger.info(f"{'='*80}")
+            logger.info(f"{prompt}")
+            logger.info(f"{'='*80}\n")
+            
+            logger.info("Gemini API 호출 중... (이미지 이해 + 설명 생성)")
+            
+            # 이미지 파일 읽기
+            from PIL import Image as PILImage
+            original_image = PILImage.open(image_path)
+            
+            # Gemini에 이미지와 프롬프트 전달
+            # 현재 Gemini는 이미지 생성이 아닌 이미지 이해를 수행
+            response = self.gemini_image_model.generate_content([
+                prompt,
+                original_image
+            ])
+            
+            logger.info(f"✅ Gemini API 응답 수신")
+            logger.info(f"📋 Gemini 응답: {response.text[:300]}...")
+            
+            # ⚠️ 중요: Gemini API는 아직 이미지 생성을 공식 지원하지 않음
+            logger.warning("=" * 80)
+            logger.warning("⚠️ Gemini API 제한사항")
+            logger.warning("=" * 80)
+            logger.warning("Gemini API(google-generativeai)는 현재 이미지 생성을 공식 지원하지 않습니다.")
+            logger.warning("이미지 이해/분석만 가능하며, 생성은 Vertex AI Imagen을 사용해야 합니다.")
+            logger.warning("")
+            logger.warning("현재 동작:")
+            logger.warning("1. 원본 이미지를 분석하여 노화 설명을 생성합니다")
+            logger.warning("2. 원본 이미지를 복사하여 반환합니다 (실제 노화 효과 없음)")
+            logger.warning("")
+            logger.warning("실제 이미지 생성을 위한 옵션:")
+            logger.warning("- 옵션 1: Replicate SDXL (권장)")
+            logger.warning("- 옵션 2: OpenAI gpt-image-1")
+            logger.warning("- 옵션 3/4: Vertex AI Imagen (GCP 결제 필요)")
+            logger.warning("=" * 80)
+            
+            # 원본 이미지 복사 (임시 처리)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            local_path = f"result_gemini_api_{timestamp}.jpg"
+            
+            import shutil
+            shutil.copy(image_path, local_path)
+            logger.info(f"⚠️ 임시: 원본 이미지 복사 → {local_path}")
+            
+            return None, local_path
+            
+        except Exception as e:
+            logger.error(f"Gemini API 호출 중 오류: {str(e)}")
+            raise
+
+    def generate_image_with_gemini_pro_image(self, image_path: str, prompt: str) -> tuple[str, str]:
+        """
+        Step 4-F: Gemini 3.0 Pro Image Preview를 사용한 이미지 생성
+        
+        gemini-3-pro-image-preview 모델은 이미지 생성을 지원합니다.
+        원본 이미지와 프롬프트를 기반으로 노화된 이미지를 생성합니다.
+        """
+        try:
+            logger.info(f"원본 이미지 로드: {image_path}")
+            logger.info(f"\n{'='*80}")
+            logger.info(f"🎨 Gemini 3.0 Pro Image에 전달되는 최종 프롬프트:")
+            logger.info(f"{'='*80}")
+            logger.info(f"{prompt}")
+            logger.info(f"{'='*80}\n")
+            
+            logger.info("Gemini 3.0 Pro Image API 호출 중... (30-90초 소요)")
+            
+            # 이미지 파일 읽기
+            from PIL import Image as PILImage
+            original_image = PILImage.open(image_path)
+            
+            # Gemini 3.0 Pro Image Preview 모델에 이미지 편집 요청
+            # generation_config에 이미지 생성 관련 설정 추가
+            response = self.gemini_image_model.generate_content(
+                [prompt, original_image],
+                generation_config={
+                    'temperature': 0.4,  # 창의성 낮춤 (Identity 보존)
+                    'candidate_count': 1,
+                }
+            )
+            
+            logger.info(f"✅ Gemini 3.0 Pro Image API 응답 수신")
+            
+            # 응답 처리 - Gemini가 이미지를 생성한 경우
+            if hasattr(response, 'parts') and response.parts:
+                for part in response.parts:
+                    # 이미지 데이터가 있는지 확인
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        logger.info("✅ 이미지 데이터 감지!")
+                        
+                        # Base64 이미지 데이터 추출
+                        image_data = part.inline_data.data
+                        mime_type = part.inline_data.mime_type
+                        
+                        # 로컬 저장
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        file_ext = "png" if "png" in mime_type else "jpg"
+                        local_path = f"result_gemini_3_pro_{timestamp}.{file_ext}"
+                        
+                        # Base64 디코딩 및 저장
+                        import base64
+                        with open(local_path, 'wb') as f:
+                            f.write(base64.b64decode(image_data))
+                        
+                        logger.info(f"✅ 이미지 저장 완료: {local_path}")
+                        return None, local_path
+            
+            # 이미지가 생성되지 않은 경우
+            logger.warning("⚠️ 응답에 이미지 데이터가 없습니다. 텍스트 응답만 수신했습니다.")
+            logger.info(f"📋 Gemini 응답: {response.text[:300]}...")
+            
+            # 원본 이미지 복사 (임시)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            local_path = f"result_gemini_3_pro_{timestamp}_fallback.jpg"
+            import shutil
+            shutil.copy(image_path, local_path)
+            logger.info(f"⚠️ 임시: 원본 이미지 복사 → {local_path}")
+            
+            return None, local_path
+            
+        except Exception as e:
+            logger.error(f"Gemini 3.0 Pro Image 생성 중 오류: {str(e)}")
             raise
 
     def generate_image_with_dalle(self, prompt: str) -> tuple[str, str]:

@@ -4,4 +4,10 @@ psycopg2-binary
 python-dotenv
 trio
 fastapi
-pydantic
+pydantic>=2.0.0
+
+# 보안 관련 패키지
+PyJWT>=2.8.0  # JWT 토큰 생성 및 검증
+cryptography>=41.0.0  # 암호화 (AES-256, RSA 등)
+python-jose[cryptography]>=3.3.0  # JWT 추가 지원
+passlib[bcrypt]>=1.7.4  # 비밀번호 해싱

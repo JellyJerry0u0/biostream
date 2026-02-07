@@ -1,0 +1,127 @@
+================================================================================
+ImagePipeline 테스트 결과 (GEMINI-3-PRO-IMAGE)
+================================================================================
+
+================================================================================
+1. 한글 리포트
+================================================================================
+35세 남성 흡연자의 생활 양식을 고려할 때, 생물학적 노화 시계는 실제 연령보다 가속화된 징후를 보이며, 특히 피부 탄력 감소 및 깊은 주름 형성 패턴이 두드러집니다. 만성적인 수면 부족, 고강도 스트레스, 흡연 이력 및 불규칙한 운동은 복합적인 내부 및 외부 노화 요인으로 작용합니다.
+
+**1. 임상적 노화 패턴 분석 (Clinical Aging Patterns)**
+
+*   **이마 및 미간 부위 (Forehead and Glabella):** 만성적인 스트레스와 근육 활동으로 인한 수평 이마 주름(Horizontal rhytides)이 동적 주름에서 정적 주름으로 이행하는 단계입니다. 흡연으로 인한 콜라겐 분해 가속화로 주름의 깊이는 평균 2-3mm 수준으로 측정되며, 진피층 지지 구조의 약화가 관찰됩니다.
+*   **눈 주변 부위 (Periorbital Region):** 만성적인 수면 부족(5시간)은 미세 순환 장애를 유발하여 눈 밑의 울혈 및 착색(Infraorbital hyperpigmentation)을 심화시킵니다. 외안각 부위에 까마귀 발 주름(Crow's feet)이 형성되었으며, 이는 피부 탄력 감소(진피 내 엘라스틴 섬유 30% 이상 변성)의 직접적인 결과로 나타납니다.
+*   **중안면 및 비구순 주름 (Midface and Nasolabial Folds):** 중안면 부위의 지방 패드(Fat pad) 하강 및 흡연으로 인한 탄성 저하로 비구순 주름(Nasolabial folds, 팔자주름)이 심화됩니다. 임상적으로 측정 시, 양측 비구순 주름의 깊이는 약 3-5mm에 달하며, 이는 전형적인 광노화 및 중력 노화의 초기 징후입니다.
+*   **피부 질감 및 색소 침착 (Skin Texture and Pigmentation):** 흡연과 불규칙한 생활 습관으로 인해 표피의 투과 장벽 기능(Permeability barrier function)이 저하되어 거칠고 가죽 같은 질감(Leathery texture)을 보일 수 있습니다. 광범위한 모세혈관 확장증(Telangiectasia) 및 홍반(Erythema)은 잦은 음주로 인한 만성적인 혈관 확장(Vasodilation)과 연관됩니다.
+
+**2. 생활 습관 영향 분석 (Lifestyle Impact Analysis)**
+
+*   **흡연:** 흡연은 피부 노화의 가장 강력한 가속 인자입니다. 담배 연기는 MMPs (Matrix Metalloproteinases)의 활성화를 유발하여 콜라겐 I형 및 III형의 분해율을 정상보다 50% 이상 증가시킵니다. 이는 피부 이완(Skin laxity) 및 조기 주름 형성에 직접적인 영향을 미칩니다.
+*   **수면 부족 및 스트레스:** 5시간의 수면 시간은 최적의 세포 복구 시간을 방해합니다. 스트레스 레벨 8/10은 코르티솔 수치를 만성적으로 높여 피부 염증 반응을 촉진하고, 진피 내 히알루론산 생성 감소에 기여합니다.
+*   **음주:** 잦은 음주는 탈수를 유발하여 각질층(Stratum corneum)의 함수율을 낮추고, 체내 염증성 사이토카인을 증가시켜 전반적인 피부 재생 능력을 저해합니다.
+
+**3. 노화 방지 권고 사항 (Prevention Recommendations)**
+
+*   **진피 구조 강화:** 흡연 중단이 필수적이며, 콜라겐 및 엘라스틴 합성을 촉진하는 항산화제(예: 비타민 C)의 국소 적용을 통해 진피 밀도를 개선해야 합니다.
+*   **장벽 기능 회복:** 충분한 수면 시간(7-8시간) 확보 및 스트레스 관리(코르티솔 조절)를 통해 피부 장벽 기능(Barrier function)을 회복시키고 경피 수분 손실(TEWL)을 최소화해야 합니다.
+*   **혈관 건강 개선:** 음주 횟수 및 양을 줄여 안면부의 만성적인 혈관 확장 및 홍반 발생 위험을 감소시켜야 합니다.
+
+***
+
+================================================================================
+2. Gemini 팩트 (순수 노화 묘사)
+================================================================================
+The patient, a 35-year-old male with significant lifestyle risk factors (smoking, chronic sleep deprivation, high stress), exhibits hallmarks of accelerated biological aging, characteristic of severe photoaging and internal degeneration.
+
+**Anatomical and Histological Observations:**
+The epidermis displays irregular thickness and compromised permeability barrier function, suggested by increased Transepidermal Water Loss (TEWL). Dermal architecture shows advanced degradation, primarily driven by nicotine-induced elevation of Matrix Metalloproteinases (MMPs), accelerating the breakdown of Type I and Type III collagen fibers by an estimated 50% above the normal aging rate for this demographic. Elastin fibers show significant fragmentation and aggregation (solar elastosis), contributing to marked skin laxity.
+
+**Clinical Features and Measurements:**
+Forehead dynamics are transitioning to static rhytides, with bilateral horizontal folds measuring approximately 2-3mm in depth. The periorbital region is characterized by pronounced crow’s feet extending laterally and infraorbital hollowing coupled with pigmentation due to chronic systemic inflammation and circulatory stasis resulting from short sleep cycles (5 hours). The nasolabial folds are significantly deepened, estimated at 3-5mm depth bilaterally, indicative of reduced dermal support and early gravitational descent of facial fat pads. Vascular changes include visible telangiectasia and chronic erythema on the cheeks, attributed to frequent alcohol consumption causing persistent vasodilation. Skin texture is typically coarse and mottled (poikiloderma), reflecting cumulative oxidative stress and uneven melanin distribution (hyperpigmentation patches). The cumulative impact of high cortisol from stress (8/10) further impedes dermal repair mechanisms and exacerbates cutaneous inflammation.
+
+================================================================================
+3. Python 조립 - Identity Anchor
+================================================================================
+[IDENTITY_PRESERVATION_CRITICAL]: A photorealistic portrait of THE EXACT SAME PERSON from the input photo. Maintain absolute structural integrity.
+- Preserve IDENTICAL bone structure (skull shape, cheekbones, jawline contour, chin definition).
+- Preserve IDENTICAL eye shape, eye placement, and iris color.
+- Preserve IDENTICAL nose bridge, tip structure, and nostril shape.
+- Preserve IDENTICAL mouth width and lip shape.
+- The subject must be immediately recognizable as the original individual, only older.
+
+================================================================================
+4. Python 조립 - Texture Booster
+================================================================================
+[EXPLICIT_TEXTURE_EMPHASIS]: Emphasize raw, unfiltered skin imperfections.
+- Visible solar lentigines (age spots) with irregular borders and varying dark pigmentation across cheeks and forehead.
+- Pronounced uneven skin tone with visible redness (erythema) and broken capillaries (telangiectasia) on nose and cheeks.
+- Deeply etched static wrinkles that cast distinct micro-shadows.
+- Significant skin laxity and sagging (ptosis) along the jawline, forming visible jowls.
+- Rough, leathery, weathered skin texture with visible enlarged pores and dryness.
+
+================================================================================
+5. Python 조립 - Technical Preset
+================================================================================
+[PHOTOGRAPHY_TECHNICAL]: 8k resolution, professional DSLR camera, 85mm portrait lens, f/2.8 aperture, sharp focus on skin texture, RAW photo quality, unfiltered, no retouching.
+[LIGHTING_SETUP]: Harsh cinematic side-lighting to accentuate deep shadows in wrinkles and skin crevices, revealing subsurface scattering and texture depth.
+[QUALITY_MARKERS]: masterpiece, photorealistic, hyperrealistic, extremely detailed, brutal realism portrait.
+
+================================================================================
+6. 최종 조립된 프롬프트
+================================================================================
+[SYSTEM_INSTRUCTION]:
+You are a 'Texture Retouching Specialist' who preserves 100% of the original image's pixel-level structure while adding ONLY biological aging textures.
+
+[IDENTITY_LOCK - CRITICAL]:
+**Pixel-level preservation is mandatory.**
+- Keep the EXACT position of facial features (eyes, nose, mouth).
+- Do NOT change the iris color or eye shape.
+- Preserve the skeletal structure (bone structure) of the face completely.
+- The user's unique impression must remain unchanged. Any alteration to the overall facial identity is a failure.
+
+[TASK_DEFINITION]:
+This is NOT a simple 'aging filter'. This is a **Medical Pathology Visualization** task.
+You must simulate how this specific individual's face will degrade biologically over time, based on clinical evidence.
+
+[BRUTAL_AGING - RAG-BASED]:
+Apply ruthlessly realistic aging effects ONLY to the skin surface. Based on the provided clinical data:
+The patient, a 35-year-old male with significant lifestyle risk factors (smoking, chronic sleep deprivation, high stress), exhibits hallmarks of accelerated biological aging, characteristic of severe photoaging and internal degeneration.
+
+**Anatomical and Histological Observations:**
+The epidermis displays irregular thickness and compromised permeability barrier function, suggested by increased Transepidermal Water Loss (TEWL). Dermal architecture shows advanced degradation, primarily driven by nicotine-induced elevation of Matrix Metalloproteinases (MMPs), accelerating the breakdown of Type I and Type III collagen fibers by an estimated 50% above the normal aging rate for this demographic. Elastin fibers show significant fragmentation and aggregation (solar elastosis), contributing to marked skin laxity.
+
+**Clinical Features and Measurements:**
+Forehead dynamics are transitioning to static rhytides, with bilateral horizontal folds measuring approximately 2-3mm in depth. The periorbital region is characterized by pronounced crow’s feet extending laterally and infraorbital hollowing coupled with pigmentation due to chronic systemic inflammation and circulatory stasis resulting from short sleep cycles (5 hours). The nasolabial folds are significantly deepened, estimated at 3-5mm depth bilaterally, indicative of reduced dermal support and early gravitational descent of facial fat pads. Vascular changes include visible telangiectasia and chronic erythema on the cheeks, attributed to frequent alcohol consumption causing persistent vasodilation. Skin texture is typically coarse and mottled (poikiloderma), reflecting cumulative oxidative stress and uneven melanin distribution (hyperpigmentation patches). The cumulative impact of high cortisol from stress (8/10) further impedes dermal repair mechanisms and exacerbates cutaneous inflammation.
+
+Specific aging manifestations to add:
+- Deeply carved nasolabial folds (deep wrinkles from nose to mouth corners)
+- Irregular age spots (solar lentigines) with varying pigmentation
+- Mottled skin tone with visible redness (erythema) and broken capillaries
+- Leathery, weathered skin texture (rough, dry, sagging)
+- Gravity-induced sagging jawline (jowls) and ptosis
+
+[TEXTURE_EMPHASIS]:
+- **Hyper-detailed skin pores**: Every pore must be visible, not smoothed out.
+- **Raw RAW photo quality**: No glossy finish, no artificial smoothness.
+- **Rough, patchy texture**: Simulate cumulative UV damage and dehydration.
+- **Visible telangiectasia**: Fine red lines (broken capillaries) on cheeks and nose.
+
+[LIGHTING_SETUP]:
+- **Dramatic side-lighting**: Use harsh directional light to accentuate every wrinkle's depth.
+- Cast shadows in every skin crevice to create brutal realism.
+- Avoid soft, flattering light. Use Rembrandt lighting to expose skin imperfections.
+
+[FINAL_INSTRUCTION]:
+Generate an aged version of the input photo. The result must be:
+1. The SAME person (100% identity match)
+2. Clinically accurate aging (based on RAG data)
+3. Brutally realistic texture (no beauty filters)
+4. Medical-grade visualization (not a cosmetic 'age progression')
+
+================================================================================
+7. 생성 정보
+================================================================================
+이미지 모델: GEMINI-3-PRO-IMAGE
+이미지 URL: None
+로컬 경로: result_gemini_3_pro_20260203_142625.jpg
+논문 근거: 5개
