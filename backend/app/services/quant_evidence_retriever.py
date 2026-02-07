@@ -31,13 +31,24 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 
 
+# ── 임베딩 LRU 캐시 ──
+# search_by_outcomes가 scroll로 전환되어 이 함수 호출이 대폭 감소했지만,
+# 혹시 다른 경로에서 호출될 경우를 대비해 캐시 유지
+_embedding_cache: Dict[str, List[float]] = {}
+_EMBEDDING_CACHE_MAX = 256
+
+
 def get_embedding(text: str) -> List[float]:
-    """Gemini API를 사용하여 텍스트 임베딩 생성"""
+    """Gemini API를 사용하여 텍스트 임베딩 생성 (LRU 캐시 적용)"""
     # 함수 내에서 환경 변수 다시 읽기 (모듈 레벨 변수 대신)
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
-    
+
+    # 캐시 히트
+    if text in _embedding_cache:
+        return _embedding_cache[text]
+
     try:
         genai.configure(api_key=api_key)  # 함수 내에서 읽은 api_key 사용
         result = genai.embed_content(
@@ -45,7 +56,15 @@ def get_embedding(text: str) -> List[float]:
             content=text,
             task_type="retrieval_query",
         )
-        return result["embedding"]
+        embedding = result["embedding"]
+
+        # 캐시 저장 (크기 제한)
+        if len(_embedding_cache) >= _EMBEDDING_CACHE_MAX:
+            oldest_key = next(iter(_embedding_cache))
+            del _embedding_cache[oldest_key]
+        _embedding_cache[text] = embedding
+
+        return embedding
     except Exception as e:
         raise Exception(f"임베딩 생성 실패: {str(e)}")
 
@@ -157,16 +176,20 @@ def search_by_outcomes(
     """
     여러 outcome_mapped로 검색 (확장 매핑용)
     
+    ⚡ 최적화: 이 함수는 필터 기반 검색만 필요하므로
+    임베딩을 생성하지 않고 scroll()을 사용합니다.
+    (이전에는 의미 없는 더미 임베딩을 매번 생성하여 API 할당량을 소비했음)
+    
     Args:
         outcome_mapped_list: 검색할 outcome 리스트 (예: ["wrinkle", "elasticity"])
         top_k: 반환할 최대 결과 수
         timeframe_days_range: (min_days, max_days) 튜플, None이면 필터 없음
-        min_score: 최소 유사도 점수 (임베딩 검색 시)
+        min_score: 최소 유사도 점수 (scroll 모드에서는 무시됨)
     
     Returns:
         QuantEvidenceCard 리스트
     """
-    print(f"\n  🔍 [search_by_outcomes] 검색 시작:")
+    print(f"\n  🔍 [search_by_outcomes] 검색 시작 (scroll 모드, 임베딩 불필요):")
     print(f"     outcome_mapped_list: {outcome_mapped_list}")
     print(f"     QDRANT_URL: {QDRANT_URL}")
     print(f"     QDRANT_COLLECTION: {QDRANT_COLLECTION}")
@@ -211,38 +234,41 @@ def search_by_outcomes(
         
         query_filter = Filter(must=must_conditions)
         
-        # 임의의 쿼리 텍스트로 검색 (필터만 사용)
-        query_text = f"outcome {' '.join(outcome_mapped_list)}"
-        print(f"     임베딩 생성 중... (쿼리: {query_text})")
-        query_embedding = get_embedding(query_text)
-        print(f"     ✅ 임베딩 생성 완료 (차원: {len(query_embedding)})")
+        # ⚡ scroll 기반 검색 (임베딩 불필요 — 필터만으로 결과 가져옴)
+        print(f"     Qdrant scroll 수행 중... (limit={top_k})")
+        all_points = []
+        offset = None
+        remaining = top_k
         
-        # 검색 수행
-        print(f"     Qdrant 검색 수행 중... (top_k={top_k}, min_score={min_score})")
-        search_results = client.query_points(
-            collection_name=QDRANT_COLLECTION,
-            query=query_embedding,
-            query_filter=query_filter,
-            limit=top_k,
-            with_payload=True,
-            with_vectors=False,
-        )
+        while remaining > 0:
+            batch_limit = min(remaining, 100)  # scroll은 한 번에 최대 100개
+            points, next_offset = client.scroll(
+                collection_name=QDRANT_COLLECTION,
+                scroll_filter=query_filter,
+                limit=batch_limit,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            if not points:
+                break
+            all_points.extend(points)
+            remaining -= len(points)
+            offset = next_offset
+            if next_offset is None:
+                break
         
-        print(f"     검색 결과: {len(search_results.points)}개 포인트 발견")
+        print(f"     검색 결과: {len(all_points)}개 포인트 발견")
         
-        # QuantEvidenceCard로 변환
+        # QuantEvidenceCard로 변환 (scroll에는 score가 없으므로 1.0 사용)
         cards = []
-        for i, point in enumerate(search_results.points):
-            if point.score < min_score:
-                print(f"       포인트 {i+1}: 점수 {point.score:.4f} < min_score {min_score} (제외)")
-                continue
-            card = QuantEvidenceCard(point.payload, point.score)
+        for i, point in enumerate(all_points):
+            card = QuantEvidenceCard(point.payload, score=1.0)
             cards.append(card)
             if i < 3:  # 처음 3개만 상세 로깅
                 print(f"       포인트 {i+1}: outcome={card.outcome_mapped}, "
                       f"value={card.effect_signed_value}, unit={card.effect_unit_filled}, "
-                      f"timeframe={card.timeframe_days}, is_valid={card.is_valid}, "
-                      f"score={point.score:.4f}")
+                      f"timeframe={card.timeframe_days}, is_valid={card.is_valid}")
         
         print(f"     ✅ 최종 반환 카드 수: {len(cards)}")
         return cards

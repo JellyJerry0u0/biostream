@@ -24,6 +24,7 @@ class _ResultScreenState extends State<ResultScreen> {
   bool _isGeneratingReport = false;
   String? _errorMessage;
   String? _selectedTab; // 선택된 탭
+  String? _selectedLifestyleSubTab; // lifestyle 서브탭 (smoking, drinking, stress)
 
   @override
   void initState() {
@@ -304,8 +305,25 @@ class _ResultScreenState extends State<ResultScreen> {
     final evidenceRefs =
         sectionData['evidence_refs'] as Map<String, dynamic>? ?? {};
 
-    // 하위 섹션이 있으면 하위 섹션 렌더링 (lifestyle 섹션)
+    // 하위 섹션이 있으면 서브탭 형태로 렌더링 (lifestyle 섹션)
     if (subsections != null && subsections.isNotEmpty) {
+      // 현재 선택된 서브탭 결정 (없으면 첫 번째)
+      final selectedSubKey = _selectedLifestyleSubTab ??
+          (subsections[0] as Map<String, dynamic>)['key'] as String? ??
+          '';
+
+      // 선택된 서브탭의 데이터 찾기
+      Map<String, dynamic>? activeSubsection;
+      for (final sub in subsections) {
+        if ((sub as Map<String, dynamic>)['key'] == selectedSubKey) {
+          activeSubsection = sub;
+          break;
+        }
+      }
+      activeSubsection ??= subsections[0] as Map<String, dynamic>;
+      final activeCards = activeSubsection['cards'] as List<dynamic>? ?? [];
+      final displayCards = _ensureFourCards(activeCards);
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -349,61 +367,99 @@ class _ResultScreenState extends State<ResultScreen> {
             ],
           ),
 
+          SizedBox(height: Responsive.padding(context, 12)),
+
+          // 서브탭 바
+          Container(
+            height: Responsive.fontSize(context, 42),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.06)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: subsections.map((sub) {
+                final subMap = sub as Map<String, dynamic>;
+                final subKey = subMap['key'] as String? ?? '';
+                final subTitle = subMap['title'] as String? ?? subKey;
+                final isActive = subKey == selectedSubKey;
+
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedLifestyleSubTab = subKey;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? const Color(0xFF37EC13)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: isActive
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF37EC13)
+                                      .withOpacity(0.3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Center(
+                        child: Text(
+                          subTitle,
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 13),
+                            fontWeight: isActive
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: isActive
+                                ? const Color(0xFF101B0D)
+                                : (isDark
+                                    ? Colors.white60
+                                    : Colors.grey[600]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
           SizedBox(height: Responsive.padding(context, 16)),
 
-          // 하위 섹션들 렌더링
-          ...subsections.asMap().entries.map((entry) {
-            final index = entry.key;
-            final subsection = entry.value as Map<String, dynamic>;
-            final subsectionTitle = subsection['title'] as String? ?? '';
-            final subsectionCards = subsection['cards'] as List<dynamic>? ?? [];
+          // 선택된 서브탭의 카드들 렌더링
+          ...displayCards.map((card) {
+            final cardType = card['type'] as String? ?? '';
 
-            // 항상 4개 카드 보장
-            final displayCards = _ensureFourCards(subsectionCards);
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 하위 섹션 헤더
-                if (index > 0)
-                  SizedBox(height: Responsive.padding(context, 24)),
-                Text(
-                  subsectionTitle,
-                  style: TextStyle(
-                    fontSize: Responsive.fontSize(context, 18),
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                SizedBox(height: Responsive.padding(context, 12)),
-
-                // 하위 섹션의 카드들 렌더링
-                ...displayCards.map((card) {
-                  final cardType = card['type'] as String? ?? '';
-
-                  switch (cardType) {
-                    case 'problem':
-                      return ProblemCard(text: card['text'] ?? '');
-                    case 'cause':
-                      return CauseCard(text: card['text'] ?? '');
-                    case 'action':
-                      final items = card['items'] as List<dynamic>? ?? [];
-                      return ActionCard(
-                        items: items
-                            .map((item) => item as Map<String, dynamic>)
-                            .toList(),
-                      );
-                    case 'simulation':
-                      return SimulationCard(
-                        text: card['text'] ?? '',
-                        meta: card['meta'] as Map<String, dynamic>?,
-                      );
-                    default:
-                      return Container(); // 빈 위젯
-                  }
-                }).toList(),
-              ],
-            );
+            switch (cardType) {
+              case 'problem':
+                return ProblemCard(text: card['text'] ?? '');
+              case 'cause':
+                return CauseCard(text: card['text'] ?? '');
+              case 'action':
+                final items = card['items'] as List<dynamic>? ?? [];
+                return ActionCard(
+                  items: items
+                      .map((item) => item as Map<String, dynamic>)
+                      .toList(),
+                );
+              case 'simulation':
+                return SimulationCard(
+                  text: card['text'] ?? '',
+                  meta: card['meta'] as Map<String, dynamic>?,
+                );
+              default:
+                return Container();
+            }
           }).toList(),
         ],
       );

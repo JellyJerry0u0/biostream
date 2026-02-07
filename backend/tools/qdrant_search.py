@@ -10,7 +10,7 @@ Recall 최우선형 RAG 검색 전략을 사용하여 관련 논문 근거를 �
 
 import os
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 from collections import defaultdict
 
 from qdrant_client import QdrantClient
@@ -41,10 +41,21 @@ if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
 
+# ── 임베딩 LRU 캐시 ──
+# 같은 query text → 같은 벡터이므로 API 재호출 방지
+# 리포트 1건 내 동일 쿼리 + fallback cascade에서 큰 절감 효과
+_embedding_cache: Dict[str, List[float]] = {}
+_EMBEDDING_CACHE_MAX = 256
+
+
 def get_embedding(text: str) -> List[float]:
-    """Gemini API를 사용하여 텍스트 임베딩 생성"""
+    """Gemini API를 사용하여 텍스트 임베딩 생성 (LRU 캐시 적용)"""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+
+    # 캐시 히트
+    if text in _embedding_cache:
+        return _embedding_cache[text]
 
     try:
         result = genai.embed_content(
@@ -52,7 +63,16 @@ def get_embedding(text: str) -> List[float]:
             content=text,
             task_type="retrieval_query",
         )
-        return result["embedding"]
+        embedding = result["embedding"]
+
+        # 캐시 저장 (크기 제한)
+        if len(_embedding_cache) >= _EMBEDDING_CACHE_MAX:
+            # 가장 오래된 항목 제거 (dict는 3.7+ 삽입 순서 보장)
+            oldest_key = next(iter(_embedding_cache))
+            del _embedding_cache[oldest_key]
+        _embedding_cache[text] = embedding
+
+        return embedding
     except Exception as e:
         raise Exception(f"임베딩 생성 실패: {str(e)}")
 
