@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/responsive.dart';
 import '../services/lifestyle_service.dart';
-import 'coach_screen.dart';
+import 'coach_chat_screen.dart';
 import '../widgets/report_tabs_bar.dart';
 import '../widgets/report_cards/problem_card.dart';
 import '../widgets/report_cards/cause_card.dart';
@@ -1886,10 +1886,12 @@ class _ResultScreenState extends State<ResultScreen> {
                                     height: Responsive.fontSize(context, 56),
                                     child: ElevatedButton(
                                       onPressed: () {
+                                        // lifestyle_id를 report_id로 전달하여 리포트 기반 코칭
+                                        final rid = _lifestyleData?['lifestyle_id'] as int?;
                                         Navigator.of(context).push(
                                           MaterialPageRoute(
                                             builder: (context) =>
-                                                const CoachScreen(),
+                                                CoachChatScreen(reportId: rid),
                                           ),
                                         );
                                       },

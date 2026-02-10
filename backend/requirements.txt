@@ -15,5 +15,7 @@ langchain-google-genai>=2.0.0  # Google Gemini 통합
 matplotlib  # 시각화 도구
 numpy  # 수치 연산 (matplotlib 의존성)
 qdrant-client>=1.7.0  # Qdrant 벡터 DB 클라이언트
-pydantic>=2.0.0  # 데이터 검증 및 스키마 정의notion-client>=2.2.1  # Notion API
-python-dotenv>=1.0.0  
+pydantic>=2.0.0  # 데이터 검증 및 스키마 정의
+notion-client>=2.2.1  # Notion API
+python-dotenv>=1.0.0
+websockets>=12.0  # WebSocket 지원 (코치 챗봇)
