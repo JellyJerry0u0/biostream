@@ -5,7 +5,6 @@ Notion API를 사용하여 리포트를 Notion 페이지로 생성
 
 import os
 import sys
-import time
 from typing import Dict, Any, List, Optional
 
 # 경로 설정
@@ -180,19 +179,13 @@ class NotionMCPClient:
             
             # Notion API는 한 번에 100개 블록만 추가 가능
             batch_size = 100
-            total_batches = (len(blocks) + batch_size - 1) // batch_size
-            
-            for batch_num, i in enumerate(range(0, len(blocks), batch_size), 1):
+            for i in range(0, len(blocks), batch_size):
                 batch = blocks[i:i + batch_size]
                 self.client.blocks.children.append(
                     block_id=page_id,
                     children=batch
                 )
-                print(f"  - 배치 {batch_num}/{total_batches}: {i + len(batch)}/{len(blocks)} 블록 추가 완료")
-                
-                # Rate limiting 방지를 위한 짧은 대기 (마지막 배치는 제외)
-                if i + batch_size < len(blocks):
-                    time.sleep(0.3)
+                print(f"  - {i + len(batch)}/{len(blocks)} 블록 추가 완료")
             
             print(f"✅ [Notion API] 모든 블록 추가 완료")
             

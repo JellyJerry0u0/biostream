@@ -26,7 +26,6 @@ except ImportError:
     print("⚠️ python-dotenv가 설치되지 않았습니다.")
 
 from langgraph_modules.report_graph import generate_report
-import time
 
 
 def test_report_with_notion():
@@ -38,24 +37,14 @@ def test_report_with_notion():
     # Notion Export 활성화 (테스트용)
     os.environ["ENABLE_NOTION_EXPORT"] = "true"
     
-    # RAGAS 평가 비활성화 (속도 향상)
-    # 평가를 원하면 이 줄을 주석처리하세요
-    os.environ["ENABLE_RAGAS_EVALUATION"] = "false"
-    
     print("\n[1] 리포트 생성 시작 (user_id=1)")
-    print("⚡ RAGAS 평가 비활성화 - 빠른 테스트 모드")
-    
-    start_time = time.time()
     
     try:
         result = generate_report(user_id=1)
         
-        elapsed_time = time.time() - start_time
-        
         if result.get("success"):
             print("\n" + "=" * 60)
             print("✅ 리포트 생성 및 Notion Export 완료")
-            print(f"⏱️  총 소요 시간: {elapsed_time:.2f}초")
             print("=" * 60)
             
             report = result.get("report", {})
