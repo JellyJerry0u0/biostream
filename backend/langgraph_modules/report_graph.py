@@ -11,6 +11,7 @@ LangGraph 기반 리포트 생성 워크플로우 (Quant-First 아키텍처)
 6. WriteSectionCards (4카드 JSON 생성)
 7. AssembleReport (카드 기반 리포트 조립)
 8. SaveReport
+9. ExportToNotion (신규: Notion으로 리포트 전송)
 """
 
 import os
@@ -39,6 +40,7 @@ sys.path.append(backend_dir)
 from tools.survey_tool import get_survey
 from tools.qdrant_search import qdrant_search
 from tools.report_store import save_report
+from tools.notion_integration import export_report_to_notion
 from tools.schemas import QdrantSearchInput, EvidenceItem
 from app.database import get_db
 from app.models import User
@@ -3042,6 +3044,55 @@ def save_report_node(state: ReportState) -> ReportState:
         return state
 
 
+# 노드 10: ExportToNotion (신규)
+def export_to_notion_node(state: ReportState) -> ReportState:
+    """
+    완성된 리포트를 Notion MCP를 통해 노션 페이지로 생성
+    
+    - Notion MCP 도구 호출 (Create Page)
+    - 섹션별로 블록 생성 (Append Block Children)
+    - 신뢰도 점수와 근거 링크 삽입
+    """
+    print("[ExportToNotion] Notion 전송 시작")
+    
+    # Notion 전송 활성화 여부 확인 (환경변수)
+    enable_notion_export = os.getenv("ENABLE_NOTION_EXPORT", "false").lower() == "true"
+    
+    if not enable_notion_export:
+        print("⚠️ [ExportToNotion] Notion 전송이 비활성화되어 있습니다 (ENABLE_NOTION_EXPORT=false)")
+        return state
+    
+    final_report = state.get("final_report")
+    
+    if not final_report:
+        print("⚠️ [ExportToNotion] 전송할 리포트가 없습니다.")
+        return state
+    
+    try:
+        # 1. Notion으로 전송
+        result = export_report_to_notion(final_report)
+        
+        if result.get("success"):
+            print(f"✅ [ExportToNotion] Notion 워크스페이스에 리포트 저장 완료")
+            print(f"   - 페이지 ID: {result.get('page_id')}")
+            print(f"   - URL: {result.get('url')}")
+            
+            # final_report에 Notion 정보 추가
+            final_report["notion_page_id"] = result.get("page_id")
+            final_report["notion_url"] = result.get("url")
+            
+            return {**state, "final_report": final_report}
+        else:
+            print(f"⚠️ [ExportToNotion] Notion 전송 실패: {result.get('error')}")
+            return state
+            
+    except Exception as e:
+        print(f"❌ [ExportToNotion] 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+        return state
+
+
 # LangGraph 워크플로우 구성
 # 노드 6.5: ValidateCards (품질 검증 + 재시도)
 def validate_cards(state: ReportState) -> ReportState:
@@ -3325,6 +3376,7 @@ def create_report_graph():
     workflow.add_node("assemble_report", assemble_report)
     workflow.add_node("evaluate_reliability", evaluate_reliability)
     workflow.add_node("save_report", save_report_node)
+    workflow.add_node("export_to_notion", export_to_notion_node)  # 신규 노드 추가
     
     workflow.set_entry_point("load_survey")
     workflow.add_edge("load_survey", "plan_sections")
@@ -3356,7 +3408,8 @@ def create_report_graph():
     
     workflow.add_edge("assemble_report", "evaluate_reliability")
     workflow.add_edge("evaluate_reliability", "save_report")
-    workflow.add_edge("save_report", END)
+    workflow.add_edge("save_report", "export_to_notion")  # SaveReport → ExportToNotion
+    workflow.add_edge("export_to_notion", END)  # ExportToNotion → END
     
     memory = MemorySaver()
     app = workflow.compile(checkpointer=memory)

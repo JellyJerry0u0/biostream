@@ -1,0 +1,1924 @@
+[
+  {
+    "object": "block",
+    "type": "heading_1",
+    "heading_1": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 BioStream 개인 맞춤 리포트"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📋 분석 목표: wrinkle, 탄력, 색소침착, hydration | 🎯 목표 기간: 10세까지"
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📋"
+      },
+      "color": "gray_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_1",
+    "heading_1": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "# 주요 목표 분석 및 개선 방안"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 문제 진단\n\n당신은 주름, 탄력, 색소, 수분 부족 등 다양한 피부 고민을 가지고 있습니다. 30대 여성의 경우, 자외선 노출로 인한 광노화(photo-ageing)는 피부 노화의 여러 측면과 밀접하게 관련되어 주름 변화를 통해 평가될 수 있습니다. 특히 얼굴의 과색소침착 반점은 형태학적 특성이 잘 알려져 있으며, 당신의 피부 톤과 균일성에 큰 영향을 미치고 있습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🔍"
+      },
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 원인 분석\n\n당신의 주름과 탄력 저하는 광노화의 복합적인 영향으로 인한 것일 가능성이 큽니다. 특히 색소 문제의 경우, 피부 내 알파-멜라닌세포 자극 호르몬(α-MSH) 신호 전달 경로가 멜라닌 생성 세포를 활성화하여 색소 침착을 유발합니다. 이러한 멜라닌 생성 메커니즘의 변화는 얼굴에 나타나는 과색소침착 반점을 심화시키며, 이는 당신의 피부 톤 불균일과 깊은 관련이 있습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🧬"
+      },
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 예상 효과\n\n피부 목표 전반을 기준으로 생활습관을 조금만 교정해 유지하면 12주 뒤에는, 연구에서 주름이(가) 중앙값 -5.6% 변화(범위 -25.0~15.0%)하는 경향이 관찰되었습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "toggle",
+    "toggle": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📚 참고 문헌 및 근거"
+          }
+        }
+      ],
+      "children": [
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📊 정량 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📄 서술 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Morphological and transcriptional evaluation of multiple facial cutaneous hyperpigmented spots (PMID: 35677918)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Comparisons between Caucasian‐validated photo‐numeric scales and Korean‐validated photo‐numeric scales for photo‐ageing. Insights from the Singapore/Malaysia cross‐sectional genetics epidemiology study (SMCGES) cohort (PMID: 38783624)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Comparisons between Caucasian‐validated photo‐numeric scales and Korean‐validated photo‐numeric scales for photo‐ageing. Insights from the Singapore/Malaysia cross‐sectional genetics epidemiology study (SMCGES) cohort (PMID: 38783624)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Comparisons between Caucasian‐validated photo‐numeric scales and Korean‐validated photo‐numeric scales for photo‐ageing. Insights from the Singapore/Malaysia cross‐sectional genetics epidemiology study (SMCGES) cohort (PMID: 38783624)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Comparisons between Caucasian‐validated photo‐numeric scales and Korean‐validated photo‐numeric scales for photo‐ageing. Insights from the Singapore/Malaysia cross‐sectional genetics epidemiology study (SMCGES) cohort (PMID: 38783624)"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_1",
+    "heading_1": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "# 수면 및 리듬"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 문제 진단\n\n30대 여성인 당신의 평일 수면은 6.5시간이며, 수면의 질은 6.0/10점입니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🔍"
+      },
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 원인 분석\n\n수면 분절은 피부의 가장 바깥층인 '각질층'의 섬세한 '지질 균형'을 방해할 수 있습니다. 이러한 불균형은 피부의 핵심 방어선인 '피부 장벽 기능'을 약화시켜 외부 자극에 취약하게 만들 가능성이 큽니다. 결과적으로 피부는 건조해지고 민감해지기 쉬운 상태가 됩니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🧬"
+      },
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 예상 효과\n\n수면 시간을 조금만 늘려 최소 7시간으로 맞춰 유지하면 4주 뒤에는, 연구에서 탄력이(가) 중앙값 5.6% 변화(범위 5.6~5.6%)하는 경향이 관찰되었습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "toggle",
+    "toggle": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📚 참고 문헌 및 근거"
+          }
+        }
+      ],
+      "children": [
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📊 정량 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📄 서술 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Skin Transcriptomic Analysis Reveals Altered Fatty Acid Metabolism Pathways in Mice Subjected to Sleep Fragmentation (PMID: 39965555)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Skin Transcriptomic Analysis Reveals Altered Fatty Acid Metabolism Pathways in Mice Subjected to Sleep Fragmentation (PMID: 39965555)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Skin Transcriptomic Analysis Reveals Altered Fatty Acid Metabolism Pathways in Mice Subjected to Sleep Fragmentation (PMID: 39965555)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Effects of Siegesbeckia herba extract against particulate matter 10 (PM 10 ) in skin barrier‐disrupted mouse models (PMID: 38391025)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Effects of Siegesbeckia herba extract against particulate matter 10 (PM 10 ) in skin barrier‐disrupted mouse models (PMID: 38391025)"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_1",
+    "heading_1": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "# 자외선 및 노화 관리"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 문제 진단\n\n30대 여성인 당신은 낮 시간대 자외선에 1~2시간 노출되는 편이며, 선크림을 거의 매일 사용하고 있습니다. 자외선은 피부 노화의 가장 강력한 외부 요인 중 하나로, 당신의 피부에 손상을 줄 가능성이 있습니다. 또한, 일부 자외선 차단 필터의 장기적인 영향에 대한 우려도 제기되고 있습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🔍"
+      },
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 원인 분석\n\n당신의 피부가 자외선에 노출되면 멜라닌세포가 활성화되어 멜라닌 생성이 촉진됩니다. 이 과정에서 자외선은 활성산소를 발생시켜 피부 장벽에 손상을 입힐 수 있습니다. 피부는 외부 손상을 막는 첫 번째 방어선이기 때문에, 이러한 손상은 전반적인 피부 건강에 영향을 미칠 수 있습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🧬"
+      },
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 예상 효과\n\n현재의 자외선 관리 습관을 조금만 강화해 유지하면 4주 뒤에는, 연구에서 탄력이(가) 중앙값 5.6% 변화(범위 5.6~5.6%)하는 경향이 관찰되었습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "toggle",
+    "toggle": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📚 참고 문헌 및 근거"
+          }
+        }
+      ],
+      "children": [
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📊 정량 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📄 서술 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "The correlation between dermoscopy and clinical and pathological tests in the evaluation of skin photoaging (PMID: 38221782)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Sunscreens: A narrative review (PMID: 39624735)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Comparisons between Caucasian‐validated photo‐numeric scales and Korean‐validated photo‐numeric scales for photo‐ageing. Insights from the Singapore/Malaysia cross‐sectional genetics epidemiology study (SMCGES) cohort (PMID: 38783624)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Objective and automatic grading system of facial signs from selfie pictures of South African women: Characterization of changes with age and sun‐exposures (PMID: 35490368)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Comparisons between Caucasian‐validated photo‐numeric scales and Korean‐validated photo‐numeric scales for photo‐ageing. Insights from the Singapore/Malaysia cross‐sectional genetics epidemiology study (SMCGES) cohort (PMID: 38783624)"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_1",
+    "heading_1": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "# 생활습관 관리"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📌 음주"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 문제 진단\n\n주당 음주 빈도가 2-3일인 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🔍"
+      },
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 원인 분석\n\n과도한 음주로 인한 피부 염증 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🧬"
+      },
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 예상 효과\n\n스트레스 수준이 높은 편이므로, 이를 5점 이하로 낮춰 유지하면 4주 뒤에는, 연구에서 장벽이(가) 중앙값 -14.7% 변화(범위 -23.3~-6.0%)하는 경향이 관찰되었습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📌 스트레스"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 문제 진단\n\n스트레스 수준이 7.0/10점으로 높은 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🔍"
+      },
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 원인 분석\n\n높은 스트레스로 인한 피부 염증 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🧬"
+      },
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 예상 효과\n\n스트레스 수준이 높은 편이므로, 이를 5점 이하로 낮춰 유지하면 4주 뒤에는, 연구에서 장벽이(가) 중앙값 -14.7% 변화(범위 -23.3~-6.0%)하는 경향이 관찰되었습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "toggle",
+    "toggle": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📚 참고 문헌 및 근거"
+          }
+        }
+      ],
+      "children": [
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📊 정량 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📄 서술 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Correlation between cigarette smoking and alcohol consumption and Rosacea: A two‐sample Mendelian randomization study (PMID: 38881049)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Perceived stress in patients with inflammatory and non‐inflammatory skin conditions. An observational controlled study among 255 Norwegian dermatological outpatients (PMID: 36479271)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Correlation between cigarette smoking and alcohol consumption and Rosacea: A two‐sample Mendelian randomization study (PMID: 38881049)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Perceived stress in patients with inflammatory and non‐inflammatory skin conditions. An observational controlled study among 255 Norwegian dermatological outpatients (PMID: 36479271)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Perceived stress in patients with inflammatory and non‐inflammatory skin conditions. An observational controlled study among 255 Norwegian dermatological outpatients (PMID: 36479271)"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_1",
+    "heading_1": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "# 활동 및 대사"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 문제 진단\n\n당신의 30대 여성 피부는 외부 환경 요인, 특히 일상적인 태양 노출에 민감하게 반응할 수 있습니다. 이는 피부 표피(epidermis)와 진피층의 주요 구성 요소인 콜라겐 섬유의 손상으로 이어져 피부 탄력 저하에 영향을 줄 가능성이 큽니다. 콜라겐은 피부의 세포 외 기질(extracellular matrix)을 구성하는 핵심 단백질로, 피부의 구조와 견고성을 유지하는 데 필수적입니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🔍"
+      },
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 원인 분석\n\n콜라겐은 피부 탄력을 결정하는 핵심 단백질로, 나이가 들면서 자연적으로 감소하거나 외부 요인에 의해 손상될 수 있습니다. 이러한 콜라겐 감소는 피부의 세포 외 기질을 약화시켜 탄력 저하와 같은 노화 징후를 가속화하는 주된 원인이 됩니다. 피부 건강과 외관 개선을 위해서는 콜라겐의 유지와 생성을 돕는 총체적인 관리가 중요합니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🧬"
+      },
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 예상 효과\n\n현재의 운동 패턴을 조금만 강화해 유지하면 4주 뒤에는, 연구에서 탄력이(가) 중앙값 5.6% 변화(범위 5.6~5.6%)하는 경향이 관찰되었습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "toggle",
+    "toggle": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📚 참고 문헌 및 근거"
+          }
+        }
+      ],
+      "children": [
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📊 정량 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " → :  (논문 0편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "heading_3",
+          "heading_3": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "📄 서술 근거"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Skin Elasticity of the Face: Demographic and Lifestyle Intricacies (PMID: 40762218)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Effect of an Oral Nutrition Supplement Containing Collagen Peptides on Stratum Corneum Hydration and Skin Elasticity in Hospitalized Older Adults: A Multicenter Open-label Randomized Controlled Study (PMID: 32195722)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Cosmeceuticals in photoaging: A review (PMID: 39233460)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Increased physical activity promotes skin clearance, improves cardiovascular and psychological health, and increases functional capacity in patients with psoriasis (PMID: 39355754)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "bulleted_list_item",
+          "bulleted_list_item": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Elastic Fibres in the subcutaneous tissue: Is there a difference between superficial and muscular fascia? A cadaver study (PMID: 34420234)"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  }
+]
