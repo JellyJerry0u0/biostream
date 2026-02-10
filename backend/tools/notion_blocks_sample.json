@@ -7,7 +7,7 @@
         {
           "type": "text",
           "text": {
-            "content": "🧬 BioStream 개인 맞춤 리포트"
+            "content": "🧬 BioStream 개인 맞춤 건강 리포트"
           }
         }
       ]
@@ -35,16 +35,59 @@
         {
           "type": "text",
           "text": {
-            "content": "📋 분석 목표: 여드름, 주름 | 🎯 목표 기간: 30세까지"
+            "content": "🎯 분석 목표: 여드름, 주름 | 목표 기간: 30세까지\n\n📅 리포트 생성: 2026-02-10 19:30:00"
           }
         }
       ],
       "icon": {
         "type": "emoji",
-        "emoji": "📋"
+        "emoji": "🧬"
+      },
+      "color": "purple_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "이 리포트는 당신의 생활습관 데이터와 최신 과학 연구를 기반으로 개인 맞춤형 건강 개선 방안을 제시합니다. 각 섹션은 문제 진단, 원인 분석, 실천 방안, 예상 효과로 구성되어 있습니다."
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "💡"
       },
       "color": "gray_background"
     }
+  },
+  {
+    "object": "block",
+    "type": "divider",
+    "divider": {}
   },
   {
     "object": "block",
@@ -68,21 +111,7 @@
         {
           "type": "text",
           "text": {
-            "content": "# 수면 및 리듬"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "object": "block",
-    "type": "paragraph",
-    "paragraph": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": " "
+            "content": "1. 😴 수면 및 생체 리듬"
           }
         }
       ]
@@ -96,112 +125,13 @@
         {
           "type": "text",
           "text": {
-            "content": "🔍 문제 진단\n\n당신의 수면 시간은 평균 5.5시간으로 권장 수면 시간(7-9시간)보다 크게 부족합니다."
+            "content": "수면 패턴이 피부 재생에 미치는 영향을 분석합니다"
           }
         }
       ],
       "icon": {
         "type": "emoji",
-        "emoji": "🔍"
-      },
-      "color": "red_background"
-    }
-  },
-  {
-    "object": "block",
-    "type": "paragraph",
-    "paragraph": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": " "
-          }
-        }
-      ]
-    }
-  },
-  {
-    "object": "block",
-    "type": "callout",
-    "callout": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": "🧬 원인 분석\n\n수면 부족은 피부 재생 호르몬 분비를 방해하고, 염증 반응을 증가시켜 피부 노화를 가속화합니다."
-          }
-        }
-      ],
-      "icon": {
-        "type": "emoji",
-        "emoji": "🧬"
-      },
-      "color": "orange_background"
-    }
-  },
-  {
-    "object": "block",
-    "type": "paragraph",
-    "paragraph": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": " "
-          }
-        }
-      ]
-    }
-  },
-  {
-    "object": "block",
-    "type": "callout",
-    "callout": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": "💡 실천 방안\n\n매일 밤 11시 이전에 취침하고, 최소 7시간 이상 수면을 유지하세요."
-          }
-        }
-      ],
-      "icon": {
-        "type": "emoji",
-        "emoji": "💡"
-      },
-      "color": "green_background"
-    }
-  },
-  {
-    "object": "block",
-    "type": "paragraph",
-    "paragraph": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": " "
-          }
-        }
-      ]
-    }
-  },
-  {
-    "object": "block",
-    "type": "callout",
-    "callout": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": "📊 예상 효과\n\n3개월간 충분한 수면을 유지하면 피부 탄력이 15% 개선될 수 있습니다."
-          }
-        }
-      ],
-      "icon": {
-        "type": "emoji",
-        "emoji": "📊"
+        "emoji": "😴"
       },
       "color": "blue_background"
     }
@@ -222,19 +152,205 @@
   },
   {
     "object": "block",
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🔍 🔍 문제 진단"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "quote",
+    "quote": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "수면 시간이 5.5시간으로 권장 시간보다 부족합니다."
+          }
+        }
+      ],
+      "color": "red_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "🧬 🧬 원인 분석"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "quote",
+    "quote": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "수면 부족은 피부 재생을 방해하고 염증을 증가시킵니다."
+          }
+        }
+      ],
+      "color": "orange_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "💡 💡 실천 방안"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "quote",
+    "quote": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "매일 밤 11시 이전에 취침하고 7시간 이상 수면하세요."
+          }
+        }
+      ],
+      "color": "green_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 📊 예상 효과"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "quote",
+    "quote": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "3개월간 충분한 수면 시 피부 탄력 15% 개선 예상."
+          }
+        }
+      ],
+      "color": "blue_background"
+    }
+  },
+  {
+    "object": "block",
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": " "
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 신뢰도 평가"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
     "type": "callout",
     "callout": {
       "rich_text": [
         {
           "type": "text",
           "text": {
-            "content": "신뢰도: 92% (Verified)"
+            "content": "✅ 92% - Verified\n\n🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩"
           }
         }
       ],
       "icon": {
         "type": "emoji",
-        "emoji": "✅"
+        "emoji": "📊"
       },
       "color": "green_background"
     }
@@ -255,13 +371,27 @@
   },
   {
     "object": "block",
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📚 과학적 근거"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
     "type": "toggle",
     "toggle": {
       "rich_text": [
         {
           "type": "text",
           "text": {
-            "content": "📚 참고 문헌 및 근거"
+            "content": "🔬 과학적 근거 자세히 보기 (클릭)"
           }
         }
       ],
@@ -274,7 +404,24 @@
               {
                 "type": "text",
                 "text": {
-                  "content": "📊 정량 근거"
+                  "content": "📊 정량 데이터 분석"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "paragraph",
+          "paragraph": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "여러 논문의 데이터를 종합한 정량적 분석 결과입니다."
+                },
+                "annotations": {
+                  "italic": true
                 }
               }
             ]
@@ -288,7 +435,21 @@
               {
                 "type": "text",
                 "text": {
-                  "content": "sleep_hours → wrinkles: -20% 개선 (논문 5편 분석)"
+                  "content": "sleep_hours → wrinkles: -20% (논문 5편 분석)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "paragraph",
+          "paragraph": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": " "
                 }
               }
             ]
@@ -302,7 +463,24 @@
               {
                 "type": "text",
                 "text": {
-                  "content": "📄 서술 근거"
+                  "content": "📄 참고 논문"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "object": "block",
+          "type": "paragraph",
+          "paragraph": {
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "이 분석의 근거가 된 주요 연구 논문들입니다."
+                },
+                "annotations": {
+                  "italic": true
                 }
               }
             ]
@@ -346,6 +524,11 @@
   },
   {
     "object": "block",
+    "type": "divider",
+    "divider": {}
+  },
+  {
+    "object": "block",
     "type": "paragraph",
     "paragraph": {
       "rich_text": [
@@ -366,10 +549,29 @@
         {
           "type": "text",
           "text": {
-            "content": "# 자외선 및 노화 관리"
+            "content": "2. ☀️ 자외선 및 노화 관리"
           }
         }
       ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "자외선 노출과 피부 보호 전략을 제시합니다"
+          }
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "☀️"
+      },
+      "color": "yellow_background"
     }
   },
   {
@@ -388,20 +590,30 @@
   },
   {
     "object": "block",
-    "type": "callout",
-    "callout": {
+    "type": "heading_3",
+    "heading_3": {
       "rich_text": [
         {
           "type": "text",
           "text": {
-            "content": "🔍 문제 진단\n\n당신의 자외선 차단제 사용 빈도는 주 2회로 매우 낮습니다."
+            "content": "🔍 🔍 문제 진단"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "quote",
+    "quote": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "자외선 차단제 사용이 주 2회로 부족합니다."
           }
         }
       ],
-      "icon": {
-        "type": "emoji",
-        "emoji": "🔍"
-      },
       "color": "red_background"
     }
   },
@@ -421,20 +633,30 @@
   },
   {
     "object": "block",
-    "type": "callout",
-    "callout": {
+    "type": "heading_3",
+    "heading_3": {
       "rich_text": [
         {
           "type": "text",
           "text": {
-            "content": "💡 실천 방안\n\n매일 아침 자외선 차단제를 바르고, 외출 시 2-3시간마다 재도포하세요."
+            "content": "💡 💡 실천 방안"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "object": "block",
+    "type": "quote",
+    "quote": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "매일 아침 자외선 차단제를 바르세요."
           }
         }
       ],
-      "icon": {
-        "type": "emoji",
-        "emoji": "💡"
-      },
       "color": "green_background"
     }
   },
@@ -459,33 +681,21 @@
   },
   {
     "object": "block",
-    "type": "paragraph",
-    "paragraph": {
+    "type": "callout",
+    "callout": {
       "rich_text": [
         {
           "type": "text",
           "text": {
-            "content": " "
+            "content": "✨ 건강한 변화는 작은 습관에서 시작됩니다. 오늘부터 한 가지씩 실천해보세요!"
           }
         }
-      ]
-    }
-  },
-  {
-    "object": "block",
-    "type": "paragraph",
-    "paragraph": {
-      "rich_text": [
-        {
-          "type": "text",
-          "text": {
-            "content": "📅 생성 시간: 2026-02-10 15:30:00"
-          },
-          "annotations": {
-            "italic": true
-          }
-        }
-      ]
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "💪"
+      },
+      "color": "green_background"
     }
   }
 ]

@@ -1,11 +1,10 @@
 """
-Notion MCP 통합 도구
-MCP (Model Context Protocol)를 사용하여 Notion API와 통신
+Notion 통합 도구
+Notion API를 사용하여 리포트를 Notion 페이지로 생성
 """
 
 import os
 import sys
-import asyncio
 from typing import Dict, Any, List, Optional
 
 # 경로 설정
@@ -27,102 +26,43 @@ try:
 except ImportError:
     pass
 
-# MCP import
+# Notion SDK import
 try:
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
-    MCP_AVAILABLE = True
+    from notion_client import Client
+    NOTION_SDK_AVAILABLE = True
 except ImportError:
-    MCP_AVAILABLE = False
-    print("⚠️ MCP가 설치되지 않았습니다. pip install mcp를 실행하세요.")
+    NOTION_SDK_AVAILABLE = False
+    print("⚠️ notion-client가 설치되지 않았습니다. pip install notion-client를 실행하세요.")
 
 
 class NotionMCPClient:
-    """Notion MCP 클라이언트"""
+    """Notion API 클라이언트"""
     
     def __init__(self):
         self.notion_token = os.getenv("NOTION_TOKEN")
         self.notion_database_id = os.getenv("NOTION_DATABASE_ID")
-        self.notion_page_id = os.getenv("NOTION_PAGE_ID")
+        self.notion_page_id = os.getenv("NOTION_PAGE_ID")  # Database 대신 Page에 작성하는 옵션
         
-        if not MCP_AVAILABLE:
-            print("❌ MCP가 설치되지 않았습니다.")
+        self.client = None
+        
+        if not NOTION_SDK_AVAILABLE:
+            print("❌ notion-client가 설치되지 않았습니다.")
             return
         
         if not self.notion_token:
             print("⚠️ NOTION_TOKEN 환경변수가 설정되지 않았습니다.")
             return
         
-        print("✅ Notion MCP 클라이언트 초기화 완료")
-    
-    async def _list_mcp_tools(self) -> List[str]:
-        """사용 가능한 MCP 도구 목록 가져오기"""
-        if not MCP_AVAILABLE:
-            return []
-        
-        server_params = StdioServerParameters(
-            command="npx",
-            args=["-y", "@notionhq/notion-mcp-server"],
-            env={"NOTION_TOKEN": self.notion_token}
-        )
-        
+        # Notion 클라이언트 초기화
         try:
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    
-                    # 사용 가능한 도구 목록 가져오기
-                    tools = await session.list_tools()
-                    tool_names = [tool.name for tool in tools.tools]
-                    
-                    print(f"📋 사용 가능한 MCP 도구: {tool_names}")
-                    return tool_names
+            self.client = Client(auth=self.notion_token)
+            print("✅ Notion 클라이언트 초기화 완료")
         except Exception as e:
-            print(f"⚠️ MCP 도구 목록 가져오기 실패: {e}")
-            return []
-    
-    async def _call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """MCP 도구 호출"""
-        if not MCP_AVAILABLE:
-            return {"success": False, "error": "MCP가 설치되지 않음"}
-        
-        # MCP 서버 파라미터 설정
-        server_params = StdioServerParameters(
-            command="npx",
-            args=["-y", "@notionhq/notion-mcp-server"],
-            env={"NOTION_TOKEN": self.notion_token}
-        )
-        
-        try:
-            # MCP 서버와 통신
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    # 세션 초기화
-                    await session.initialize()
-                    
-                    # 도구 호출
-                    result = await session.call_tool(tool_name, arguments=arguments)
-                    
-                    return {
-                        "success": True,
-                        "result": result.content
-                    }
-        except Exception as e:
-            print(f"❌ MCP 도구 호출 실패: {e}")
-            import traceback
-            traceback.print_exc()
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    def list_tools(self) -> List[str]:
-        """사용 가능한 도구 목록 (동기 래퍼)"""
-        return asyncio.run(self._list_mcp_tools())
+            print(f"❌ Notion 클라이언트 초기화 실패: {e}")
     
     def create_page(self, title: str, blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Notion 페이지 생성 (동기 래퍼)
+        Notion 페이지 생성
         
         Args:
             title: 페이지 제목
@@ -131,87 +71,73 @@ class NotionMCPClient:
         Returns:
             생성 결과 (page_id 포함)
         """
-        print(f"[Notion MCP] 페이지 생성 시작: {title}")
-        print(f"[Notion MCP] 블록 개수: {len(blocks)}개")
-        
-        # 비동기 호출을 동기로 실행
-        return asyncio.run(self._create_page_async(title, blocks))
-    
-    async def _create_page_async(self, title: str, blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Notion 페이지 생성 (비동기)"""
-        if not self.notion_page_id and not self.notion_database_id:
-            print("❌ NOTION_DATABASE_ID 또는 NOTION_PAGE_ID가 설정되지 않았습니다.")
+        if not self.client:
+            print("❌ Notion 클라이언트가 초기화되지 않았습니다.")
             return {
                 "success": False,
-                "error": "Notion parent 설정 누락"
+                "error": "Notion 클라이언트 초기화 실패"
             }
         
         try:
-            # parent 설정
+            print(f"[Notion API] 페이지 생성 시작: {title}")
+            print(f"[Notion API] 블록 개수: {len(blocks)}개")
+            
+            # 페이지 생성 (Database 또는 Page 하위)
             if self.notion_database_id:
+                # Database에 페이지 생성
                 parent = {"database_id": self.notion_database_id}
-                # Database에 페이지 생성 시 properties 형식
                 properties = {
                     "Name": {
                         "title": [
                             {
-                                "type": "text",
-                                "text": {"content": title}
+                                "text": {
+                                    "content": title
+                                }
                             }
                         ]
                     }
                 }
-            else:
+            elif self.notion_page_id:
+                # 기존 페이지의 하위 페이지로 생성
                 parent = {"page_id": self.notion_page_id}
-                # Page 하위에 생성 시 properties 형식
                 properties = {
-                    "title": {
-                        "title": [
-                            {
-                                "type": "text",
-                                "text": {"content": title}
+                    "title": [
+                        {
+                            "text": {
+                                "content": title
                             }
-                        ]
-                    }
+                        }
+                    ]
+                }
+            else:
+                print("❌ NOTION_DATABASE_ID 또는 NOTION_PAGE_ID가 설정되지 않았습니다.")
+                return {
+                    "success": False,
+                    "error": "Notion parent 설정 누락"
                 }
             
-            # MCP를 통해 페이지 생성
-            # Notion API 직접 호출 형식 사용
-            arguments = {
-                "parent": parent,
-                "properties": properties,
-                "children": blocks[:100]  # 첫 100개 블록만
-            }
+            # Notion API는 한 번에 100개 블록만 추가 가능
+            # 블록을 100개씩 나눠서 처리
+            blocks_batch_size = 100
+            initial_blocks = blocks[:blocks_batch_size]
             
-            result = await self._call_mcp_tool("API-post-page", arguments)
+            # 페이지 생성
+            response = self.client.pages.create(
+                parent=parent,
+                properties=properties,
+                children=initial_blocks
+            )
             
-            if not result.get("success"):
-                return result
+            page_id = response["id"]
+            page_url = response["url"]
             
-            # 결과 파싱
-            page_data = result.get("result", [{}])[0]
-            if isinstance(page_data, dict):
-                page_id = page_data.get("id") or page_data.get("page_id")
-                page_url = page_data.get("url") or f"https://notion.so/{page_id}"
-            else:
-                # 텍스트 응답인 경우 파싱
-                import json
-                try:
-                    parsed = json.loads(str(page_data))
-                    page_id = parsed.get("id")
-                    page_url = parsed.get("url")
-                except:
-                    # 단순 ID만 반환된 경우
-                    page_id = str(page_data).strip()
-                    page_url = f"https://notion.so/{page_id}"
-            
-            print(f"✅ [Notion MCP] 페이지 생성 완료 (페이지 ID: {page_id})")
+            print(f"✅ [Notion API] 페이지 생성 완료 (페이지 ID: {page_id})")
             
             # 나머지 블록 추가
-            if len(blocks) > 100:
-                print(f"[Notion MCP] 나머지 블록 추가 중... ({len(blocks) - 100}개)")
-                remaining_blocks = blocks[100:]
-                await self._append_blocks_async(page_id, remaining_blocks)
+            if len(blocks) > blocks_batch_size:
+                print(f"[Notion API] 나머지 블록 추가 중... ({len(blocks) - blocks_batch_size}개)")
+                remaining_blocks = blocks[blocks_batch_size:]
+                self.append_blocks(page_id, remaining_blocks)
             
             return {
                 "success": True,
@@ -221,7 +147,7 @@ class NotionMCPClient:
             }
             
         except Exception as e:
-            print(f"❌ [Notion MCP] 페이지 생성 실패: {e}")
+            print(f"❌ [Notion API] 페이지 생성 실패: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -229,31 +155,39 @@ class NotionMCPClient:
                 "error": str(e)
             }
     
-    async def _append_blocks_async(self, page_id: str, blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Notion 페이지에 블록 추가 (비동기)"""
+    def append_blocks(self, page_id: str, blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Notion 페이지에 블록 추가
+        
+        Args:
+            page_id: 페이지 ID
+            blocks: 추가할 Notion Block 리스트
+        
+        Returns:
+            추가 결과
+        """
+        if not self.client:
+            print("❌ Notion 클라이언트가 초기화되지 않았습니다.")
+            return {
+                "success": False,
+                "error": "Notion 클라이언트 초기화 실패"
+            }
+        
         try:
-            print(f"[Notion MCP] 블록 추가 시작 (페이지 ID: {page_id})")
-            print(f"[Notion MCP] 추가할 블록 개수: {len(blocks)}개")
+            print(f"[Notion API] 블록 추가 시작 (페이지 ID: {page_id})")
+            print(f"[Notion API] 추가할 블록 개수: {len(blocks)}개")
             
-            # 100개씩 배치 처리
+            # Notion API는 한 번에 100개 블록만 추가 가능
             batch_size = 100
             for i in range(0, len(blocks), batch_size):
                 batch = blocks[i:i + batch_size]
-                
-                arguments = {
-                    "block_id": page_id,
-                    "children": batch
-                }
-                
-                result = await self._call_mcp_tool("API-patch-block-children", arguments)
-                
-                if not result.get("success"):
-                    print(f"⚠️ 배치 {i//batch_size + 1} 추가 실패")
-                    continue
-                
+                self.client.blocks.children.append(
+                    block_id=page_id,
+                    children=batch
+                )
                 print(f"  - {i + len(batch)}/{len(blocks)} 블록 추가 완료")
             
-            print(f"✅ [Notion MCP] 모든 블록 추가 완료")
+            print(f"✅ [Notion API] 모든 블록 추가 완료")
             
             return {
                 "success": True,
@@ -261,7 +195,9 @@ class NotionMCPClient:
             }
             
         except Exception as e:
-            print(f"❌ [Notion MCP] 블록 추가 실패: {e}")
+            print(f"❌ [Notion API] 블록 추가 실패: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "success": False,
                 "error": str(e)
@@ -294,7 +230,7 @@ def export_report_to_notion(final_report: Dict[str, Any]) -> Dict[str, Any]:
         outcomes = survey_summary.get("outcomes", [])
         generated_at = final_report.get("generated_at", "")
         
-        title = f"report-{generated_at}"
+        title = f"BioStream 리포트 - {', '.join(outcomes[:2])} - {generated_at}"
         
         # 4. Notion 페이지 생성
         result = client.create_page(title=title, blocks=blocks)
@@ -382,8 +318,8 @@ def export_report_from_db_to_notion(
 
 
 def test_notion_connection():
-    """Notion MCP 연결 테스트"""
-    print("=== Notion MCP 연결 테스트 ===\n")
+    """Notion API 연결 테스트"""
+    print("=== Notion API 연결 테스트 ===\n")
     
     # 환경변수 확인
     notion_token = os.getenv("NOTION_TOKEN")
@@ -404,27 +340,22 @@ def test_notion_connection():
     
     if not notion_token:
         print("❌ NOTION_TOKEN이 설정되지 않았습니다.")
+        print("   NOTION_SETUP_GUIDE.md를 참고하여 설정하세요.")
         return False
     
     if not notion_database_id and not notion_page_id:
         print("❌ NOTION_DATABASE_ID 또는 NOTION_PAGE_ID가 설정되지 않았습니다.")
+        print("   NOTION_SETUP_GUIDE.md를 참고하여 설정하세요.")
         return False
     
     # 클라이언트 초기화 테스트
     try:
         client = NotionMCPClient()
-        
-        print("✅ Notion MCP 클라이언트 초기화 성공\n")
-        
-        # 사용 가능한 도구 목록 확인
-        print("📋 사용 가능한 MCP 도구 확인 중...")
-        tools = client.list_tools()
-        
-        if not tools:
-            print("⚠️ MCP 도구를 가져올 수 없습니다. Node.js와 npx가 설치되어 있는지 확인하세요.")
+        if not client.client:
+            print("❌ Notion 클라이언트 초기화 실패")
             return False
         
-        print(f"✅ 사용 가능한 도구: {', '.join(tools)}\n")
+        print("✅ Notion 클라이언트 초기화 성공\n")
         
         # 간단한 테스트 페이지 생성
         print("📝 테스트 페이지 생성 중...")
@@ -440,12 +371,12 @@ def test_notion_connection():
                 "object": "block",
                 "type": "paragraph",
                 "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": "Notion MCP 연결 테스트가 성공했습니다! 🎉"}}]
+                    "rich_text": [{"type": "text", "text": {"content": "Notion API 연결 테스트가 성공했습니다! 🎉"}}]
                 }
             }
         ]
         
-        result = client.create_page("BioStream MCP 연결 테스트", test_blocks)
+        result = client.create_page("BioStream 연결 테스트", test_blocks)
         
         if result["success"]:
             print("✅ 테스트 성공!")
@@ -463,6 +394,7 @@ def test_notion_connection():
         return False
 
 
+# 테스트 함수 (샘플 데이터로 Export)
 def test_notion_export():
     """Notion Export 테스트 (샘플 데이터)"""
     print("=" * 60)
@@ -504,8 +436,8 @@ if __name__ == "__main__":
     """테스트 실행"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Notion MCP Export 테스트")
-    parser.add_argument("--test-connection", action="store_true", help="Notion MCP 연결 테스트만 수행")
+    parser = argparse.ArgumentParser(description="Notion Export 테스트")
+    parser.add_argument("--test-connection", action="store_true", help="Notion API 연결 테스트만 수행")
     parser.add_argument("--sample", action="store_true", help="샘플 리포트로 Export 테스트")
     parser.add_argument("--user-id", type=int, default=1, help="User ID (DB 테스트용)")
     parser.add_argument("--lifestyle-id", type=int, help="Lifestyle ID (선택)")
@@ -537,3 +469,4 @@ if __name__ == "__main__":
         else:
             print(f"\n❌ 실패: {result.get('error', 'Unknown error')}")
             sys.exit(1)
+

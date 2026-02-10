@@ -55,32 +55,6 @@ class NotionMCPClient:
         
         print("✅ Notion MCP 클라이언트 초기화 완료")
     
-    async def _list_mcp_tools(self) -> List[str]:
-        """사용 가능한 MCP 도구 목록 가져오기"""
-        if not MCP_AVAILABLE:
-            return []
-        
-        server_params = StdioServerParameters(
-            command="npx",
-            args=["-y", "@notionhq/notion-mcp-server"],
-            env={"NOTION_TOKEN": self.notion_token}
-        )
-        
-        try:
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    
-                    # 사용 가능한 도구 목록 가져오기
-                    tools = await session.list_tools()
-                    tool_names = [tool.name for tool in tools.tools]
-                    
-                    print(f"📋 사용 가능한 MCP 도구: {tool_names}")
-                    return tool_names
-        except Exception as e:
-            print(f"⚠️ MCP 도구 목록 가져오기 실패: {e}")
-            return []
-    
     async def _call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP 도구 호출"""
         if not MCP_AVAILABLE:
@@ -116,10 +90,6 @@ class NotionMCPClient:
                 "error": str(e)
             }
     
-    def list_tools(self) -> List[str]:
-        """사용 가능한 도구 목록 (동기 래퍼)"""
-        return asyncio.run(self._list_mcp_tools())
-    
     def create_page(self, title: str, blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Notion 페이지 생성 (동기 래퍼)
@@ -149,41 +119,19 @@ class NotionMCPClient:
         try:
             # parent 설정
             if self.notion_database_id:
-                parent = {"database_id": self.notion_database_id}
-                # Database에 페이지 생성 시 properties 형식
-                properties = {
-                    "Name": {
-                        "title": [
-                            {
-                                "type": "text",
-                                "text": {"content": title}
-                            }
-                        ]
-                    }
-                }
+                parent = {"type": "database_id", "database_id": self.notion_database_id}
             else:
-                parent = {"page_id": self.notion_page_id}
-                # Page 하위에 생성 시 properties 형식
-                properties = {
-                    "title": {
-                        "title": [
-                            {
-                                "type": "text",
-                                "text": {"content": title}
-                            }
-                        ]
-                    }
-                }
+                parent = {"type": "page_id", "page_id": self.notion_page_id}
             
             # MCP를 통해 페이지 생성
-            # Notion API 직접 호출 형식 사용
+            # Notion MCP 서버가 제공하는 create_page 도구 사용
             arguments = {
+                "title": title,
                 "parent": parent,
-                "properties": properties,
                 "children": blocks[:100]  # 첫 100개 블록만
             }
             
-            result = await self._call_mcp_tool("API-post-page", arguments)
+            result = await self._call_mcp_tool("create_page", arguments)
             
             if not result.get("success"):
                 return result
@@ -245,7 +193,7 @@ class NotionMCPClient:
                     "children": batch
                 }
                 
-                result = await self._call_mcp_tool("API-patch-block-children", arguments)
+                result = await self._call_mcp_tool("append_block_children", arguments)
                 
                 if not result.get("success"):
                     print(f"⚠️ 배치 {i//batch_size + 1} 추가 실패")
@@ -294,7 +242,7 @@ def export_report_to_notion(final_report: Dict[str, Any]) -> Dict[str, Any]:
         outcomes = survey_summary.get("outcomes", [])
         generated_at = final_report.get("generated_at", "")
         
-        title = f"report-{generated_at}"
+        title = f"BioStream 리포트 - {', '.join(outcomes[:2])} - {generated_at}"
         
         # 4. Notion 페이지 생성
         result = client.create_page(title=title, blocks=blocks)
@@ -415,16 +363,6 @@ def test_notion_connection():
         client = NotionMCPClient()
         
         print("✅ Notion MCP 클라이언트 초기화 성공\n")
-        
-        # 사용 가능한 도구 목록 확인
-        print("📋 사용 가능한 MCP 도구 확인 중...")
-        tools = client.list_tools()
-        
-        if not tools:
-            print("⚠️ MCP 도구를 가져올 수 없습니다. Node.js와 npx가 설치되어 있는지 확인하세요.")
-            return False
-        
-        print(f"✅ 사용 가능한 도구: {', '.join(tools)}\n")
         
         # 간단한 테스트 페이지 생성
         print("📝 테스트 페이지 생성 중...")
