@@ -12,7 +12,7 @@ from tools.schemas import EvidenceItem
 # ──────────────────────────── State ────────────────────────────
 
 class ReportState(TypedDict, total=False):
-    """리포트 생성 상태 (Quant-First + Evidence Extraction)"""
+    """리포트 생성 상태 (Quant-First + Evidence Extraction + RAGAS Reliability)"""
     user_id: int
     lifestyle_id: Optional[int]
     survey: Optional[Dict[str, Any]]
@@ -29,6 +29,7 @@ class ReportState(TypedDict, total=False):
     retry_needed: bool
     retry_sections: List[str]
     retry_count: Dict[str, Any]
+    reliability_scores: Optional[Dict[str, Any]]  # RAGAS 신뢰도 평가 결과
 
 
 # ──────────────────────────── 목표(outcome) 매핑 ────────────────────────────

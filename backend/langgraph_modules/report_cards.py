@@ -481,7 +481,8 @@ def get_lifestyle_subsection_keys(survey: dict) -> List[str]:
     if smoking and str(smoking).lower() not in ["never", "안", "비흡연", "never smoked", "none", ""]:
         subsections.append("smoking")
     drinking = survey.get("drinking_days_per_week")
-    if drinking is not None and int(drinking) > 0:
+    # drinking_days_per_week는 문자열 ('0', '1', '2-3', '4-5', '6-7')
+    if drinking is not None and str(drinking) not in ["0", "", "none"]:
         subsections.append("drinking")
     stress = survey.get("stress_score")
     if stress is not None and float(stress) > 0:

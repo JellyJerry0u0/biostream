@@ -4,7 +4,12 @@
 """
 
 import os
+import asyncio
+import warnings
 from dotenv import load_dotenv
+
+# aiohttp cleanup 경고 무시
+warnings.filterwarnings('ignore', category=ResourceWarning)
 
 load_dotenv()
 
@@ -84,3 +89,17 @@ except Exception as e:
     print(f"\n❌ 평가 실패: {e}")
     import traceback
     traceback.print_exc()
+
+finally:
+    # 리소스 정리 (aiohttp 세션 cleanup 경고 방지)
+    print("\n리소스 정리 중...")
+    try:
+        # 모든 보류 중인 태스크 정리
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
+        # 짧은 대기로 정리 시간 제공
+        import time
+        time.sleep(0.1)
+    except Exception:
+        pass

@@ -6,7 +6,33 @@ LangGraph 리포트 생성 + RAGAS 신뢰도 평가 통합 테스트
 
 import os
 import sys
+import warnings
+import asyncio
 from dotenv import load_dotenv
+
+# SSL 및 asyncio 경고 무시
+warnings.filterwarnings('ignore', category=ResourceWarning)
+warnings.filterwarnings('ignore', message='.*SSL.*')
+warnings.filterwarnings('ignore', message='.*Event loop.*')
+
+# Windows에서 ProactorEventLoop SSL 에러 방지
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# stderr 리다이렉션 (SSL transport 에러 억제)
+import contextlib
+import io
+
+# SSL 에러 메시지를 무시하는 컨텍스트 매니저
+@contextlib.contextmanager
+def suppress_ssl_errors():
+    """SSL transport 에러 메시지를 억제"""
+    original_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    try:
+        yield
+    finally:
+        sys.stderr = original_stderr
 
 load_dotenv()
 
@@ -71,6 +97,9 @@ print("2️⃣ RAGAS 신뢰도 평가 실행 중...")
 print("-" * 70 + "\n")
 
 from tools.reliability_auditor import ReliabilityAuditor
+
+# SSL 에러는 평가 중에 많이 발생하므로 이 블록 전체를 조용히 처리
+print("💡 참고: SSL transport 경고는 무해하며 평가 결과에 영향을 주지 않습니다.\n")
 
 try:
     auditor = ReliabilityAuditor()
@@ -146,3 +175,21 @@ except Exception as e:
     import traceback
     traceback.print_exc()
     sys.exit(1)
+
+finally:
+    # 리소스 정리 (aiohttp 세션 cleanup 및 SSL 에러 방지)
+    print("\n리소스 정리 중...")
+    with suppress_ssl_errors():
+        try:
+            import time
+            # 짧은 대기로 정리 시간 제공
+            time.sleep(0.5)
+            # 이벤트 루프가 열려있으면 정리
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.stop()
+            except RuntimeError:
+                pass  # 이미 루프가 없으면 무시
+        except Exception as cleanup_error:
+            pass  # 정리 중 에러 무시

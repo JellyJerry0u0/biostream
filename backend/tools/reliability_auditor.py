@@ -12,10 +12,23 @@ LangGraph로 생성된 리포트의 신뢰도를 RAGAS의 faithfulness와 answer
 
 import os
 import sys
+import warnings
+import asyncio
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 import pandas as pd
 from dotenv import load_dotenv
+
+# SSL 및 asyncio 경고 무시
+warnings.filterwarnings('ignore', category=ResourceWarning)
+warnings.filterwarnings('ignore', message='.*SSL.*')
+
+# Windows에서 ProactorEventLoop SSL 에러 방지
+if sys.platform == 'win32' and hasattr(asyncio, 'WindowsSelectorEventLoopPolicy'):
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except:
+        pass
 
 # 환경변수 로드
 load_dotenv()
@@ -134,14 +147,50 @@ class ReliabilityAuditor:
                 embeddings=self.evaluator_embeddings  # Google Embeddings 전달
             )
             
-            # 디버그: 결과 구조 확인
-            print(f"  [DEBUG] 결과 타입: {type(result)}")
-            print(f"  [DEBUG] 결과 키: {result.keys() if hasattr(result, 'keys') else 'No keys'}")
-            print(f"  [DEBUG] 결과 컬럼: {result.columns.tolist() if hasattr(result, 'columns') else 'No columns'}")
+            # 디버그: 결과 구조 확인 (간소화)
+            # if hasattr(result, '__dict__'):
+            #     print(f"  [DEBUG] 결과 속성: {list(result.__dict__.keys())}")
             
-            # 점수 추출 (RAGAS 0.4.x는 DataFrame 형태 반환)
-            faithfulness_score = result["faithfulness"].iloc[0] if "faithfulness" in result.columns else 0.0
-            relevancy_score = result["answer_relevancy"].iloc[0] if "answer_relevancy" in result.columns else 0.0
+            # 점수 추출 (RAGAS 최신 버전은 EvaluationResult 객체 반환)
+            faithfulness_score = 0.0
+            relevancy_score = 0.0
+            
+            # 방법 1: to_pandas() 메서드 시도
+            if hasattr(result, 'to_pandas'):
+                try:
+                    df = result.to_pandas()
+                    # print(f"  [DEBUG] DataFrame 컬럼: {df.columns.tolist()}")
+                    faithfulness_score = df["faithfulness"].iloc[0] if "faithfulness" in df.columns else 0.0
+                    relevancy_score = df["answer_relevancy"].iloc[0] if "answer_relevancy" in df.columns else 0.0
+                except Exception as e:
+                    print(f"  [DEBUG] to_pandas() 실패: {e}")
+            
+            # 방법 2: scores 속성 시도 (to_pandas가 실패한 경우만)
+            if (faithfulness_score == 0.0 or pd.isna(faithfulness_score)) and hasattr(result, 'scores'):
+                scores = result.scores
+                print(f"  [DEBUG] scores 타입: {type(scores)}")
+                if isinstance(scores, dict):
+                    print(f"  [DEBUG] scores 키: {scores.keys()}")
+                    faithfulness_score = scores.get("faithfulness", [0.0])[0] if scores.get("faithfulness") else 0.0
+                    relevancy_score = scores.get("answer_relevancy", [0.0])[0] if scores.get("answer_relevancy") else 0.0
+                elif isinstance(scores, pd.DataFrame):
+                    print(f"  [DEBUG] scores DataFrame 컬럼: {scores.columns.tolist()}")
+                    faithfulness_score = scores["faithfulness"].iloc[0] if "faithfulness" in scores.columns else 0.0
+                    relevancy_score = scores["answer_relevancy"].iloc[0] if "answer_relevancy" in scores.columns else 0.0
+            
+            # NaN 체크 및 처리
+            if pd.isna(faithfulness_score):
+                print(f"  ⚠️ faithfulness_score가 NaN입니다. 0으로 설정합니다.")
+                faithfulness_score = 0.0
+            if pd.isna(relevancy_score):
+                print(f"  ⚠️ relevancy_score가 NaN입니다. 0으로 설정합니다.")
+                relevancy_score = 0.0
+            
+            # 여전히 점수를 얻지 못한 경우에만 방법 3 시도
+            if (faithfulness_score == 0.0 or pd.isna(faithfulness_score)) and hasattr(result, 'columns'):
+                faithfulness_score = result["faithfulness"].iloc[0] if "faithfulness" in result.columns else 0.0
+                relevancy_score = result["answer_relevancy"].iloc[0] if "answer_relevancy" in result.columns else 0.0
+            
             average_score = (faithfulness_score + relevancy_score) / 2
             
             # 등급 계산
@@ -224,9 +273,23 @@ class ReliabilityAuditor:
                 # 3. Answer: 해당 카드 타입의 카드 텍스트
                 answer = ""
                 for card in cards:
-                    if isinstance(card, dict) and card.get("card_type") == card_type:
-                        answer = card.get("text", "")
+                    if isinstance(card, dict) and card.get("type") == card_type:
+                        # action 카드는 items 리스트를 텍스트로 변환
+                        if card_type == "action" and "items" in card:
+                            items = card.get("items", [])
+                            action_texts = []
+                            for item in items:
+                                if isinstance(item, dict):
+                                    title = item.get("title", "")
+                                    detail = item.get("detail", "")
+                                    action_texts.append(f"{title}: {detail}")
+                            answer = " ".join(action_texts)
+                        else:
+                            answer = card.get("text", "")
                         break
+                
+                # 디버그: 데이터 확인 (간소화)
+                # print(f"  [DEBUG {section}/{card_type}] question={len(question)}자, contexts={len(contexts)}개, answer={len(answer)}자")
                 
                 # 평가 실행
                 score = self.evaluate_section(
