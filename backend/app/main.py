@@ -47,6 +47,10 @@ app.include_router(lifestyle_survey.router, prefix="/api", tags=["Lifestyle Surv
 from .api import report
 app.include_router(report.router, prefix="/api", tags=["Health Report"])
 
+# 코치 챗봇 WebSocket (/ws/coach)
+from .api import coach_ws
+app.include_router(coach_ws.router, tags=["Coach Chatbot"])
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "BioStream API is running"}
