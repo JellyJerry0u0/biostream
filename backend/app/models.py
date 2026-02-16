@@ -40,6 +40,10 @@ class Lifestyle(Base):
     original_image_url = Column(String, nullable=True)  # 사용자가 업로드한 원본 사진 경로 (설문 단계에서는 없을 수 있음)
     #처음에는 null허용인데 나중에는 미래 얼굴 사진이 반드시 생성되니 일단은 nullable=True
     generated_image_url = Column(String, nullable=True) # Gemini가 생성한 미래 얼굴 사진 경로
+    
+    # 이미지 생성 상태 및 파라미터 관리
+    generation_status = Column(String, default="not_started", nullable=True)  # not_started -> pending -> processing -> completed -> failed
+    image_gen_params = Column(JSON, nullable=True)  # AI 이미지 생성용 파라미터 예: {"wrinkles": 0.8, "pigmentation": 0.5, "target_age": 50}
       
     # A. 주요 목표 (리포트 톤 라우팅) - multi choice
     outcomes = Column(JSON, nullable=True)  # ["wrinkle", "elasticity", "pigmentation", "hydration", "hydration_barrier", "acne", "redness", "general_aging"]

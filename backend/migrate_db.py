@@ -31,6 +31,19 @@ def migrate():
             """))
             print("✅ health_report_generated_at 컬럼 추가 완료")
             
+            # 이미지 생성 관련 컬럼 추가
+            conn.execute(text("""
+                ALTER TABLE lifestyles 
+                ADD COLUMN IF NOT EXISTS generation_status VARCHAR DEFAULT 'not_started';
+            """))
+            print("✅ generation_status 컬럼 추가 완료")
+            
+            conn.execute(text("""
+                ALTER TABLE lifestyles 
+                ADD COLUMN IF NOT EXISTS image_gen_params JSON;
+            """))
+            print("✅ image_gen_params 컬럼 추가 완료")
+            
             conn.commit()
             print("✅ 마이그레이션 완료!")
             

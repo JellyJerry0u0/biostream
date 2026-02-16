@@ -38,6 +38,7 @@ from tools.schemas import QdrantSearchInput
 from app.services.quant_evidence_retriever import (
     get_grouped_stats, get_grouped_stats_multi,
 )
+from app.services.image_service import image_gen_service
 
 # ── 서브모듈 import ──
 from .report_constants import (
@@ -782,6 +783,10 @@ def assemble_report(state: ReportState) -> ReportState:
             "target_years": survey.get("target_years", 30),
         },
         "generated_at": None,
+        # 이미지 생성 정보 포함 (이후 노드에서 채워짐)
+        "generated_image_url": state.get("generated_image_url"),
+        "generation_status": state.get("generation_status"),
+        "image_gen_params": state.get("image_gen_params"),
     }
 
     print(f"✅ [AssembleReport] 완료 - {len(sections_dict)}개 섹션")
@@ -817,6 +822,63 @@ def _collect_narrative_refs(section_evidence) -> List[Dict[str, Any]]:
 
 
 # ════════════════════════════════════════════════════════════════
+#  노드 7.5: GenerateAgingImage
+# ════════════════════════════════════════════════════════════════
+
+def generate_aging_image_node(state: ReportState) -> ReportState:
+    """
+    사용자의 습관 데이터를 바탕으로 미래 이미지를 생성하는 노드
+    """
+    print("---미래 모습 시뮬레이션 생성 시작---")
+    
+    # 1. 서비스 호출에 필요한 데이터 추출
+    lifestyle_id = state.get("lifestyle_id")
+    survey = state.get("survey", {})
+    user_profile = state.get("user_profile", {})
+    
+    # survey에서 성별과 목표 년수 추출
+    gender = user_profile.get("gender") or survey.get("gender", "unknown")
+    target_years = survey.get("target_years", 30)
+    
+    # 습관 데이터 추출 (survey 전체를 habits로 전달)
+    habits = {
+        "smoking_status": survey.get("smoking_status"),
+        "uv_exposure_10to16": survey.get("uv_exposure_10to16"),
+        "drinking_days_per_week": survey.get("drinking_days_per_week"),
+        "sleep_hours_weekday": survey.get("sleep_hours_weekday"),
+        "stress_score": survey.get("stress_score"),
+    }
+    
+    # 2. 이미지 생성 서비스 호출 (async 함수를 sync 환경에서 실행)
+    import asyncio
+    try:
+        # 이벤트 루프가 없는 경우 새로 생성
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    result = loop.run_until_complete(
+        image_gen_service.request_aging_simulation(
+            lifestyle_id=lifestyle_id,
+            gender=gender,
+            target_years=target_years,
+            habits=habits
+        )
+    )
+    
+    print(f"✅ [GenerateAgingImage] 이미지 생성 완료: {result['image_url']}")
+    
+    # 3. 결과 반환하여 State 업데이트
+    return {
+        **state,
+        "generated_image_url": result["image_url"],
+        "generation_status": result["status"],
+        "image_gen_params": result["params"]
+    }
+
+
+# ════════════════════════════════════════════════════════════════
 #  노드 8: SaveReport
 # ════════════════════════════════════════════════════════════════
 
@@ -832,13 +894,24 @@ def save_report_node(state: ReportState) -> ReportState:
         return state
 
     try:
-        result = save_report(user_id, final_report, lifestyle_id=survey.get("lifestyle_id"))
+        # State에서 이미지 관련 데이터를 꺼내서 save_report에 전달
+        result = save_report(
+            user_id, 
+            final_report, 
+            lifestyle_id=survey.get("lifestyle_id"),
+            generated_image_url=state.get("generated_image_url"),
+            generation_status=state.get("generation_status"),
+            image_gen_params=state.get("image_gen_params")
+        )
         if "error" in result:
             print(f"⚠️ [SaveReport] 저장 실패: {result['error']}")
         else:
             print(f"✅ [SaveReport] 저장 완료 - report_id: {result.get('report_id')}")
+            if result.get("generated_image_url"):
+                print(f"   └── 이미지 URL: {result.get('generated_image_url')}")
             final_report["report_id"] = result.get("report_id")
             final_report["generated_at"] = result.get("timestamp")
+            final_report["generated_image_url"] = result.get("generated_image_url")
         return {**state, "final_report": final_report}
     except Exception as e:
         print(f"❌ [SaveReport] 저장 실패: {e}")
@@ -863,6 +936,7 @@ def create_report_graph():
     workflow.add_node("write_section_cards", write_section_cards)
     workflow.add_node("validate_cards", validate_cards)
     workflow.add_node("assemble_report", assemble_report)
+    workflow.add_node("generate_aging_image", generate_aging_image_node)
     workflow.add_node("save_report", save_report_node)
 
     workflow.set_entry_point("load_survey")
@@ -887,7 +961,8 @@ def create_report_graph():
         "validate_cards", should_retry,
         {"retry": "write_section_cards", "continue": "assemble_report"},
     )
-    workflow.add_edge("assemble_report", "save_report")
+    workflow.add_edge("assemble_report", "generate_aging_image")
+    workflow.add_edge("generate_aging_image", "save_report")
     workflow.add_edge("save_report", END)
 
     return workflow.compile(checkpointer=MemorySaver())
