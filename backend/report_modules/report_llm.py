@@ -1,5 +1,5 @@
 """
-LLM 초기화 및 유틸리티
+LLM 초기화 및 유틸리티 (google-generativeai 직접 사용)
 - Gemini LLM 초기화 (모델 폴백)
 - LRU 캐시
 - JSON 추출/파싱
@@ -14,8 +14,6 @@ import hashlib
 from typing import Dict, Any, Optional
 from collections import OrderedDict
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
 import google.generativeai as genai
 
 
@@ -30,8 +28,7 @@ if not GOOGLE_API_KEY:
 
 # ──────────────────────────── LLM 초기화 ────────────────────────────
 
-llm = None
-genai_model_name = None
+genai_model_name: Optional[str] = None
 fallback_models = [
     "gemini-2.5-flash",
     "gemini-2.0-flash",
@@ -43,14 +40,8 @@ if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
     for _model_name in fallback_models:
         try:
-            _model = genai.GenerativeModel(_model_name)
+            _ = genai.GenerativeModel(_model_name)
             genai_model_name = _model_name
-            llm = ChatGoogleGenerativeAI(
-                model=_model_name,
-                temperature=0.7,
-                google_api_key=GOOGLE_API_KEY,
-                max_retries=3,
-            )
             print(f"✅ LLM 초기화 성공 - 모델: {_model_name}")
             break
         except Exception as e:
@@ -212,19 +203,10 @@ def invoke_llm_json(
                 print(f"  ⏳ [{context}] 모델 폴백 대기: {backoff_seconds}초...")
                 time.sleep(backoff_seconds)
 
-            raw_text = ""
-            if llm and model_name == genai_model_name:
-                messages = []
-                if system_prompt:
-                    messages.append(SystemMessage(content=system_prompt))
-                messages.append(HumanMessage(content=prompt))
-                response = llm.invoke(messages)
-                raw_text = response.content if hasattr(response, 'content') else str(response)
-            else:
-                model = genai.GenerativeModel(model_name)
-                full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-                response = model.generate_content(full_prompt)
-                raw_text = response.text
+            model = genai.GenerativeModel(model_name)
+            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            response = model.generate_content(full_prompt)
+            raw_text = response.text
 
             if debug:
                 print(f"  📝 [{context}] LLM 호출 성공 (모델: {model_name}), raw_text 길이: {len(raw_text)}")

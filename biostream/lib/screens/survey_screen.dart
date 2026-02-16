@@ -63,12 +63,17 @@ class _SurveyScreenState extends State<SurveyScreen> {
   // 목표 연도
   double _targetYears = 30.0;
 
+  // 참고할 상황 (선택, 마지막 입력, DB 저장 안 함)
+  final TextEditingController _situationTextController = TextEditingController();
+  static const int _situationTextMaxLength = 200;
+
   final int _totalPages = 9; // 8개 섹션 + 1개 요약
 
   @override
   void dispose() {
     _pageController.dispose();
     _smokingAmountController.dispose();
+    _situationTextController.dispose();
     super.dispose();
   }
 
@@ -112,8 +117,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
     final result = await _lifestyleService.saveLifestyleProfile(lifestyleData);
 
     if (result['success'] == true && mounted) {
+      final situationText = _situationTextController.text.trim();
+      final situationForReport = situationText.isNotEmpty ? situationText : null;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const ResultScreen()),
+        MaterialPageRoute(
+          builder: (context) => ResultScreen(situationText: situationForReport),
+        ),
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1222,6 +1231,47 @@ class _SurveyScreenState extends State<SurveyScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            '참고할 상황 (선택)',
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 16),
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+          SizedBox(height: Responsive.padding(context, 8)),
+          Text(
+            '리포트에 반영해 주었으면 하는 상황이나 특성을 간단히 적어주세요. 비워두어도 됩니다.',
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 12),
+              color: isDark ? Colors.grey[500] : Colors.grey[500],
+            ),
+          ),
+          SizedBox(height: Responsive.padding(context, 12)),
+          TextField(
+            controller: _situationTextController,
+            maxLength: _situationTextMaxLength,
+            maxLines: 3,
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 14),
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+            decoration: InputDecoration(
+              hintText: '예: 야근이 많아 새벽에 자요. 3개월 뒤 중요한 일이 있어요.',
+              hintStyle: TextStyle(
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+              ),
+              counterText: '',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF1A2C16) : Colors.white,
+              contentPadding: EdgeInsets.all(Responsive.padding(context, 16)),
+            ),
+          ),
+          SizedBox(height: Responsive.padding(context, 24)),
           Text(
             '입력 요약',
             style: TextStyle(

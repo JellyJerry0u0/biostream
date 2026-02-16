@@ -10,7 +10,9 @@ import '../widgets/report_cards/simulation_card.dart';
 import '../widgets/evidence_modal.dart';
 
 class ResultScreen extends StatefulWidget {
-  const ResultScreen({super.key});
+  final String? situationText;
+
+  const ResultScreen({super.key, this.situationText});
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -99,8 +101,11 @@ class _ResultScreenState extends State<ResultScreen> {
         return;
       }
 
-      final result = await _lifestyleService.generateHealthReport(lifestyleId,
-          force: force);
+      final result = await _lifestyleService.generateHealthReport(
+        lifestyleId,
+        force: force,
+        situationText: widget.situationText,
+      );
 
       if (result['success'] == true) {
         // 이미 리포트가 있는 경우 다이얼로그 표시

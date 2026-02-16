@@ -1,36 +1,32 @@
 """
-LangGraph 기반 리포트 생성 워크플로우 (Quant-First 아키텍처)
+리포트 생성 파이프라인 (LangGraph + Quant-First 아키텍처)
 정량 근거를 먼저 확보하고, 그를 중심으로 서술을 생성하는 구조
 
-노드 흐름:
+노드 흐름 (LangGraph StateGraph):
 1. LoadSurvey
 2. PlanSections
-3. PreloadQuantEvidence (신규: 정량 근거 먼저 확보)
-4. BuildQueries (quant 결과 반영)
-5. RetrieveNarrativeEvidence (원문 검색)
-6. WriteSectionCards (4카드 JSON 생성)
-7. AssembleReport (카드 기반 리포트 조립)
-8. SaveReport
-9. ExportToNotion (신규: Notion으로 리포트 전송)
+2.5. DeriveUserProfile
+3. PreloadQuantEvidence
+4. BuildQueries
+5. RetrieveNarrativeEvidence
+5.5. ExtractClaims (rule-based)
+6. WriteSectionCards
+6.5. ValidateCards → (재시도 시 WriteSectionCards / 아니면 AssembleReport)
+7. AssembleReport
+8. GenerateAgingImage
+9. SaveReport
+10. ExportToNotion (Notion으로 리포트 전송)
 """
 
 import os
+import re
 import json
 import sys
-import re
-import math
-import time
-import hashlib
-from typing import Dict, Any, List, Optional, TypedDict
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Any, List, Optional, Tuple, TypedDict
 from collections import defaultdict, OrderedDict
 
-# 디버그 모드 (환경변수로 제어)
-REPORT_DEBUG = os.getenv("REPORT_DEBUG", "0") == "1"
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
-import google.generativeai as genai
-
-# 패키지 langgraph import
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -59,41 +55,42 @@ from app.services.quant_evidence_retriever import (
 )
 from app.services.image_service import image_gen_service
 
-# Google API Key 설정
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
-if not GOOGLE_API_KEY:
-    print("⚠️ 경고: GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+# ── 서브모듈 import ──
+from .report_constants import (
+    ReportState,
+    OUTCOME_LABELS,
+    UI_OUTCOME_TO_QUANT_MAPPED,
+    OUTCOME_TO_NARRATIVE_TOPICS,
+    SECTION_OUTCOME_CANDIDATES,
+    SECTION_PRIMARY_OUTCOME,
+    SECTION_CARD_TYPE_KEYWORDS,
+    SECTION_TITLES,
+)
+from .report_llm import get_llm_call_count
+from .report_formatters import (
+    map_outcomes_to_topics,
+    timeframe_days_to_label,
+    calculate_user_profile_derived,
+    format_user_profile_for_prompt,
+    score_outcome_for_selection,
+    select_top_timeframes,
+    calculate_estimated_stats,
+)
+from .report_cards import (
+    generate_section_cards,
+    generate_lifestyle_cards,
+    get_lifestyle_subsection_keys,
+    create_template_based_subsection_cards,
+    build_dual_queries,
+    extract_keyword_based_sentences,
+    validate_section_cards,
+)
 
-# LLM 초기화
-llm = None
-genai_model_name = None
-fallback_models = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-pro-latest",
-    "gemini-flash-latest",
-]
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
-    for model_name in fallback_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            genai_model_name = model_name
-            llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                temperature=0.7,
-                google_api_key=GOOGLE_API_KEY,
-                max_retries=3,
-            )
-            print(f"✅ LLM 초기화 성공 - 모델: {model_name}")
-            break
-        except Exception as e:
-            print(f"⚠️ 모델 {model_name} 초기화 실패: {e}")
-            continue
-
-# LLM 호출 캐시 (LRU 방식, 최대 1000개 항목)
-_llm_cache: OrderedDict[str, Optional[Dict[str, Any]]] = OrderedDict()
-_llm_cache_max_size = 1000
+# ── 하위 호환 re-export ──
+# 테스트 파일에서 from report_modules.report_graph import X 로 사용 중인 심볼:
+#   ReportState, SECTION_CARD_TYPE_KEYWORDS, OUTCOME_TO_NARRATIVE_TOPICS,
+#   map_outcomes_to_topics → 위 import에서 자동 re-export
+_extract_keyword_based_sentences = extract_keyword_based_sentences  # noqa: F841
 
 
 def _llm_cache_get(key: str) -> Optional[Dict[str, Any]]:
@@ -797,7 +794,183 @@ def derive_user_profile(state: ReportState) -> ReportState:
         return {**state, "user_profile": {}}
 
 
-# 노드 3: PreloadQuantEvidence (신규)
+# ════════════════════════════════════════════════════════════════
+#  노드 3: PreloadQuantEvidence (헬퍼)
+# ════════════════════════════════════════════════════════════════
+
+class _QuantHelper:
+    """PreloadQuantEvidence 내부 로직을 깔끔하게 분리하기 위한 네임스페이스"""
+
+    @staticmethod
+    def _collect_outcome_scores(outcome_list, search_fn, used_outcomes):
+        """outcome 후보들의 점수를 수집"""
+        scores = []
+        for outcome in outcome_list:
+            try:
+                stats = search_fn(outcome)
+                if stats and stats.get("timeframe_groups"):
+                    score = score_outcome_for_selection(stats)
+                    if score > 0:
+                        scores.append((outcome, stats, score))
+            except Exception:
+                continue
+        return scores
+
+    @staticmethod
+    def _select_timeframes_with_dedup(
+        timeframe_groups, used_timeframe_labels, max_count=2,
+    ):
+        """겹침을 최소화하며 timeframe 선택"""
+        tf_scores = {}
+        for tf_days, group in timeframe_groups.items():
+            tf_label = timeframe_days_to_label(tf_days)
+            usage = used_timeframe_labels.get(tf_label, 0)
+            if usage >= 2:
+                continue
+            card_count = len(group.get("cards", []))
+            tf_scores[tf_days] = card_count / (1 + usage)
+
+        if tf_scores:
+            sorted_tfs = sorted(tf_scores.items(), key=lambda x: x[1], reverse=True)
+            return [tf for tf, _ in sorted_tfs[:max_count]]
+        return select_top_timeframes(timeframe_groups, max_count=max_count)
+
+    @staticmethod
+    def _store_outcome_data(
+        outcome, stats, section_quant, used_outcomes,
+        used_timeframe_labels,
+    ):
+        """outcome 데이터를 section_quant에 저장"""
+        timeframe_groups = stats.get("timeframe_groups", {})
+        selected_tfs = _QuantHelper._select_timeframes_with_dedup(
+            timeframe_groups, used_timeframe_labels,
+        )
+
+        used_outcomes.add(outcome)
+        for tf_days in selected_tfs:
+            tf_label = timeframe_days_to_label(tf_days)
+            used_timeframe_labels[tf_label] = used_timeframe_labels.get(tf_label, 0) + 1
+
+        filtered_groups = {tf: timeframe_groups[tf] for tf in selected_tfs if tf in timeframe_groups}
+        section_quant["stats_by_outcome"][outcome] = {**stats, "timeframe_groups": filtered_groups}
+
+        for tf_days in selected_tfs:
+            if tf_days in timeframe_groups:
+                for card_dict in timeframe_groups[tf_days].get("cards", []):
+                    section_quant["quant_refs"].append({
+                        "point_id": f"{card_dict.get('chunk_id', '')}__{card_dict.get('row_uid', '')}",
+                        "paper_id": card_dict.get("paper_id", ""),
+                        "chunk_id": card_dict.get("chunk_id", ""),
+                        "outcome_mapped": card_dict.get("outcome_mapped", ""),
+                        "timeframe_days": tf_days,
+                        "effect_signed_value": card_dict.get("effect_signed_value"),
+                        "effect_unit": card_dict.get("effect_unit_filled", "%"),
+                        "p_value": card_dict.get("p_value_num"),
+                        "p_label": card_dict.get("p_label", ""),
+                        "source_snippet": card_dict.get("source_snippet", ""),
+                    })
+
+        return len(selected_tfs)
+
+
+def _preload_goals_quant(survey, section_quant, used_outcomes, used_timeframe_labels):
+    """goals 섹션 정량 근거"""
+    outcomes = survey.get("outcomes", [])
+    outcome_scores = []
+
+    for ui_outcome in outcomes:
+        quant_list = UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, [])
+        if not quant_list:
+            continue
+        try:
+            stats = get_grouped_stats_multi(quant_list, exclude_suspicious=True)
+            if stats and stats.get("timeframe_groups"):
+                score = score_outcome_for_selection(stats)
+                if score > 0:
+                    outcome_scores.append((ui_outcome, stats, score))
+        except Exception as e:
+            print(f"    ⚠️ {ui_outcome} 검색 실패: {e}")
+
+    outcome_scores.sort(key=lambda x: x[2], reverse=True)
+    selected = outcome_scores[:2]
+
+    if selected:
+        section_quant["mode"] = "grounded"
+        section_quant["selected_outcomes"] = [o for o, _, _ in selected]
+
+        for ui_outcome, _, _ in selected:
+            for qo in UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, []):
+                used_outcomes.add(qo)
+
+        total_tf = 0
+        for ui_outcome, stats, _ in selected:
+            total_tf += _QuantHelper._store_outcome_data(
+                ui_outcome, stats, section_quant, used_outcomes, used_timeframe_labels,
+            )
+        print(f"    ✅ {len(selected)}개 outcome 선택 → grounded (총 {total_tf}개 timeframe)")
+
+
+def _preload_section_quant(
+    section, survey, section_quant,
+    used_outcomes, used_timeframe_labels, available_quant_outcomes,
+):
+    """일반 섹션 정량 근거"""
+    candidates = SECTION_OUTCOME_CANDIDATES.get(section, [])
+    outcome_scores = []
+
+    for outcome in candidates:
+        try:
+            stats = get_grouped_stats(outcome, exclude_suspicious=True)
+            if stats and stats.get("timeframe_groups"):
+                score = score_outcome_for_selection(stats)
+                if score > 0:
+                    outcome_scores.append((outcome, stats, score))
+        except Exception:
+            continue
+
+    # 예상경로 다양화: 섹션 고유 outcome 우선 + 재사용 강한 페널티
+    primary = SECTION_PRIMARY_OUTCOME.get(section)
+    filtered = []
+    for outcome, stats, score in outcome_scores:
+        adj = score
+        if outcome == primary:
+            adj *= 1.4  # 섹션별 1순위 outcome 부스트 (수면→수분, UV→색소 등)
+        if outcome in used_outcomes:
+            adj *= 0.5  # 다른 섹션에서 이미 사용된 outcome 억제
+        filtered.append((outcome, stats, adj))
+    filtered.sort(key=lambda x: x[2], reverse=True)
+    selected = filtered[:3]  # 예상경로 다양화: 2→3개 outcome 사용
+
+    if selected:
+        section_quant["mode"] = "grounded"
+        section_quant["selected_outcomes"] = [o for o, _, _ in selected]
+
+        total_tf = 0
+        for outcome, stats, _ in selected:
+            total_tf += _QuantHelper._store_outcome_data(
+                outcome, stats, section_quant, used_outcomes, used_timeframe_labels,
+            )
+        print(f"    ✅ {len(selected)}개 outcome 선택 → grounded (총 {total_tf}개 timeframe)")
+    else:
+        # estimated fallback
+        outcomes = survey.get("outcomes", [])
+        all_quant = []
+        for ui_outcome in outcomes:
+            all_quant.extend(UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, []))
+        filtered_candidates = [c for c in all_quant if c in available_quant_outcomes]
+        if filtered_candidates:
+            estimated = calculate_estimated_stats(filtered_candidates)
+            if estimated:
+                section_quant["mode"] = "estimated"
+                section_quant["selected_outcomes"] = filtered_candidates[:2]
+                section_quant["stats_by_outcome"]["estimated"] = estimated
+                print(f"    ⚠️ grounded 없음 → estimated ({estimated['timeframe_label']}, {estimated['median']:.1f}%)")
+            else:
+                print("    ⚠️ 정량 근거 없음 (estimated 실패)")
+        else:
+            print("    ⚠️ 정량 근거 없음 (available outcomes 없음)")
+
+
 def preload_quant_evidence(state: ReportState) -> ReportState:
     """섹션별 정량 근거 먼저 확보 (grounded 또는 estimated)"""
     print("[PreloadQuantEvidence] 정량 근거 확보 시작")
@@ -1249,6 +1422,19 @@ def retrieve_narrative_evidence(state: ReportState) -> ReportState:
             outcomes = survey.get("outcomes", [])
             topics = map_outcomes_to_topics(outcomes, include_fallback=True)
             print(f"  [{section}] UI outcomes {outcomes} → narrative topics {topics}")
+        elif section == "sleep":
+            # 수면 섹션: outcome 후보 → narrative topics 매핑 (검색 품질 개선)
+            section_outcomes = SECTION_OUTCOME_CANDIDATES.get("sleep", [])
+            topics = map_outcomes_to_topics(section_outcomes, include_fallback=True)
+            print(f"  [{section}] section outcomes {section_outcomes} → narrative topics {topics}")
+        elif section == "uv":
+            section_outcomes = SECTION_OUTCOME_CANDIDATES.get("uv", [])
+            topics = map_outcomes_to_topics(section_outcomes, include_fallback=True)
+            print(f"  [{section}] section outcomes {section_outcomes} → narrative topics {topics}")
+        elif section == "lifestyle":
+            section_outcomes = SECTION_OUTCOME_CANDIDATES.get("lifestyle", [])
+            topics = map_outcomes_to_topics(section_outcomes, include_fallback=True)
+            print(f"  [{section}] section outcomes {section_outcomes} → narrative topics {topics}")
         elif section == "activity":
             topics = ["exercise"]
         
@@ -1544,18 +1730,45 @@ def _format_survey_data_for_claims(section: str, survey: dict) -> str:
     
     return "\n".join(parts) if parts else "설문 데이터 없음"
 
-
-# 노드 6: WriteSectionCards (4카드 JSON 생성 - 근거 기반 강화 + retry_sections 처리)
-def write_section_cards(state: ReportState) -> ReportState:
-    """섹션별 4카드 JSON 생성 (extracted_claims + user_profile 기반) + retry_sections 처리"""
-    print("[WriteSectionCards] 카드 생성 시작")
-    sections = state.get("active_sections", [])
+def _generate_cards_for_section(
+    section: str, state: ReportState
+) -> Tuple[str, Dict[str, List[Dict[str, Any]]]]:
+    """
+    단일 섹션 카드 생성 (병렬 실행용 워커).
+    Returns: (section, {key: cards}).
+    """
     survey = state.get("survey", {})
     quant_results = state.get("quant_evidence_results", {})
     extracted_claims = state.get("extracted_claims", {})
     user_profile = state.get("user_profile", {})
-    
-    # retry_sections가 있으면 해당 섹션만 재생성
+    if section == "lifestyle":
+        subsections = get_lifestyle_subsection_keys(survey)
+        if subsections:
+            lifestyle_result = generate_lifestyle_cards(
+                survey, quant_results, extracted_claims, user_profile, state,
+            )
+            result: Dict[str, List[Dict[str, Any]]] = {}
+            for sub_key in subsections:
+                result[f"{section}.{sub_key}"] = lifestyle_result.get(sub_key, [])
+            result[section] = result.get(f"{section}.{subsections[0]}", [])
+            return section, result
+        else:
+            cards = generate_section_cards(
+                section, survey, quant_results, extracted_claims, user_profile, state,
+            )
+            return section, {section: cards}
+    else:
+        cards = generate_section_cards(
+            section, survey, quant_results, extracted_claims, user_profile, state,
+        )
+        return section, {section: cards}
+
+
+def write_section_cards(state: ReportState) -> ReportState:
+    """섹션별 4카드 JSON 생성 (병렬 호출)"""
+    print("[WriteSectionCards] 카드 생성 시작 (병렬)")
+    sections = state.get("active_sections", [])
+    survey = state.get("survey", {})
     retry_sections = state.get("retry_sections", [])
     existing_cards = state.get("section_cards", {})
     
@@ -1565,39 +1778,34 @@ def write_section_cards(state: ReportState) -> ReportState:
         section_cards = existing_cards.copy()  # 기존 카드 유지
     else:
         sections_to_process = sections
-        section_cards = {}
-    
-    for section in sections_to_process:
-        print(f"\n  [{section}] 카드 생성 중...")
-        
-        # lifestyle 섹션은 하위 섹션별로 템플릿 기반 카드 생성 (LLM 호출 없음)
-        if section == "lifestyle":
-            lifestyle_subsections = _get_lifestyle_subsection_keys(survey)
-            if lifestyle_subsections:
-                print(f"  [{section}] 하위 섹션별 템플릿 기반 카드 생성: {lifestyle_subsections} (LLM 호출 없음)")
-                for subsection_key in lifestyle_subsections:
-                    # 템플릿 기반 카드 생성 (LLM 호출 없음)
-                    subsection_cards = _create_template_based_subsection_cards(
-                        section, subsection_key, survey, quant_results, user_profile
-                    )
-                    # 하위 섹션별로 저장 (예: "lifestyle.smoking")
-                    section_cards[f"{section}.{subsection_key}"] = subsection_cards
-                
-                # lifestyle 섹션 자체에도 대표 카드 4장 생성 (ValidateCards 통과용)
-                # 가장 강한 설문 수치 기준으로 선택
-                representative_subsection = lifestyle_subsections[0]  # 첫 번째 하위 섹션 사용
-                section_cards[section] = section_cards.get(f"{section}.{representative_subsection}", [])
-            else:
-                # 하위 섹션이 없으면 일반 섹션으로 처리
-                cards = _generate_section_cards(section, survey, quant_results, extracted_claims, user_profile, state)
-                section_cards[section] = cards
-        else:
-            # 일반 섹션 처리
-            cards = _generate_section_cards(section, survey, quant_results, extracted_claims, user_profile, state)
-            section_cards[section] = cards
-    
+        section_cards: Dict[str, list] = {}
+
+    max_workers = max(1, min(len(sections_to_process), 5))  # 최대 5개 동시 실행
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_section = {
+            executor.submit(_generate_cards_for_section, section, state): section
+            for section in sections_to_process
+        }
+        for future in as_completed(future_to_section):
+            section = future_to_section[future]
+            try:
+                _, result = future.result()
+                for key, cards in result.items():
+                    section_cards[key] = cards
+                print(f"  ✅ [{section}] 카드 생성 완료")
+            except Exception as e:
+                print(f"  ❌ [{section}] 카드 생성 실패: {e}")
+                traceback.print_exc()
+                # 실패 시 동기 재시도 (fallback)
+                try:
+                    _, result = _generate_cards_for_section(section, state)
+                    for key, cards in result.items():
+                        section_cards[key] = cards
+                except Exception as retry_e:
+                    print(f"  ❌ [{section}] 재시도도 실패: {retry_e}")
+
     print(f"\n✅ [WriteSectionCards] 완료")
-    print(f"📊 [LLMBudget] 리포트 생성당 총 LLM 호출 횟수: {_llm_call_count}회")
+    print(f"📊 [LLMBudget] 리포트 생성당 총 LLM 호출 횟수: {get_llm_call_count()}회")
     
     # retry_sections 처리 완료 시 플래그 해제
     if retry_sections:
@@ -3388,6 +3596,10 @@ def _check_overconfident_language(text: str) -> bool:
     return False
 
 
+# ════════════════════════════════════════════════════════════════
+#  LangGraph 워크플로우
+# ════════════════════════════════════════════════════════════════
+
 def create_report_graph():
     """리포트 생성 LangGraph 워크플로우 생성"""
     workflow = StateGraph(ReportState)
@@ -3415,38 +3627,34 @@ def create_report_graph():
     workflow.add_edge("retrieve_narrative_evidence", "extract_claims")
     workflow.add_edge("extract_claims", "write_section_cards")  # ExtractClaims는 rule-based로 LLM 호출 없음
     workflow.add_edge("write_section_cards", "validate_cards")
-    
-    # validate_cards에서 재시도 필요 여부에 따라 분기
-    def should_retry(state: ReportState) -> str:
-        if state.get("retry_needed", False) and state.get("retry_sections"):
-            retry_count = state.get("retry_count", {}).get("validate_cards", {})
-            for section in state.get("retry_sections", []):
-                if retry_count.get(section, 0) <= 1:
+    def _should_retry(state: dict) -> str:
+        if state.get("retry_needed") and state.get("retry_sections"):
+            rc = state.get("retry_count", {}).get("validate_cards", {})
+            for sec in state.get("retry_sections", []):
+                if rc.get(sec, 0) <= 1:
                     return "retry"
         return "continue"
     
     workflow.add_conditional_edges(
         "validate_cards",
-        should_retry,
-        {
-            "retry": "write_section_cards",
-            "continue": "assemble_report"
-        }
+        _should_retry,
+        {"retry": "write_section_cards", "continue": "assemble_report"},
     )
     workflow.add_edge("assemble_report", "generate_aging_image")
     workflow.add_edge("generate_aging_image", "save_report")
-    workflow.add_edge("save_report", "export_to_notion")  # SaveReport → ExportToNotion
-    workflow.add_edge("export_to_notion", END)  # ExportToNotion → END
-    
+    workflow.add_edge("save_report", "export_to_notion")
+    workflow.add_edge("export_to_notion", END)
+
     memory = MemorySaver()
-    app = workflow.compile(checkpointer=memory)
-    
-    return app
+    return workflow.compile(checkpointer=memory)
 
 
-# 리포트 생성 함수
-def generate_report(user_id: int, lifestyle_id: Optional[int] = None) -> Dict[str, Any]:
-    """리포트 생성 메인 함수"""
+def generate_report(
+    user_id: int,
+    lifestyle_id: Optional[int] = None,
+    situation_text: Optional[str] = None,
+) -> Dict[str, Any]:
+    """리포트 생성 메인 함수 (LangGraph 워크플로우)"""
     try:
         initial_state: ReportState = {
             "user_id": user_id,
@@ -3458,33 +3666,23 @@ def generate_report(user_id: int, lifestyle_id: Optional[int] = None) -> Dict[st
             "quant_evidence_results": {},
             "section_queries": {},
             "narrative_evidence": {},
+            "extracted_claims": {},
             "section_cards": {},
             "quality_flags": {},
             "final_report": None,
+            "situation_text": situation_text,
         }
         
         app = create_report_graph()
-        config = {"configurable": {"thread_id": f"user_{user_id}"}}
-        
-        final_state = None
-        for state in app.stream(initial_state, config):
-            final_state = state
-        
-        if final_state:
-            last_node_key = list(final_state.keys())[-1] if final_state else None
-            if last_node_key:
-                result_state = final_state[last_node_key]
-            else:
-                result_state = initial_state
-            
-            final_report = result_state.get("final_report")
-            if final_report:
-                return {"success": True, "report": final_report}
-            else:
-                return {"success": False, "error": "리포트 생성 실패"}
-        else:
-            return {"success": False, "error": "리포트 생성 실패"}
-            
+        config = {"configurable": {"thread_id": f"report_user_{user_id}"}}
+
+        final_state = app.invoke(initial_state, config=config)
+
+        final_report = final_state.get("final_report")
+        if final_report:
+            return {"success": True, "report": final_report}
+
+        return {"success": False, "error": "리포트 생성 실패"}
     except Exception as e:
         print(f"[오류] 리포트 생성 실패: {str(e)}")
         import traceback

@@ -13,7 +13,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from langgraph_modules.report_graph import (
+from report_modules.report_graph import (
     generate_report,
     map_outcomes_to_topics,
     OUTCOME_TO_NARRATIVE_TOPICS,

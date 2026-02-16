@@ -12,7 +12,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from langgraph_modules.report_graph import generate_report
+from report_modules.report_graph import generate_report
 
 def test_report_generation(user_id: int = 1):
     """리포트 생성 테스트"""

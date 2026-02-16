@@ -35,6 +35,7 @@ from .report_formatters import (
 def build_card_prompt_enhanced(
     section: str, survey: dict, section_quant: dict,
     section_claims: dict, user_profile: dict,
+    situation_text: Optional[str] = None,
 ) -> str:
     """카드 생성 프롬프트 (근거 기반 강화 버전)"""
     survey_text = format_survey_data(section, survey)
@@ -45,6 +46,14 @@ def build_card_prompt_enhanced(
     claims_text = "\n\n".join(claims_texts) if claims_texts else "구조화된 주장 없음"
     personalization_note = get_personalization_note(section, survey)
 
+    situation_block = ""
+    if situation_text and situation_text.strip():
+        situation_block = f"""
+[사용자가 직접 언급한 참고 상황 - action 카드 작성 시 반드시 반영하세요]
+{situation_text.strip()[:300]}
+
+"""
+
     return f"""섹션: {section}
 
 ⚠️ 중요: 반드시 사용자 설문 데이터와 구조화된 주장(claims)을 바탕으로 개인화된 리포트를 작성하세요.
@@ -52,8 +61,7 @@ def build_card_prompt_enhanced(
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
 
 {personalization_note}
-
-[사용자 설문 데이터 - 반드시 이 값들을 자연스럽게 요약해 반영하세요]
+{situation_block}[사용자 설문 데이터 - 반드시 이 값들을 자연스럽게 요약해 반영하세요]
 {survey_text}
 
 [사용자 기본 정보 - 의학적으로 자연스럽게 반영하세요]
@@ -68,7 +76,8 @@ def build_card_prompt_enhanced(
 
 ⚠️ 각 카드 작성 규칙:
 - problem/cause: 위 claims의 "claim"과 "support_text"를 바탕으로 작성하되, 설문 수치를 자연스럽게 요약해 반영
-- action: 이 사용자 설문 + 신체정보에서 가장 큰 레버 1~2개에 집중 (BMI 높으면 체중·대사 쪽, 수면 짧으면 수면 쪽)
+- action: 이 사용자 설문 + 신체정보 + [참고 상황]을 반드시 고려해 개인화된 행동 3가지를 제시. 정량적 효과(%, 기간 등)는 action에 넣지 마세요.
+- simulation: [정량 근거]에 있는 효과량(%, 기간)을 모두 여기에 반영하세요. 여러 가지가 있으면 모두 나열해도 됩니다.
 - 각 카드에 evidence 기반 키워드(근거 support_text에서 추출한 키워드) 최소 1개 포함
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
 - 근거에서 말하는 메커니즘/방향성(예: 장벽/염증/멜라닌/콜라겐)을 1번 이상 언급
@@ -77,7 +86,10 @@ def build_card_prompt_enhanced(
 각 카드는 사용자 설문 데이터와 구조화된 주장을 바탕으로 개인화되게 작성하세요."""
 
 
-def build_card_prompt(section: str, survey: dict, section_quant: dict, narrative_items: list) -> str:
+def build_card_prompt(
+    section: str, survey: dict, section_quant: dict, narrative_items: list,
+    situation_text: Optional[str] = None,
+) -> str:
     """카드 생성 프롬프트 (기본 버전)"""
     survey_text = format_survey_data(section, survey)
     quant_text = format_quant_data(section_quant)
@@ -87,6 +99,14 @@ def build_card_prompt(section: str, survey: dict, section_quant: dict, narrative
     )
     personalization_note = get_personalization_note(section, survey)
 
+    situation_block = ""
+    if situation_text and situation_text.strip():
+        situation_block = f"""
+[사용자가 직접 언급한 참고 상황 - action 카드 작성 시 반드시 반영하세요]
+{situation_text.strip()[:300]}
+
+"""
+
     return f"""섹션: {section}
 
 ⚠️ 중요: 반드시 사용자 설문 데이터를 직접 인용하여 개인화된 리포트를 작성하세요.
@@ -94,8 +114,7 @@ def build_card_prompt(section: str, survey: dict, section_quant: dict, narrative
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
 
 {personalization_note}
-
-[사용자 설문 데이터 - 반드시 이 값들을 직접 인용하세요]
+{situation_block}[사용자 설문 데이터 - 반드시 이 값들을 직접 인용하세요]
 {survey_text}
 
 [정량 근거]
@@ -244,9 +263,14 @@ def generate_section_cards(
     )
     print(f"  [{section}] has_claims={has_claims}")
 
+    situation_text = state.get("situation_text") or ""
+
     if has_claims:
         try:
-            prompt = build_card_prompt_enhanced(section, survey, section_quant, section_claims, user_profile)
+            prompt = build_card_prompt_enhanced(
+                section, survey, section_quant, section_claims, user_profile,
+                situation_text=situation_text,
+            )
             if REPORT_DEBUG:
                 print(f"    📝 [{section}] enhanced 프롬프트 길이: {len(prompt)}자")
         except Exception as e:
@@ -263,7 +287,10 @@ def generate_section_cards(
                 narrative_items_flat.extend(items[:2])
         elif isinstance(section_evidence, list):
             narrative_items_flat = section_evidence[:5]
-        prompt = build_card_prompt(section, survey, section_quant, narrative_items_flat)
+        prompt = build_card_prompt(
+            section, survey, section_quant, narrative_items_flat,
+            situation_text=situation_text,
+        )
 
     try:
         context = f"write_section_cards.{section}"
@@ -323,10 +350,19 @@ def build_lifestyle_combined_prompt(
     section_quant: dict,
     section_claims: dict,
     user_profile: dict,
+    situation_text: Optional[str] = None,
 ) -> str:
     """생활습관 서브섹션 통합 프롬프트 (1회 호출용)"""
     profile_text = format_user_profile_for_prompt(user_profile)
     quant_text = format_quant_data(section_quant)
+
+    situation_block = ""
+    if situation_text and situation_text.strip():
+        situation_block = f"""
+[사용자가 직접 언급한 참고 상황 - action 카드 작성 시 반드시 반영하세요]
+{situation_text.strip()[:300]}
+
+"""
 
     # 서브섹션별 설문 데이터 정리
     survey_parts = []
@@ -367,8 +403,7 @@ def build_lifestyle_combined_prompt(
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
 
 {sub_requirements_text}
-
-[사용자 설문 데이터 - 반드시 해당 서브섹션의 수치를 자연스럽게 반영하세요]
+{situation_block}[사용자 설문 데이터 - 반드시 해당 서브섹션의 수치를 자연스럽게 반영하세요]
 {survey_text}
 
 [사용자 기본 정보]
@@ -383,8 +418,8 @@ def build_lifestyle_combined_prompt(
 ⚠️ 각 카드 작성 규칙:
 - problem: 이 사용자의 현재 해당 습관이 피부에 미치는 상태를 구체적으로 서술
 - cause: 해당 습관이 피부에 악영향을 미치는 생물학적 메커니즘 설명
-- action: 이 사용자에게 실천 가능한 구체적 행동 3가지
-- simulation: 12주 후 개선 예상 경로 (보수적 추정)
+- action: 이 사용자에게 실천 가능한 구체적 행동 3가지. [참고 상황]이 있으면 반드시 반영. 정량적 효과는 action에 넣지 마세요.
+- simulation: 12주 후 개선 예상 경로. [정량 근거]의 효과량(%, 기간)을 모두 여기에 반영. 여러 가지가 있으면 모두 나열
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
 - 근거에서 말하는 메커니즘/방향성을 1번 이상 언급
 
@@ -418,8 +453,10 @@ def generate_lifestyle_cards(
     }
 
     # ── 프롬프트 빌드 & LLM 호출 ──
+    situation_text = state.get("situation_text") or ""
     prompt = build_lifestyle_combined_prompt(
         subsection_keys, survey, section_quant, section_claims, user_profile,
+        situation_text=situation_text,
     )
     if REPORT_DEBUG:
         print(f"    📝 [lifestyle] combined 프롬프트 길이: {len(prompt)}자, 서브섹션: {subsection_keys}")
@@ -712,11 +749,12 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
 # ════════════════════════════════════════════════════════════════
 
 def limit_sentences(text: str, max_sentences: int) -> str:
-    """문장 수 제한"""
+    """문장 수 제한 (숫자 내 . 은 문장 끝으로 보지 않음, 예: 5.2%, 2.0~8.0)"""
     if not text:
         return text
 
-    sentences = re.split(r'([.!?。！？]\s*)', text)
+    # (?<![0-9]) ... (?![0-9]): 숫자 사이의 . 은 제외 (5.2, 2.0 등)
+    sentences = re.split(r'((?<![0-9])[.!?。！？](?![0-9])\s*)', text)
     result_sentences = []
     for i in range(0, len(sentences) - 1, 2):
         if i + 1 < len(sentences):
@@ -724,7 +762,8 @@ def limit_sentences(text: str, max_sentences: int) -> str:
         else:
             result_sentences.append(sentences[i])
 
-    if len(result_sentences) == 0 or (len(result_sentences) == 1 and not re.search(r'[.!?。！？]', text)):
+    _sentence_end = r'(?<![0-9])[.!?。！？](?![0-9])'
+    if len(result_sentences) == 0 or (len(result_sentences) == 1 and not re.search(_sentence_end, text)):
         return text[:200].strip() + "..." if len(text) > 200 else text
 
     if len(result_sentences) <= max_sentences:
@@ -902,6 +941,7 @@ def format_simulation_text(section_key: str, survey: dict, section_quant: dict) 
     meta: Dict[str, Any] = {"mode": mode}
 
     if mode == "grounded" and stats_by_outcome:
+        parts: List[str] = []
         for outcome, stats in stats_by_outcome.items():
             if isinstance(stats, dict) and "timeframe_groups" in stats:
                 timeframe_groups = stats["timeframe_groups"]
@@ -914,12 +954,17 @@ def format_simulation_text(section_key: str, survey: dict, section_quant: dict) 
                 median = group.get("median", group.get("mean", 0))
                 min_val = group.get("min", 0)
                 max_val = group.get("max", 0)
-                text = (
-                    f"{condition} {tf_label} 뒤에는, 연구에서 {outcome_label}이(가) "
-                    f"중앙값 {median:.1f}% 변화(범위 {min_val:.1f}~{max_val:.1f}%)하는 경향이 관찰되었습니다."
+                parts.append(
+                    f"{outcome_label} {tf_label} 뒤 중앙값 {median:.1f}%(범위 {min_val:.1f}~{max_val:.1f}%)"
                 )
                 print(f"    📊 [{section_key}] condition=\"{condition}\", tf={tf_label}, outcome={outcome_label}")
-                return text, meta
+        if parts:
+            text = (
+                f"{condition} 연구에서는 "
+                + ", ".join(parts)
+                + " 등이 각각 변화하는 경향이 관찰되었습니다."
+            )
+            return text, meta
         return f"{condition} 정량 근거를 바탕으로 예상되는 변화입니다.", meta
 
     elif mode == "estimated" and "estimated" in stats_by_outcome:
@@ -1081,7 +1126,7 @@ def _collect_evidence_chunk_ids(evidence_map: Dict, card_type: str) -> List[str]
 
 
 def _build_quant_refs_summary(section_quant: dict) -> List[Dict[str, Any]]:
-    """section_quant → meta용 정량 근거 요약 (최대 4개, 본문 노출 아님)."""
+    """section_quant → meta용 정량 근거 요약 (최대 6개, 본문 노출 아님)."""
     refs: List[Dict[str, Any]] = []
     stats_by_outcome = section_quant.get("stats_by_outcome", {})
 
@@ -1113,7 +1158,7 @@ def _build_quant_refs_summary(section_quant: dict) -> List[Dict[str, Any]]:
                 "p_label": p_labels[0] if p_labels else "",
             })
 
-    return refs[:4]
+    return refs[:6]  # outcome 3개 × timeframe 2개 반영
 
 
 def _build_card_meta(
@@ -1122,7 +1167,7 @@ def _build_card_meta(
     evidence_map: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """개별 카드의 meta 딕셔너리 기본 골격 생성."""
-    selected_outcomes = section_quant.get("selected_outcomes", [])[:2]
+    selected_outcomes = section_quant.get("selected_outcomes", [])[:3]
 
     # 대표 timeframe
     tf_days_val: Optional[float] = None

@@ -64,7 +64,7 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app:/app/app  # 코드 변경 시 자동 반영 (개발 환경)
-      - ./backend/langgraph_modules:/app/langgraph_modules  # LangGraph 모듈 마운트
+      - ./backend/report_modules:/app/report_modules  # 리포트 생성 파이프라인 모듈
       - ./backend/tools:/app/tools  # tools 모듈 마운트
       - ./backend/mcp_server:/app/mcp_server  # MCP 서버 코드도 반영
 
