@@ -10,7 +10,16 @@ from app.database import get_db
 from app.models import Lifestyle
 
 
-def save_report(user_id: int, report: Dict[str, Any], lifestyle_id: Optional[int] = None, db: Optional[Session] = None) -> Dict[str, Any]:
+def save_report(
+    user_id: int, 
+    report: Dict[str, Any], 
+    lifestyle_id: Optional[int] = None, 
+    db: Optional[Session] = None,
+    # 이미지 생성 관련 인자
+    generated_image_url: Optional[str] = None,
+    generation_status: Optional[str] = None,
+    image_gen_params: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     리포트를 데이터베이스에 저장합니다.
     
@@ -19,9 +28,12 @@ def save_report(user_id: int, report: Dict[str, Any], lifestyle_id: Optional[int
         report: 리포트 데이터 딕셔너리
         lifestyle_id: Lifestyle 레코드 ID (None이면 최신 레코드 사용)
         db: 데이터베이스 세션 (None이면 자동으로 생성)
+        generated_image_url: AI가 생성한 미래 얼굴 이미지 URL
+        generation_status: 이미지 생성 상태
+        image_gen_params: 이미지 생성에 사용된 파라미터
     
     Returns:
-        저장 결과 (report_id, timestamp 포함)
+        저장 결과 (report_id, timestamp, generated_image_url 포함)
     """
     # TODO: 현재는 Lifestyle 레코드의 health_report 필드에 저장합니다.
     # 향후 별도 Report 테이블이 필요하면 여기에 추가하세요.
@@ -57,6 +69,14 @@ def save_report(user_id: int, report: Dict[str, Any], lifestyle_id: Optional[int
         lifestyle.health_report = report
         lifestyle.health_report_generated_at = datetime.utcnow()
         
+        # ⭐ 이미지 관련 데이터 저장 (바구니에서 꺼내 DB 선반에 올리기)
+        if generated_image_url:
+            lifestyle.generated_image_url = generated_image_url
+        if generation_status:
+            lifestyle.generation_status = generation_status
+        if image_gen_params:
+            lifestyle.image_gen_params = image_gen_params
+        
         db.commit()
         db.refresh(lifestyle)
         
@@ -64,7 +84,8 @@ def save_report(user_id: int, report: Dict[str, Any], lifestyle_id: Optional[int
             "success": True,
             "report_id": str(lifestyle.id),  # lifestyle_id를 report_id로 사용
             "timestamp": lifestyle.health_report_generated_at.isoformat(),
-            "lifestyle_id": lifestyle.id
+            "lifestyle_id": lifestyle.id,
+            "generated_image_url": lifestyle.generated_image_url  # 확인용 반환
         }
         
     except Exception as e:

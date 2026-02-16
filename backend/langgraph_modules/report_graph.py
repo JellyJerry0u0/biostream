@@ -40,8 +40,8 @@ sys.path.append(backend_dir)
 from tools.survey_tool import get_survey
 from tools.qdrant_search import qdrant_search
 from tools.report_store import save_report
+from tools.schemas import QdrantSearchInput
 from tools.notion_integration import export_report_to_notion
-from tools.schemas import QdrantSearchInput, EvidenceItem
 from app.database import get_db
 from app.models import User
 from datetime import date
@@ -54,6 +54,10 @@ from quant_evidence_retriever import (
     search_by_outcomes, get_grouped_stats, get_grouped_stats_multi,
     QuantEvidenceCard
 )
+from app.services.quant_evidence_retriever import (
+    get_grouped_stats, get_grouped_stats_multi,
+)
+from app.services.image_service import image_gen_service
 
 # Google API Key 설정
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
@@ -2933,89 +2937,105 @@ def assemble_report(state: ReportState) -> ReportState:
             "target_years": survey.get("target_years", 30),
         },
         "generated_at": None,
+        # 이미지 생성 정보 포함 (이후 노드에서 채워짐)
+        "generated_image_url": state.get("generated_image_url"),
+        "generation_status": state.get("generation_status"),
+        "image_gen_params": state.get("image_gen_params"),
     }
     
     print(f"✅ [AssembleReport] 완료 - {len(sections_dict)}개 섹션")
     return {**state, "final_report": final_report}
 
 
-# 노드 8: EvaluateReliability (RAGAS)
-def evaluate_reliability(state: ReportState) -> ReportState:
-    """RAGAS를 사용하여 리포트 신뢰도 평가"""
-    print("[EvaluateReliability] RAGAS 신뢰도 평가 시작")
+def _collect_narrative_refs(section_evidence) -> List[Dict[str, Any]]:
+    """narrative evidence에서 참조 목록 수집"""
+    refs = []
+    seen_ids = set()
+
+    items_list = []
+    if isinstance(section_evidence, dict):
+        for card_type in ["problem", "cause", "action"]:
+            items_list.extend(section_evidence.get(card_type, []))
+    elif isinstance(section_evidence, list):
+        items_list = section_evidence
+
+    for item in items_list:
+        if hasattr(item, 'paper_id') and hasattr(item, 'chunk_id'):
+            item_id = f"{item.paper_id}_{item.chunk_id}"
+            if item_id not in seen_ids:
+                seen_ids.add(item_id)
+                refs.append({
+                    "paper_id": item.paper_id,
+                    "chunk_id": item.chunk_id,
+                    "title": getattr(item, 'title', None),
+                    "pmid": getattr(item, 'pmid', None),
+                    "section_norm": getattr(item, 'section_norm', ''),
+                    "topics": getattr(item, 'topics', []),
+                })
+    return refs
+
+
+# ════════════════════════════════════════════════════════════════
+#  노드 7.5: GenerateAgingImage
+# ════════════════════════════════════════════════════════════════
+
+def generate_aging_image_node(state: ReportState) -> ReportState:
+    """
+    사용자의 습관 데이터를 바탕으로 미래 이미지를 생성하는 노드
+    """
+    print("---미래 모습 시뮬레이션 생성 시작---")
     
-    # 환경변수에서 평가 활성화 여부 확인
-    enable_ragas = os.getenv("ENABLE_RAGAS_EVALUATION", "false").lower() == "true"
+    # 1. 서비스 호출에 필요한 데이터 추출
+    lifestyle_id = state.get("lifestyle_id")
+    survey = state.get("survey", {})
+    user_profile = state.get("user_profile", {})
     
-    if not enable_ragas:
-        print("⚠️ [EvaluateReliability] RAGAS 평가가 비활성화되어 있습니다 (ENABLE_RAGAS_EVALUATION=false)")
-        return {**state, "reliability_scores": None}
+    # survey에서 성별과 목표 년수 추출
+    gender = user_profile.get("gender") or survey.get("gender", "unknown")
+    target_years = survey.get("target_years", 30)
     
+    # 습관 데이터 추출 (survey 전체를 habits로 전달)
+    habits = {
+        "smoking_status": survey.get("smoking_status"),
+        "uv_exposure_10to16": survey.get("uv_exposure_10to16"),
+        "drinking_days_per_week": survey.get("drinking_days_per_week"),
+        "sleep_hours_weekday": survey.get("sleep_hours_weekday"),
+        "stress_score": survey.get("stress_score"),
+    }
+    
+    # 2. 이미지 생성 서비스 호출 (async 함수를 sync 환경에서 실행)
+    import asyncio
     try:
-        from tools.reliability_auditor import ReliabilityAuditor
-        
-        auditor = ReliabilityAuditor()
-        scores = auditor.evaluate_report_state(state)
-        
-        # 결과를 직렬화 가능한 형태로 변환
-        serialized_scores = {}
-        for section, section_scores in scores.items():
-            serialized_scores[section] = [
-                {
-                    "section": score.section,
-                    "card_type": score.card_type,
-                    "faithfulness_score": score.faithfulness_score,
-                    "relevancy_score": score.relevancy_score,
-                    "average_score": score.average_score,
-                    "grade": score.grade,
-                    "color": score.color,
-                    "message": score.message,
-                }
-                for score in section_scores
-            ]
-        
-        # 전체 통계 계산
-        all_scores = [score for section_scores in scores.values() for score in section_scores]
-        if all_scores:
-            avg_overall = sum(s.average_score for s in all_scores) / len(all_scores)
-            grade_counts = {"Verified": 0, "Plausible": 0, "Caution": 0}
-            for score in all_scores:
-                grade_counts[score.grade] += 1
-            
-            if avg_overall >= 0.9:
-                overall_grade = "Verified"
-            elif avg_overall >= 0.7:
-                overall_grade = "Plausible"
-            else:
-                overall_grade = "Caution"
-            
-            reliability_result = {
-                "scores": serialized_scores,
-                "statistics": {
-                    "total_cards": len(all_scores),
-                    "avg_overall": round(avg_overall, 3),
-                    "grade_counts": grade_counts,
-                    "overall_grade": overall_grade
-                }
-            }
-        else:
-            reliability_result = None
-        
-        print(f"✅ [EvaluateReliability] 평가 완료 - 전체 등급: {overall_grade if all_scores else 'N/A'}")
-        return {**state, "reliability_scores": reliability_result}
-        
-    except ImportError as e:
-        print(f"⚠️ [EvaluateReliability] RAGAS 모듈 로드 실패: {e}")
-        print("   pip install ragas langchain-google-genai 를 실행하세요")
-        return {**state, "reliability_scores": None}
-    except Exception as e:
-        print(f"❌ [EvaluateReliability] 평가 실패: {e}")
-        import traceback
-        traceback.print_exc()
-        return {**state, "reliability_scores": None}
+        # 이벤트 루프가 없는 경우 새로 생성
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    result = loop.run_until_complete(
+        image_gen_service.request_aging_simulation(
+            lifestyle_id=lifestyle_id,
+            gender=gender,
+            target_years=target_years,
+            habits=habits
+        )
+    )
+    
+    print(f"✅ [GenerateAgingImage] 이미지 생성 완료: {result['image_url']}")
+    
+    # 3. 결과 반환하여 State 업데이트
+    return {
+        **state,
+        "generated_image_url": result["image_url"],
+        "generation_status": result["status"],
+        "image_gen_params": result["params"]
+    }
 
 
-# 노드 9: SaveReport
+# ════════════════════════════════════════════════════════════════
+#  노드 8: SaveReport
+# ════════════════════════════════════════════════════════════════
+
 def save_report_node(state: ReportState) -> ReportState:
     """리포트 저장"""
     print("[SaveReport] 리포트 저장 시작")
@@ -3028,16 +3048,24 @@ def save_report_node(state: ReportState) -> ReportState:
         return state
     
     try:
-        lifestyle_id = survey.get("lifestyle_id")
-        result = save_report(user_id, final_report, lifestyle_id=lifestyle_id)
-        
+        # State에서 이미지 관련 데이터를 꺼내서 save_report에 전달
+        result = save_report(
+            user_id, 
+            final_report, 
+            lifestyle_id=survey.get("lifestyle_id"),
+            generated_image_url=state.get("generated_image_url"),
+            generation_status=state.get("generation_status"),
+            image_gen_params=state.get("image_gen_params")
+        )
         if "error" in result:
             print(f"⚠️ [SaveReport] 저장 실패: {result['error']}")
         else:
             print(f"✅ [SaveReport] 저장 완료 - report_id: {result.get('report_id')}")
+            if result.get("generated_image_url"):
+                print(f"   └── 이미지 URL: {result.get('generated_image_url')}")
             final_report["report_id"] = result.get("report_id")
             final_report["generated_at"] = result.get("timestamp")
-        
+            final_report["generated_image_url"] = result.get("generated_image_url")
         return {**state, "final_report": final_report}
     except Exception as e:
         print(f"❌ [SaveReport] 저장 실패: {e}")
@@ -3374,7 +3402,7 @@ def create_report_graph():
     workflow.add_node("write_section_cards", write_section_cards)
     workflow.add_node("validate_cards", validate_cards)
     workflow.add_node("assemble_report", assemble_report)
-    workflow.add_node("evaluate_reliability", evaluate_reliability)
+    workflow.add_node("generate_aging_image", generate_aging_image_node)
     workflow.add_node("save_report", save_report_node)
     workflow.add_node("export_to_notion", export_to_notion_node)  # 신규 노드 추가
     
@@ -3405,9 +3433,8 @@ def create_report_graph():
             "continue": "assemble_report"
         }
     )
-    
-    workflow.add_edge("assemble_report", "evaluate_reliability")
-    workflow.add_edge("evaluate_reliability", "save_report")
+    workflow.add_edge("assemble_report", "generate_aging_image")
+    workflow.add_edge("generate_aging_image", "save_report")
     workflow.add_edge("save_report", "export_to_notion")  # SaveReport → ExportToNotion
     workflow.add_edge("export_to_notion", END)  # ExportToNotion → END
     

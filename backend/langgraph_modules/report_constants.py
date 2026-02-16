@@ -29,7 +29,11 @@ class ReportState(TypedDict, total=False):
     retry_needed: bool
     retry_sections: List[str]
     retry_count: Dict[str, Any]
-    reliability_scores: Optional[Dict[str, Any]]  # RAGAS 신뢰도 평가 결과
+    
+    # 이미지 생성 관련 필드
+    generated_image_url: Optional[str]  # AI가 생성한 미래 얼굴 이미지 URL
+    generation_status: Optional[str]    # 이미지 생성 상태 (not_started/pending/processing/completed/failed)
+    image_gen_params: Optional[Dict[str, Any]]  # 이미지 생성에 사용된 파라미터 (wrinkles, pigmentation 등)
 
 
 # ──────────────────────────── 목표(outcome) 매핑 ────────────────────────────
