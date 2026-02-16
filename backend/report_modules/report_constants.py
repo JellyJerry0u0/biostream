@@ -29,6 +29,7 @@ class ReportState(TypedDict, total=False):
     retry_needed: bool
     retry_sections: List[str]
     retry_count: Dict[str, Any]
+    situation_text: Optional[str]  # 사용자 참고 상황 (DB 저장 안 함, 프롬프트에만 반영)
 
 
 # ──────────────────────────── 목표(outcome) 매핑 ────────────────────────────
@@ -82,11 +83,20 @@ OUTCOME_TO_NARRATIVE_TOPICS: Dict[str, List[str]] = {
 }
 
 # 섹션별 outcome 후보 리스트 (우선순위 순)
+# ※ 각 섹션마다 고유한 1순위 outcome 배치 → 예상경로 겹침(탄력 4/5) 방지
 SECTION_OUTCOME_CANDIDATES: Dict[str, List[str]] = {
-    "sleep": ["hydration_barrier", "wrinkle", "elasticity", "redness"],
-    "uv": ["pigmentation", "wrinkle", "elasticity", "redness"],
-    "lifestyle": ["acne", "redness", "hydration_barrier", "pigmentation"],
-    "activity": ["elasticity", "wrinkle", "general_skin"],
+    "sleep": ["hydration_barrier", "redness", "wrinkle", "elasticity"],      # 수면→수분/장벽
+    "uv": ["pigmentation", "redness", "wrinkle", "elasticity"],               # UV→색소
+    "lifestyle": ["acne", "redness", "hydration_barrier", "pigmentation"],   # 생활습관→여드름/염증
+    "activity": ["elasticity", "wrinkle", "general_skin"],                   # 운동→탄력
+}
+
+# 섹션별 1순위 outcome (예상경로 다양화용)
+SECTION_PRIMARY_OUTCOME: Dict[str, str] = {
+    "sleep": "hydration_barrier",
+    "uv": "pigmentation",
+    "lifestyle": "acne",
+    "activity": "elasticity",
 }
 
 # 표준 timeframe (일 단위)
@@ -160,8 +170,8 @@ CARD_SYSTEM_PROMPT = """당신은 피부과 전문의입니다. 사용자의 설
 
 규칙:
 - problem/cause: 각 2-3문장까지만 (더 길면 잘라서 3문장)
-- simulation: 4문장 초과 금지
-- action items: 정확히 3개, title/detail 각 1문장
+- simulation: 4문장 초과 금지. 정량적 효과(%, 기간)는 simulation에만 넣고, action에는 넣지 마세요. 효과가 여러 가지면 모두 나열 가능.
+- action items: 정확히 3개, title/detail 각 1문장. 정량적 효과는 포함하지 마세요.
 - 전문용어는 1회만 (괄호로 쉬운 설명)
 - 한국어만 사용
 - PMC, PMID, p=, CI 같은 논문 정보는 본문에 절대 포함하지 마세요.
@@ -201,6 +211,7 @@ LIFESTYLE_COMBINED_SYSTEM_PROMPT = """당신은 피부과 전문의입니다. �
 - simulation: 4문장 초과 금지
 - action items: 정확히 3개, title/detail 각 1문장
 - 각 서브섹션의 카드는 해당 생활습관 요인(흡연/음주/스트레스)에 **구체적으로 집중**하세요. 다른 요인을 혼합하지 마세요.
+- action 카드에는 정량적 효과(%, 기간)를 넣지 마세요. 정량적 효과는 simulation 카드에만 넣고, 여러 가지가 있으면 모두 나열하세요.
 - "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
 - 전문용어는 1회만 (괄호로 쉬운 설명)
 - 한국어만 사용

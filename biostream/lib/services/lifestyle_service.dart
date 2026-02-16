@@ -83,8 +83,12 @@ class LifestyleService {
     }
   }
 
-  // 건강 리포트 생성 (LangGraph 기반, MCP tool 사용)
-  Future<Map<String, dynamic>> generateHealthReport(int lifestyleId, {bool force = false}) async {
+  // 건강 리포트 생성 (순차 파이프라인 + RAG, MCP tool 사용)
+  Future<Map<String, dynamic>> generateHealthReport(
+    int lifestyleId, {
+    bool force = false,
+    String? situationText,
+  }) async {
     try {
       final token = await storage.read(key: 'jwt_token');
       if (token == null) {
@@ -92,16 +96,21 @@ class LifestyleService {
       }
 
       final origin = await ApiConfig.getBaseOrigin();
-      final uri = force 
+      final uri = force
           ? Uri.parse('$origin/api/generate-report/$lifestyleId?force=true')
           : Uri.parse('$origin/api/generate-report/$lifestyleId');
-      
+
+      final body = situationText != null && situationText.isNotEmpty
+          ? jsonEncode({"situation_text": situationText})
+          : '{}';
+
       final response = await http.post(
         uri,
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
         },
+        body: body,
       );
 
       if (response.statusCode == 200) {

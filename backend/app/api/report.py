@@ -6,10 +6,11 @@ Qdrant 중심 RAG + LangGraph 기반 워크플로우를 사용하여 사용자 �
 
 import sys
 import os
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Body
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel
 from app.database import get_db
 from app.models import User, Lifestyle
 from app.auth.security import verify_token
@@ -18,9 +19,14 @@ from app.auth.security import verify_token
 app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if app_root not in sys.path:
     sys.path.append(app_root)
-from langgraph_modules.report_graph import generate_report as generate_report_new
+from report_modules.report_graph import generate_report as generate_report_new
 
 router = APIRouter()
+
+
+class GenerateReportBody(BaseModel):
+    """리포트 생성 시 선택적으로 전달하는 참고 상황 (DB 저장 안 함)"""
+    situation_text: Optional[str] = None
 
 
 def get_current_user(authorization: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
@@ -62,6 +68,7 @@ def get_current_user(authorization: Optional[str] = Header(None, alias="Authoriz
 def generate_report(
     lifestyle_id: int,
     force: bool = Query(False, description="기존 리포트가 있어도 강제로 재생성"),
+    body: Optional[GenerateReportBody] = Body(None),
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ):
@@ -137,9 +144,11 @@ def generate_report(
         print(f"[리포트 생성] 신규 리포트 생성 시작 - lifestyle_id: {lifestyle_id}, user_id: {current_user.id}")
         
         # 신규 generate_report 호출 (lifestyle_id 지정)
+        situation_text = body.situation_text if body and body.situation_text else None
         report_result = generate_report_new(
             user_id=current_user.id,
-            lifestyle_id=lifestyle_id
+            lifestyle_id=lifestyle_id,
+            situation_text=situation_text,
         )
         
         if not report_result.get("success"):

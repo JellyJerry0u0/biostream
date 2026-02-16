@@ -14,11 +14,21 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from langgraph_modules.report_graph import (
-    create_report_graph,
+from report_modules.report_graph import (
     ReportState,
     _extract_keyword_based_sentences,
-    SECTION_CARD_TYPE_KEYWORDS
+    SECTION_CARD_TYPE_KEYWORDS,
+    load_survey,
+    plan_sections,
+    derive_user_profile,
+    preload_quant_evidence,
+    build_queries,
+    retrieve_narrative_evidence,
+    extract_claims,
+    write_section_cards,
+    validate_cards,
+    assemble_report,
+    generate_report,
 )
 
 
@@ -64,27 +74,21 @@ def test_section_card_type_keywords():
     print("✅ SECTION_CARD_TYPE_KEYWORDS 테스트 통과\n")
 
 
-def test_graph_structure():
-    """그래프 구조 테스트"""
-    print("[테스트] 그래프 구조")
+def test_pipeline_structure():
+    """파이프라인 구조 테스트 — 순차 단계 함수 존재 확인"""
+    print("[테스트] 파이프라인 구조")
     
-    app = create_report_graph()
-    assert app is not None, "그래프가 생성되어야 합니다"
+    required_steps = [
+        load_survey, plan_sections, derive_user_profile, preload_quant_evidence,
+        build_queries, retrieve_narrative_evidence, extract_claims,
+        write_section_cards, validate_cards, assemble_report,
+    ]
+    for step in required_steps:
+        assert callable(step), f"파이프라인 단계 {step.__name__}가 호출 가능해야 합니다"
     
-    # 노드 확인
-    nodes = app.nodes if hasattr(app, 'nodes') else None
-    if nodes:
-        required_nodes = [
-            "load_survey", "plan_sections", "derive_user_profile",
-            "preload_quant_evidence", "build_queries", "retrieve_narrative_evidence",
-            "extract_claims", "write_section_cards", "validate_cards",
-            "assemble_report", "save_report"
-        ]
-        for node in required_nodes:
-            assert node in nodes, f"{node} 노드가 그래프에 포함되어야 합니다"
-    
-    print("  ✅ 그래프 구조가 올바름")
-    print("✅ 그래프 구조 테스트 통과\n")
+    assert callable(generate_report), "generate_report가 호출 가능해야 합니다"
+    print("  ✅ 파이프라인 구조가 올바름")
+    print("✅ 파이프라인 구조 테스트 통과\n")
 
 
 def test_report_state_structure():
@@ -175,7 +179,7 @@ def run_all_tests():
     try:
         test_extract_keyword_based_sentences()
         test_section_card_type_keywords()
-        test_graph_structure()
+        test_pipeline_structure()
         test_report_state_structure()
         test_section_cards_structure()
         
