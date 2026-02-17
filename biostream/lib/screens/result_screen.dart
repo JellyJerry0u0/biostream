@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/responsive.dart';
 import '../services/lifestyle_service.dart';
 import 'coach_chat_screen.dart';
@@ -669,6 +670,57 @@ class _ResultScreenState extends State<ResultScreen> {
                           : const Color(0xFF101B0D),
                     ),
                   ),
+                  // Notion 버튼 (notion_url이 있을 때만 표시)
+                  if (_reportData?['notion_url'] != null) ...[
+                    SizedBox(width: Responsive.padding(context, 8)),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          final notionUrl = _reportData!['notion_url'];
+                          if (notionUrl != null) {
+                            try {
+                              final uri = Uri.parse(notionUrl);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              } else {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('링크를 열 수 없습니다')),
+                                  );
+                                }
+                              }
+                            } catch (e) {
+                              debugPrint('Notion URL 열기 실패: $e');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('링크를 열 수 없습니다')),
+                                );
+                              }
+                            }
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          width: Responsive.fontSize(context, 40),
+                          height: Responsive.fontSize(context, 40),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.black.withOpacity(0.2)
+                                : Colors.white.withOpacity(0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.description_outlined,
+                            size: Responsive.iconSize(context, 24),
+                            color:
+                                isDark ? Colors.white : const Color(0xFF101B0D),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -1939,6 +1991,75 @@ class _ResultScreenState extends State<ResultScreen> {
                                   ),
                                   SizedBox(
                                       height: Responsive.padding(context, 12)),
+                                  // Notion 버튼 (notion_url이 있을 때만 표시)
+                                  if (_reportData?['notion_url'] != null)
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: Responsive.fontSize(context, 56),
+                                      child: ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final notionUrl = _reportData!['notion_url'];
+                                          if (notionUrl != null) {
+                                            try {
+                                              final uri = Uri.parse(notionUrl);
+                                              if (await canLaunchUrl(uri)) {
+                                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                              } else {
+                                                if (mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('링크를 열 수 없습니다'),
+                                                      backgroundColor: Colors.red,
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            } catch (e) {
+                                              debugPrint('Notion URL 열기 실패: $e');
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('링크를 열 수 없습니다'),
+                                                    backgroundColor: Colors.red,
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          }
+                                        },
+                                        icon: Icon(
+                                          Icons.description_outlined,
+                                          size: Responsive.iconSize(context, 20),
+                                        ),
+                                        label: Text(
+                                          'Notion 바로가기',
+                                          style: TextStyle(
+                                            fontSize: Responsive.fontSize(context, 16),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isDark
+                                              ? const Color(0xFF2A4025)
+                                              : Colors.white,
+                                          foregroundColor: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF101B0D),
+                                          side: BorderSide(
+                                            color: isDark
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.grey[200]!,
+                                            width: 1,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(9999),
+                                          ),
+                                          elevation: 0,
+                                        ),
+                                      ),
+                                    ),
+                                  if (_reportData?['notion_url'] != null)
+                                    SizedBox(height: Responsive.padding(context, 12)),
                                   SizedBox(
                                     width: double.infinity,
                                     height: Responsive.fontSize(context, 56),

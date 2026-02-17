@@ -20,6 +20,7 @@ dependencies:
   image_picker: ^1.0.7  # 갤러리 및 카메라 이미지 선택용
   intl: ^0.19.0  # 날짜 포맷팅용
   web_socket_channel: ^3.0.1  # 코치 챗봇 WebSocket
+  url_launcher: ^6.2.5  # URL 열기용 (Notion 링크)
 
 dev_dependencies:
   flutter_test:

@@ -99,67 +99,67 @@ async def create_section_visualization(section_type: str, section_content: str, 
         시각자료 정보 (base64 인코딩된 이미지)
     """
     return generate_visualization(section_type, section_content, lifestyle_data)
+ 
+# # RAGAS 신뢰도 평가 도구 import (주석처리 - Notion 생성만 사용)
+# try:
+#     from mcp_server.tools.reliability_tools import evaluate_report_reliability, get_section_reliability
+# except ImportError:
+#     try:
+#         import importlib.util
+#         rel_path = mcp_server_dir / "tools" / "reliability_tools.py"
+#         spec = importlib.util.spec_from_file_location("reliability_tools", rel_path)
+#         rel_tools = importlib.util.module_from_spec(spec)
+#         spec.loader.exec_module(rel_tools)
+#         evaluate_report_reliability = rel_tools.evaluate_report_reliability
+#         get_section_reliability = rel_tools.get_section_reliability
+#     except Exception as e:
+#         raise ImportError(f"Could not import reliability_tools: {e}")
 
-# RAGAS 신뢰도 평가 도구 import
-try:
-    from mcp_server.tools.reliability_tools import evaluate_report_reliability, get_section_reliability
-except ImportError:
-    try:
-        import importlib.util
-        rel_path = mcp_server_dir / "tools" / "reliability_tools.py"
-        spec = importlib.util.spec_from_file_location("reliability_tools", rel_path)
-        rel_tools = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(rel_tools)
-        evaluate_report_reliability = rel_tools.evaluate_report_reliability
-        get_section_reliability = rel_tools.get_section_reliability
-    except Exception as e:
-        raise ImportError(f"Could not import reliability_tools: {e}")
+# @mcp.tool()
+# async def evaluate_report_with_ragas(report_state: dict, gemini_api_key: str = None):
+#     """
+#     LangGraph로 생성된 리포트의 신뢰도를 RAGAS로 평가합니다.
+#     
+#     Args:
+#         report_state: LangGraph ReportState 딕셔너리 (active_sections, section_queries, narrative_evidence, section_cards 포함)
+#         gemini_api_key: Gemini API Key (옵션, 없으면 환경변수 사용)
+#     
+#     Returns:
+#         {
+#             "success": bool,
+#             "scores": { 섹션별 점수 },
+#             "statistics": { 전체 통계 }
+#         }
+#     """
+#     return evaluate_report_reliability(report_state, gemini_api_key)
 
-@mcp.tool()
-async def evaluate_report_with_ragas(report_state: dict, gemini_api_key: str = None):
-    """
-    LangGraph로 생성된 리포트의 신뢰도를 RAGAS로 평가합니다.
-    
-    Args:
-        report_state: LangGraph ReportState 딕셔너리 (active_sections, section_queries, narrative_evidence, section_cards 포함)
-        gemini_api_key: Gemini API Key (옵션, 없으면 환경변수 사용)
-    
-    Returns:
-        {
-            "success": bool,
-            "scores": { 섹션별 점수 },
-            "statistics": { 전체 통계 }
-        }
-    """
-    return evaluate_report_reliability(report_state, gemini_api_key)
-
-@mcp.tool()
-async def evaluate_section_with_ragas(
-    section: str,
-    card_type: str,
-    question: str,
-    contexts: list,
-    answer: str,
-    gemini_api_key: str = None
-):
-    """
-    단일 섹션-카드의 신뢰도를 RAGAS로 평가합니다.
-    
-    Args:
-        section: 섹션 이름 (예: "sleep", "uv")
-        card_type: 카드 타입 (예: "problem", "cause", "action")  
-        question: 질문 (쿼리)
-        contexts: 근거 텍스트 리스트
-        answer: 생성된 답변
-        gemini_api_key: Gemini API Key (옵션)
-    
-    Returns:
-        {
-            "success": bool,
-            "score": { 평가 점수 정보 }
-        }
-    """
-    return get_section_reliability(section, card_type, question, contexts, answer, gemini_api_key)
+# @mcp.tool()
+# async def evaluate_section_with_ragas(
+#     section: str,
+#     card_type: str,
+#     question: str,
+#     contexts: list,
+#     answer: str,
+#     gemini_api_key: str = None
+# ):
+#     """
+#     단일 섹션-카드의 신뢰도를 RAGAS로 평가합니다.
+#     
+#     Args:
+#         section: 섹션 이름 (예: "sleep", "uv")
+#         card_type: 카드 타입 (예: "problem", "cause", "action")  
+#         question: 질문 (쿼리)
+#         contexts: 근거 텍스트 리스트
+#         answer: 생성된 답변
+#         gemini_api_key: Gemini API Key (옵션)
+#     
+#     Returns:
+#         {
+#             "success": bool,
+#             "score": { 평가 점수 정보 }
+#         }
+#     """
+#     return get_section_reliability(section, card_type, question, contexts, answer, gemini_api_key)
 
 if __name__ == "__main__":
     mcp.run() # 이 줄이 있어야 Inspector와 통신이 가능합니다.

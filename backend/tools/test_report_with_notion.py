@@ -25,7 +25,7 @@ try:
 except ImportError:
     print("⚠️ python-dotenv가 설치되지 않았습니다.")
 
-from langgraph_modules.report_graph import generate_report
+from report_modules.report_graph import generate_report
 
 
 def test_report_with_notion():

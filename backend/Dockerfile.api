@@ -2,11 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# PostgreSQL 연결을 위한 필수 시스템 패키지 설치
+# PostgreSQL, Node.js, npm 설치 (Notion MCP 서버용)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Notion MCP 서버 글로벌 설치
+RUN npm install -g @notionhq/client
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

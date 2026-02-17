@@ -91,6 +91,10 @@ class Lifestyle(Base):
     health_report = Column(JSON, nullable=True)  # 리포트 섹션별 데이터 및 통합 리포트
     health_report_generated_at = Column(DateTime(timezone=True), nullable=True)  # 리포트 생성 시간
 
+    # Notion 정보
+    notion_page_id = Column(String, nullable=True)
+    notion_url = Column(String, nullable=True)
+
 
     # Lifestyle과 User 간의 다대일 관계 설정
     owner=relationship("User", back_populates="lifestyles")

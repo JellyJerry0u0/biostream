@@ -163,6 +163,13 @@ def generate_report(
         # 리포트 저장 (신규 구조 그대로 저장)
         lifestyle.health_report = new_report
         lifestyle.health_report_generated_at = datetime.utcnow()
+        
+        # Notion 정보 별도 저장 (있는 경우)
+        if new_report.get("notion_page_id"):
+            lifestyle.notion_page_id = new_report.get("notion_page_id")
+        if new_report.get("notion_url"):
+            lifestyle.notion_url = new_report.get("notion_url")
+        
         db.commit()
         db.refresh(lifestyle)
         
@@ -327,5 +334,7 @@ def get_report(
         "success": True,
         "report": lifestyle.health_report,
         "cards": cards,
-        "generated_at": lifestyle.health_report_generated_at.isoformat() if lifestyle.health_report_generated_at else None
+        "generated_at": lifestyle.health_report_generated_at.isoformat() if lifestyle.health_report_generated_at else None,
+        "notion_url": lifestyle.notion_url,
+        "notion_page_id": lifestyle.notion_page_id
     }

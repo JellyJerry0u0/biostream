@@ -343,7 +343,7 @@ def run_ragas_test(state: Dict[str, Any]) -> Dict[str, List[ReliabilityScore]]:
 
 ```python
 # 사용 예시
-from langgraph_modules.report_graph import app
+from report_modules.report_graph import app
 from tools.reliability_auditor import run_ragas_test
 
 # 1. 리포트 생성
@@ -475,7 +475,7 @@ Input: question, contexts, answer
 #### 현재 (reliability_auditor.py 단독)
 ```python
 # 수동 실행
-from langgraph_modules.report_graph import app
+from report_modules.report_graph import app
 from tools.reliability_auditor import run_ragas_test
 
 final_state = app.invoke(initial_state)
@@ -494,7 +494,7 @@ async def generate_report_with_reliability(
     """리포트 생성 + 자동 신뢰도 평가"""
     
     # 1. LangGraph로 리포트 생성
-    from langgraph_modules.report_graph import app
+    from report_modules.report_graph import app
     initial_state = {
         "user_id": user_id,
         "lifestyle_id": lifestyle_id,
