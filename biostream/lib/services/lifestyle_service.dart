@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_config.dart';
@@ -103,6 +104,7 @@ class LifestyleService {
       final body = situationText != null && situationText.isNotEmpty
           ? jsonEncode({"situation_text": situationText})
           : '{}';
+      debugPrint('[LifestyleService] generateHealthReport situationText 전달: ${situationText != null ? "있음 (${situationText.length}자)" : "없음"}, body: $body');
 
       final response = await http.post(
         uri,

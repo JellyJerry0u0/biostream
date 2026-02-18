@@ -8,6 +8,7 @@
 """
 
 import os
+import re
 import sys
 from typing import Dict, Any, List, Optional
 from datetime import date
@@ -26,6 +27,30 @@ from .report_constants import (
     OUTCOME_TO_NARRATIVE_TOPICS,
     STANDARD_TIMEFRAMES,
 )
+
+
+def strip_markdown(text: str) -> str:
+    """마크다운 문법 제거 (**, *, #, __ 등) - 리포트 카드 본문용"""
+    if not text:
+        return text
+    s = str(text)
+    # **bold** 또는 ** ** 형태
+    s = re.sub(r'\*\*([^*]*)\*\*', r'\1', s)
+    # *italic* (단일 별표, 단어 경계 주의)
+    s = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', s)
+    # __bold__
+    s = re.sub(r'__([^_]+)__', r'\1', s)
+    # _italic_
+    s = re.sub(r'(?<!_)_([^_]+)_(?!_)', r'\1', s)
+    # ### 헤더 (#으로 시작) - 앞쪽 # 제거
+    s = re.sub(r'^#+\s*', '', s)
+    s = re.sub(r'\n#+\s*', '\n', s)
+    # 남은 짝 안 맞는 **, *
+    s = re.sub(r'\*\*', '', s)
+    s = re.sub(r'(?<!\w)\*(?!\w)', '', s)
+    s = re.sub(r'__', '', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
 
 
 # ──────────────────────────── outcome → topic 매핑 ────────────────────────────

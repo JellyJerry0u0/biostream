@@ -75,7 +75,9 @@ from .report_formatters import (
     score_outcome_for_selection,
     select_top_timeframes,
     calculate_estimated_stats,
+    strip_markdown,
 )
+from .report_llm import REPORT_DEBUG
 from .report_cards import (
     generate_section_cards,
     generate_lifestyle_cards,
@@ -411,6 +413,7 @@ class ReportState(TypedDict, total=False):
     retry_needed: bool  # 재시도 필요 여부
     retry_sections: List[str]  # 재시도가 필요한 섹션 목록
     retry_count: Dict[str, Any]  # 재시도 횟수 추적 (예: {"validate_cards": {"sleep": 1}, "write_section_cards": {"sleep": 2}})
+    situation_text: Optional[str]  # 사용자 참고 상황 (DB 저장 안 함, 프롬프트에만 반영)
 
 
 # 목표 한글 매핑
@@ -1902,9 +1905,10 @@ def _generate_section_cards(
 규칙:
 - problem/cause: 각 2-3문장까지만 (더 길면 잘라서 3문장)
 - simulation: 4문장 초과 금지
-- action items: 정확히 3개, title/detail 각 1문장
+- action items: 정확히 3개, title/detail 각 1문장. action은 problem(현재 상태)과 cause(원인)에 연계되어, 그 원인을 해결하는 구체적 행동이어야 함
 - 전문용어는 1회만 (괄호로 쉬운 설명)
 - 한국어만 사용
+- 카드 본문에 **, *, # 같은 마크다운 문법을 절대 사용하지 마세요. 일반 텍스트만 사용하세요.
 - PMC, PMID, p=, CI 같은 논문 정보는 본문에 절대 포함하지 마세요."""
     
     try:
@@ -1989,9 +1993,10 @@ def _generate_subsection_cards(
 규칙:
 - problem/cause: 각 2-3문장까지만 (더 길면 잘라서 3문장)
 - simulation: 4문장 초과 금지
-- action items: 정확히 3개, title/detail 각 1문장
+- action items: 정확히 3개, title/detail 각 1문장. action은 problem(현재 상태)과 cause(원인)에 연계되어, 그 원인을 해결하는 구체적 행동이어야 함
 - 전문용어는 1회만 (괄호로 쉬운 설명)
 - 한국어만 사용
+- 카드 본문에 **, *, # 같은 마크다운 문법을 절대 사용하지 마세요. 일반 텍스트만 사용하세요.
 - PMC, PMID, p=, CI 같은 논문 정보는 본문에 절대 포함하지 마세요."""
     
     try:
@@ -2240,8 +2245,9 @@ def _build_card_prompt_enhanced(section: str, survey: dict, section_quant: dict,
 {claims_text}
 
 ⚠️ 각 카드 작성 규칙:
+- 논리적·유기적 연결: [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·논문 근거를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
 - problem/cause: 위 claims의 "claim"과 "support_text"를 바탕으로 작성하되, 설문 수치를 자연스럽게 요약해 반영
-- action: 이 사용자 설문 + 신체정보에서 가장 큰 레버 1~2개에 집중 (BMI 높으면 체중·대사 쪽, 수면 짧으면 수면 쪽)
+- action: 반드시 앞선 [현재 상태]+[왜 이런 상태인가]와 연계. action 3개 각각이 위에서 말한 원인(cause)을 해결하는 구체적 행동이어야 함. 설문+신체정보에서 가장 큰 레버 1~2개에 집중 (BMI 높으면 체중·대사 쪽, 수면 짧으면 수면 쪽)
 - 각 카드에 evidence 기반 키워드(근거 support_text에서 추출한 키워드) 최소 1개 포함
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
 - 근거에서 말하는 메커니즘/방향성(예: 장벽/염증/멜라닌/콜라겐)을 1번 이상 언급
@@ -2845,7 +2851,7 @@ def _postprocess_cards(
         
         # problem/cause: 문장 수 제한 + 과확신 표현 완화
         if card_type in ["problem", "cause"]:
-            text = card.get("text", "")
+            text = strip_markdown(card.get("text", ""))
             text, leaked = _remove_citation_leaks(text)
             if leaked:
                 quality_flags["leaked_citation"] = True
@@ -2856,6 +2862,7 @@ def _postprocess_cards(
         elif card_type == "simulation":
             # 템플릿으로 강제 생성 (section_key, survey 전달)
             template_text, sim_meta = _format_simulation_text(section_key, survey, section_quant)
+            template_text = strip_markdown(template_text)
             template_text, leaked = _remove_citation_leaks(template_text)
             if leaked:
                 quality_flags["leaked_citation"] = True
@@ -2883,9 +2890,9 @@ def _postprocess_cards(
             # 각 item의 title/detail 길이 제한 및 PMC 제거
             processed_items = []
             for item in items:
-                title = item.get("title", "")
-                detail = item.get("detail", "")
-                
+                title = strip_markdown(item.get("title", ""))
+                detail = strip_markdown(item.get("detail", ""))
+
                 # 빈 값 체크
                 if not title:
                     title = "행동"
@@ -3672,6 +3679,8 @@ def generate_report(
             "final_report": None,
             "situation_text": situation_text,
         }
+        if situation_text:
+            print(f"[ReportGraph] initial_state에 situation_text 반영: {situation_text[:50]}...")
         
         app = create_report_graph()
         config = {"configurable": {"thread_id": f"report_user_{user_id}"}}
