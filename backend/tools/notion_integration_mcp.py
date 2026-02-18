@@ -133,27 +133,66 @@ class NotionMCPClient:
             
             result = await self._call_mcp_tool("create_page", arguments)
             
+            print(f"🔥 MCP RAW RESULT: {result}")
+            
             if not result.get("success"):
                 return result
             
-            # 결과 파싱
+            # 결과 파싱 - MCP가 Pydantic TextContent 객체를 반환하므로 특별 처리
             page_data = result.get("result", [{}])[0]
-            if isinstance(page_data, dict):
-                page_id = page_data.get("id") or page_data.get("page_id")
-                page_url = page_data.get("url") or f"https://notion.so/{page_id}"
-            else:
-                # 텍스트 응답인 경우 파싱
+            page_id = None
+            page_url = None
+            
+            print(f"🔍 page_data type: {type(page_data)}")
+            print(f"🔍 page_data value: {page_data}")
+            
+            # Pydantic TextContent 객체인 경우 text 속성에서 JSON 추출
+            if hasattr(page_data, 'text'):
                 import json
                 try:
-                    parsed = json.loads(str(page_data))
-                    page_id = parsed.get("id")
-                    page_url = parsed.get("url")
-                except:
-                    # 단순 ID만 반환된 경우
-                    page_id = str(page_data).strip()
-                    page_url = f"https://notion.so/{page_id}"
+                    json_str = page_data.text
+                    print(f"🔍 Extracted JSON string: {json_str[:200]}...")
+                    page_json = json.loads(json_str)
+                    page_id = page_json.get("id")
+                    page_url = page_json.get("url")
+                    print(f"✅ Parsed from Pydantic: page_id={page_id}, page_url={page_url}")
+                except Exception as e:
+                    print(f"⚠️ Pydantic parsing failed: {e}")
             
-            print(f"✅ [Notion MCP] 페이지 생성 완료 (페이지 ID: {page_id})")
+            # dict인 경우 직접 파싱
+            if not page_id and isinstance(page_data, dict):
+                page_id = page_data.get("id") or page_data.get("page_id")
+                page_url = page_data.get("url")
+                print(f"✅ Parsed from dict: page_id={page_id}, page_url={page_url}")
+            
+            # 문자열인 경우 JSON 파싱 시도
+            if not page_id and isinstance(page_data, str):
+                import json
+                try:
+                    page_json = json.loads(page_data)
+                    page_id = page_json.get("id")
+                    page_url = page_json.get("url")
+                    print(f"✅ Parsed from string: page_id={page_id}, page_url={page_url}")
+                except:
+                    page_id = page_data.strip()
+                    print(f"⚠️ Using raw string as page_id: {page_id}")
+            
+            # URL이 없으면 page_id로 생성 (하이픈 제거)
+            if page_id and not page_url:
+                page_id_clean = page_id.replace("-", "")
+                page_url = f"https://www.notion.so/{page_id_clean}"
+                print(f"🔧 Generated URL from page_id: {page_url}")
+            
+            if not page_id or not page_url:
+                print(f"❌ Failed to extract page_id or page_url")
+                return {
+                    "success": False,
+                    "error": "페이지 ID/URL 파싱 실패"
+                }
+            
+            print(f"✅ [Notion MCP] 페이지 생성 완료")
+            print(f"   페이지 ID: {page_id}")
+            print(f"   페이지 URL: {page_url}")
             
             # 나머지 블록 추가
             if len(blocks) > 100:

@@ -167,8 +167,10 @@ def generate_report(
         # Notion 정보 별도 저장 (있는 경우)
         if new_report.get("notion_page_id"):
             lifestyle.notion_page_id = new_report.get("notion_page_id")
+            print(f"[Notion] 페이지 ID 저장: {lifestyle.notion_page_id}")
         if new_report.get("notion_url"):
             lifestyle.notion_url = new_report.get("notion_url")
+            print(f"[Notion] 페이지 URL 저장: {lifestyle.notion_url}")
         
         db.commit()
         db.refresh(lifestyle)
