@@ -71,7 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final extractedItems = _extractSolutionItems(reportResult['report']);
+    final report = reportResult['report'];
+    final extractedItems = _extractSolutionItems(report);
+    final completedIdsFromServer = _extractCompletedIdsFromServer(report);
 
     if (extractedItems.isEmpty) {
       setState(() {
@@ -83,7 +85,14 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    await _restorePracticedState(lifestyleId, extractedItems);
+    if (completedIdsFromServer.isNotEmpty) {
+      for (final item in extractedItems) {
+        item.isDone = completedIdsFromServer.contains(item.id);
+      }
+      await _savePracticedStateToLocal(lifestyleId, extractedItems);
+    } else {
+      await _restorePracticedStateFromLocal(lifestyleId, extractedItems);
+    }
 
     if (!mounted) return;
 
@@ -184,7 +193,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _questStorageKey(int lifestyleId) => 'home_quest_done_$lifestyleId';
 
-  Future<void> _restorePracticedState(int lifestyleId, List<_QuestItem> items) async {
+  Set<String> _extractCompletedIdsFromServer(dynamic report) {
+    if (report is! Map<String, dynamic>) {
+      return <String>{};
+    }
+
+    final questProgress = report['quest_progress'];
+    if (questProgress is! Map<String, dynamic>) {
+      return <String>{};
+    }
+
+    final completed = questProgress['completed_action_ids'];
+    if (completed is! List) {
+      return <String>{};
+    }
+
+    return completed
+        .map((entry) => entry.toString().trim())
+        .where((entry) => entry.isNotEmpty)
+        .toSet();
+  }
+
+  Future<void> _restorePracticedStateFromLocal(int lifestyleId, List<_QuestItem> items) async {
     final prefs = await SharedPreferences.getInstance();
     final doneIds = prefs.getStringList(_questStorageKey(lifestyleId)) ?? [];
     for (final item in items) {
@@ -192,12 +222,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _savePracticedState() async {
-    final lifestyleId = _lifestyleId;
-    if (lifestyleId == null) return;
-
+  Future<void> _savePracticedStateToLocal(int lifestyleId, List<_QuestItem> items) async {
     final prefs = await SharedPreferences.getInstance();
-    final doneIds = _questItems
+    final doneIds = items
         .where((item) => item.isDone)
         .map((item) => item.id)
         .toList();
@@ -205,11 +232,30 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setStringList(_questStorageKey(lifestyleId), doneIds);
   }
 
+  Future<void> _savePracticedStateToServer(int lifestyleId, List<_QuestItem> items) async {
+    final doneIds = items.where((item) => item.isDone).map((item) => item.id).toList();
+    final result = await _lifestyleService.updateQuestProgress(lifestyleId, doneIds);
+    if (!mounted) return;
+
+    if (result['success'] != true) {
+      final message = (result['message'] ?? '퀘스트 저장에 실패했습니다.').toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
   Future<void> _toggleQuestItem(_QuestItem item) async {
+    final lifestyleId = _lifestyleId;
+
     setState(() {
       item.isDone = !item.isDone;
     });
-    await _savePracticedState();
+
+    if (lifestyleId == null) return;
+
+    await _savePracticedStateToLocal(lifestyleId, _questItems);
+    await _savePracticedStateToServer(lifestyleId, _questItems);
   }
 
   @override
@@ -632,6 +678,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               const _NavItem(
+                icon: Icons.face_retouching_natural,
+                label: '홈 화면',
+                isActive: true,
+              ),
+               const _NavItem(
                 icon: Icons.face_retouching_natural,
                 label: '내 미래 얼굴',
                 isActive: true,

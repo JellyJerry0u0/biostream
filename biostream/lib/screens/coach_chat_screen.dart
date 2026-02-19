@@ -6,6 +6,7 @@
 /// - 액션 버튼 클릭 → action 메시지 전송
 
 import 'package:flutter/material.dart';
+import 'home_screen.dart';
 import '../utils/responsive.dart';
 import '../models/coach_models.dart';
 import '../services/coach_ws_client.dart';
@@ -174,6 +175,13 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
     };
   }
 
+  void _goHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      (route) => false,
+    );
+  }
+
   CoachChatMessage? _findMessage(String id) {
     try {
       return _messages.firstWhere((m) => m.id == id);
@@ -280,6 +288,8 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
         children: [
           // 뒤로가기
           _iconButton(Icons.arrow_back, isDark, () => Navigator.of(context).pop()),
+          const SizedBox(width: 6),
+          _iconButton(Icons.home_outlined, isDark, _goHome),
           const SizedBox(width: 8),
           // 타이틀 + 상태
           Expanded(

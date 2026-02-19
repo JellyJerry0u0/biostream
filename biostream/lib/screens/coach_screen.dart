@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_screen.dart';
 import '../utils/responsive.dart';
 
 class CoachScreen extends StatefulWidget {
@@ -22,6 +23,13 @@ class _CoachScreenState extends State<CoachScreen> {
 
   void _onBack() {
     Navigator.of(context).pop();
+  }
+
+  void _goHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      (route) => false,
+    );
   }
 
   void _onMore() {
@@ -76,22 +84,43 @@ class _CoachScreenState extends State<CoachScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _onBack,
-                      borderRadius: BorderRadius.circular(9999),
-                      child: Container(
-                        width: Responsive.fontSize(context, 40),
-                        height: Responsive.fontSize(context, 40),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          Icons.arrow_back,
-                          size: Responsive.iconSize(context, 24),
-                          color: isDark ? Colors.white : Colors.black87,
+                  Row(
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _onBack,
+                          borderRadius: BorderRadius.circular(9999),
+                          child: Container(
+                            width: Responsive.fontSize(context, 40),
+                            height: Responsive.fontSize(context, 40),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.arrow_back,
+                              size: Responsive.iconSize(context, 24),
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _goHome,
+                          borderRadius: BorderRadius.circular(9999),
+                          child: Container(
+                            width: Responsive.fontSize(context, 40),
+                            height: Responsive.fontSize(context, 40),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.home_outlined,
+                              size: Responsive.iconSize(context, 22),
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   Column(
                     children: [

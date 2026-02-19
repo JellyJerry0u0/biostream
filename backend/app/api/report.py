@@ -29,6 +29,11 @@ class GenerateReportBody(BaseModel):
     situation_text: Optional[str] = None
 
 
+class QuestProgressBody(BaseModel):
+    """홈 퀘스트(맞춤 솔루션) 실천 체크 상태"""
+    completed_action_ids: list[str] = []
+
+
 def get_current_user(authorization: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
     """현재 사용자 인증"""
     if not authorization:
@@ -339,4 +344,56 @@ def get_report(
         "generated_at": lifestyle.health_report_generated_at.isoformat() if lifestyle.health_report_generated_at else None,
         "notion_url": lifestyle.notion_url,
         "notion_page_id": lifestyle.notion_page_id
+    }
+
+
+@router.patch("/report/{lifestyle_id}/quest-progress")
+def update_quest_progress(
+    lifestyle_id: int,
+    body: QuestProgressBody,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """홈 화면 퀘스트 진행 상태를 리포트 JSON에 저장합니다."""
+    current_user = get_current_user(authorization, db)
+
+    lifestyle = db.query(Lifestyle).filter(
+        Lifestyle.id == lifestyle_id,
+        Lifestyle.user_id == current_user.id
+    ).first()
+
+    if not lifestyle:
+        raise HTTPException(
+            status_code=404,
+            detail="해당 설문조사 데이터를 찾을 수 없습니다."
+        )
+
+    if not isinstance(lifestyle.health_report, dict):
+        raise HTTPException(
+            status_code=404,
+            detail="생성된 리포트가 없습니다. 먼저 리포트를 생성해주세요."
+        )
+
+    normalized_ids: list[str] = []
+    seen = set()
+    for action_id in body.completed_action_ids:
+        value = str(action_id).strip()
+        if not value or value in seen:
+            continue
+        normalized_ids.append(value)
+        seen.add(value)
+
+    report_data = dict(lifestyle.health_report)
+    report_data["quest_progress"] = {
+        "completed_action_ids": normalized_ids,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+    lifestyle.health_report = report_data
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "퀘스트 진행 상황이 저장되었습니다.",
+        "quest_progress": report_data["quest_progress"],
     }

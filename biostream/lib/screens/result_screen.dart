@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../utils/responsive.dart';
 import '../services/lifestyle_service.dart';
 import 'coach_chat_screen.dart';
+import 'home_screen.dart';
 import '../widgets/report_tabs_bar.dart';
 import '../widgets/report_cards/problem_card.dart';
 import '../widgets/report_cards/cause_card.dart';
@@ -28,6 +29,13 @@ class _ResultScreenState extends State<ResultScreen> {
   String? _errorMessage;
   String? _selectedTab; // 선택된 탭
   String? _selectedLifestyleSubTab; // lifestyle 서브탭 (smoking, drinking, stress)
+
+  void _goHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      (route) => false,
+    );
+  }
 
   @override
   void initState() {
@@ -668,6 +676,30 @@ class _ResultScreenState extends State<ResultScreen> {
                       color: isDark
                           ? Colors.white.withOpacity(0.9)
                           : const Color(0xFF101B0D),
+                    ),
+                  ),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _goHome,
+                      borderRadius: BorderRadius.circular(9999),
+                      child: Container(
+                        width: Responsive.fontSize(context, 40),
+                        height: Responsive.fontSize(context, 40),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.black.withOpacity(0.2)
+                              : Colors.white.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.home_outlined,
+                          size: Responsive.iconSize(context, 22),
+                          color:
+                              isDark ? Colors.white : const Color(0xFF101B0D),
+                        ),
+                      ),
                     ),
                   ),
                   // Notion 버튼 (notion_url이 있을 때만 표시)

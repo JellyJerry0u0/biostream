@@ -184,6 +184,53 @@ class LifestyleService {
       return {"success": false, "message": "서버 연결 실패: $e"};
     }
   }
+
+  Future<Map<String, dynamic>> updateQuestProgress(
+    int lifestyleId,
+    List<String> completedActionIds,
+  ) async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) {
+        return {"success": false, "message": "로그인이 필요합니다."};
+      }
+
+      final origin = await ApiConfig.getBaseOrigin();
+      final response = await http.patch(
+        Uri.parse('$origin/api/report/$lifestyleId/quest-progress'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "completed_action_ids": completedActionIds,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          "success": true,
+          "message": data['message'] ?? '퀘스트 진행 상황이 저장되었습니다.',
+        };
+      } else if (response.statusCode == 401) {
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          "success": false,
+          "message": errorData['detail'] ?? "퀘스트 저장에 실패했습니다."
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "서버 연결 실패: $e"};
+    }
+  }
 }
 
 
