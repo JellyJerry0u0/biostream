@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/responsive.dart';
 import '../services/lifestyle_service.dart';
+import 'home_screen.dart';
 import 'result_screen.dart';
 
 class SurveyScreen extends StatefulWidget {
   final String? originalImageUrl;
+  final bool showHomeButtonOnFirstPage;
 
   const SurveyScreen({
     super.key,
     this.originalImageUrl,
+    this.showHomeButtonOnFirstPage = false,
   });
 
   @override
@@ -196,6 +199,32 @@ class _SurveyScreenState extends State<SurveyScreen> {
           padding: EdgeInsets.all(Responsive.padding(context, 16)),
           child: Column(
             children: [
+              if (widget.showHomeButtonOnFirstPage && _currentPage == 0)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => const HomeScreen(),
+                        ),
+                      );
+                    },
+                    icon: Icon(
+                      Icons.home,
+                      size: Responsive.iconSize(context, 16),
+                      color: const Color(0xFF37EC13),
+                    ),
+                    label: Text(
+                      '홈으로 돌아가기',
+                      style: TextStyle(
+                        fontSize: Responsive.fontSize(context, 12),
+                        color: const Color(0xFF37EC13),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

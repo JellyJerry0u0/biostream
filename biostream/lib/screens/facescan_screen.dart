@@ -189,6 +189,7 @@ class _FaceScanScreenState extends State<FaceScanScreen>
             MaterialPageRoute(
               builder: (context) => SurveyScreen(
                 originalImageUrl: finalImageUrl,
+                showHomeButtonOnFirstPage: true,
               ),
             ),
           );

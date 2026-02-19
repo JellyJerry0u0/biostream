@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
-import 'survey_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -428,7 +427,7 @@ class HomeScreen extends StatelessWidget {
                 label: '설문 조사',
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SurveyScreen()),
+                    MaterialPageRoute(builder: (_) => const FaceScanScreen()),
                   );
                 },
               ),
