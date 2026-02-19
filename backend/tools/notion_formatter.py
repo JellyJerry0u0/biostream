@@ -564,9 +564,9 @@ class NotionReportFormatter:
                 italic=True
             ))
             for ref in quant_refs[:5]:
-                children.append(self.builder.bulleted_list_item(
-                    self._format_quant_ref(ref)
-                ))
+                formatted = self._format_quant_ref(ref)
+                if formatted:
+                    children.append(self.builder.bulleted_list_item(formatted))
             children.append(self.builder.paragraph(""))
         
         # 참고 논문
@@ -591,11 +591,53 @@ class NotionReportFormatter:
     
     def _format_quant_ref(self, ref: Dict[str, Any]) -> str:
         """정량 근거 포맷팅"""
-        outcome = ref.get("outcome", "")
-        factor = ref.get("factor", "")
-        effect = ref.get("effect", "")
-        n_papers = ref.get("n_papers", 0)
-        return f"{factor} → {outcome}: {effect} (논문 {n_papers}편 분석)"
+        # 레거시 스키마: outcome/factor/effect/n_papers
+        outcome = str(ref.get("outcome", "")).strip()
+        factor = str(ref.get("factor", "")).strip()
+        effect = str(ref.get("effect", "")).strip()
+
+        # 현재 스키마(report_graph quant_refs): outcome_mapped/effect_signed_value/effect_unit/timeframe_days/p_label/paper_id
+        if not outcome:
+            outcome = str(ref.get("outcome_mapped", "")).strip()
+
+        if not effect:
+            signed_value = ref.get("effect_signed_value")
+            unit = str(ref.get("effect_unit", "")).strip()
+            if signed_value not in (None, ""):
+                effect = f"{signed_value}{unit}" if unit else str(signed_value)
+
+        timeframe_days = ref.get("timeframe_days")
+        timeframe_label = ""
+        if isinstance(timeframe_days, (int, float)):
+            timeframe_label = f"약 {int(timeframe_days)}일"
+
+        p_label = str(ref.get("p_label", "")).strip()
+
+        n_papers_raw = ref.get("n_papers")
+        if isinstance(n_papers_raw, (int, float)):
+            n_papers = int(n_papers_raw)
+        else:
+            n_papers = 1 if str(ref.get("paper_id", "")).strip() else 0
+
+        # 완전히 비어있는 행은 출력하지 않음
+        if not any([outcome, factor, effect, timeframe_label, p_label, n_papers]):
+            return ""
+
+        if factor:
+            headline = f"{factor} → {outcome or '지표'}"
+        else:
+            headline = outcome or "정량 지표"
+
+        detail_parts = []
+        if effect:
+            detail_parts.append(effect)
+        if timeframe_label:
+            detail_parts.append(timeframe_label)
+        if p_label:
+            detail_parts.append(p_label)
+
+        detail_text = " | ".join(detail_parts) if detail_parts else "효과 값 정보 없음"
+        return f"{headline}: {detail_text} (논문 {n_papers}편 분석)"
     
     def _format_narrative_ref(self, ref: Dict[str, Any]) -> str:
         """서술 근거 포맷팅"""

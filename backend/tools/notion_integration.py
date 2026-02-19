@@ -7,6 +7,7 @@ import os
 import sys
 import asyncio
 import json
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 # 경로 설정
@@ -36,6 +37,39 @@ try:
 except ImportError:
     MCP_AVAILABLE = False
     print("⚠️ MCP가 설치되지 않았습니다. pip install mcp를 실행하세요.")
+
+
+def _format_generated_at_for_title(generated_at: Any) -> str:
+    """리포트 생성 시각을 제목용으로 보기 좋게 포맷"""
+    if generated_at is None:
+        return "생성 시각 미상"
+
+    dt: Optional[datetime] = None
+    raw = str(generated_at).strip()
+    if not raw:
+        return "생성 시각 미상"
+
+    if isinstance(generated_at, datetime):
+        dt = generated_at
+    else:
+        normalized = raw.replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(normalized)
+        except Exception:
+            try:
+                dt = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return raw
+
+    if dt.tzinfo is not None:
+        try:
+            dt = dt.astimezone()
+        except Exception:
+            pass
+
+    period = "오전" if dt.hour < 12 else "오후"
+    hour_12 = dt.hour % 12 or 12
+    return f"{dt:%Y-%m-%d} {period} {hour_12}:{dt:%M}"
 
 
 class NotionMCPClient:
@@ -317,7 +351,7 @@ def export_report_to_notion(final_report: Dict[str, Any]) -> Dict[str, Any]:
         # 3. 페이지 제목 생성
         survey_summary = final_report.get("survey_summary", {})
         outcomes = survey_summary.get("outcomes", [])
-        generated_at = final_report.get("generated_at", "")
+        generated_at = _format_generated_at_for_title(final_report.get("generated_at", ""))
         user_name = final_report.get("user_name", "사용자")
         
         #사용자 이름이 제목에 포함되게 수정 ex> "***사용자의 분석 리포트 결과- 2026-02-10 15:30:00"
@@ -385,7 +419,7 @@ def export_report_from_db_to_notion(
         # 3. 페이지 제목 생성
         survey_summary = final_report.get("survey_summary", {})
         outcomes = survey_summary.get("outcomes", [])
-        generated_at = final_report.get("generated_at", "")
+        generated_at = _format_generated_at_for_title(final_report.get("generated_at", ""))
         user_name = final_report.get("user_name", "사용자")
         title = f"{user_name}님의 분석 리포트 결과 - {generated_at}"
         
