@@ -1,46 +1,99 @@
-import asyncio
-import random
+import os
+import httpx
+from sqlalchemy.orm import Session
+from app.models import Lifestyle
 
+'''
+.env루트 (추가해야함)
+IMAGE_GENERATION_API_URL=http://your-gpu-ip:8000/generate
+IMAGE_GENERATION_API_KEY=your-secret-key
+'''
 class ImageGenerationService:
+
     def __init__(self):
-        # 나중에 실제 AWS G4dn 인스턴스 IP가 생기면 여기에 기입합니다.
-        self.gpu_server_url = "http://your-aws-gpu-ip:8000/generate"
+        self.gpu_server_url = os.getenv("IMAGE_GENERATION_API_URL")
+        self.api_key = os.getenv("IMAGE_GENERATION_API_KEY")
 
-    async def request_aging_simulation(self, lifestyle_id: int, gender: str, target_years: int, habits: dict):
+        if not self.gpu_server_url:
+            raise ValueError("IMAGE_GENERATION_API_URL not set")
+
+    async def request_aging_simulation(
+        self,
+        db: Session,
+        lifestyle_id: int
+    ):
         """
-        이미지 생성 요청을 시뮬레이션하는 함수 (Mock)
+        1. Lifestyle 조회
+        2. 노화 점수 계산
+        3. GPU 서버 호출
+        4. 결과 DB 저장
         """
-        # 1. 시뮬레이션 파라미터 계산 (나중에 모델에 전달할 수치들)
-        # 예: 흡연 여부와 자외선 노출량에 따라 주름 지표를 0.0 ~ 1.0 사이로 계산
-        wrinkle_score = 0.2
-        if habits.get("smoking_status") == "current":
-            wrinkle_score += 0.4
-        if habits.get("uv_exposure_10to16") in [">2h", "1~2h"]:
-            wrinkle_score += 0.3
-            
-        params = {
-            "target_age_offset": target_years,
-            "gender": gender,
-            "wrinkles": min(wrinkle_score, 1.0),
-            "pigmentation": random.uniform(0.1, 0.5) # 일단 랜덤값
+
+        # 1️⃣ lifestyle 조회
+        lifestyle = db.query(Lifestyle).filter(
+            Lifestyle.id == lifestyle_id
+        ).first()
+
+        if not lifestyle:
+            raise Exception("Lifestyle not found")
+
+        if not lifestyle.image_url:
+            raise Exception("Original image not found")
+
+        # 2️⃣ 노화 점수 계산
+        aging_score = self._calculate_score(lifestyle)
+
+        # 3️⃣ GPU 서버 호출
+        payload = {
+            "image_url": lifestyle.image_url,
+            "aging_strength": aging_score
         }
 
-        print(f"[ImageService] Lifestyle {lifestyle_id}에 대한 이미지 생성 요청 접수")
-        print(f"[ImageService] 계산된 파라미터: {params}")
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
-        # 2. 실제로는 여기서 GPU 서버에 비동기 HTTP 요청을 보냅니다.
-        # 지금은 GPU가 없으므로 5초간 기다리는 척 합니다.
-        await asyncio.sleep(5)
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                self.gpu_server_url,
+                json=payload,
+                headers=headers
+            )
 
-        # 3. 결과물 (지금은 테스트용 샘플 S3 URL 반환)
-        # 실제 환경에서는 GPU 서버가 생성 후 S3에 올린 URL을 반환하게 됩니다.
-        mock_url = f"https://biostream-bucket.s3.amazonaws.com/generated/future_{lifestyle_id}.png"
-        
-        return {
-            "status": "completed",
-            "image_url": mock_url,
-            "params": params
-        }
+        response.raise_for_status()
+        result = response.json()
 
-# 싱글톤 패턴으로 인스턴스 생성
-image_gen_service = ImageGenerationService()
+        output_url = result.get("output_url")
+        if not output_url:
+            raise Exception("GPU server did not return output_url")
+
+        # 4️⃣ 결과 DB 저장
+        lifestyle.aged_image_url = output_url
+        db.commit()
+
+        return {"output_url": output_url}
+
+    def _calculate_score(self, lifestyle):
+        """
+        설문 데이터를 기반으로 노화 강도 계산 (0.0 ~ 1.0)
+        """
+
+        score = 0.2  # 기본 노화값
+
+        # 흡연
+        if lifestyle.smoking == "current":
+            score += 0.4
+
+        # 자외선 노출
+        if lifestyle.UV in ["1~2h", ">2h"]:
+            score += 0.3
+
+        # 수면 부족
+        if lifestyle.sleep in ["<5h", "5~6h"]:
+            score += 0.2
+
+        # 최대 1.0 제한
+        return min(score, 1.0)
+
+
+image_service = ImageGenerationService()

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
 
-#from .database import engine, get_db
+from .database import engine, get_db
 from . import models
 from .api import auth, data  # 만약 경로 에러가 나면 from app.api import auth로 시도
 
