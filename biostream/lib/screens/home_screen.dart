@@ -1,14 +1,216 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/lifestyle_service.dart';
 import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   static const Color _primary = Color(0xFF2BEE75);
   static const Color _backgroundDark = Color(0xFF050C08);
   static const Color _gameCard = Color(0xFF0D1F14);
+
+  final LifestyleService _lifestyleService = LifestyleService();
+
+  bool _isLoadingQuests = true;
+  String? _questError;
+  int? _lifestyleId;
+  List<_QuestItem> _questItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuestFromReport();
+  }
+
+  Future<void> _loadQuestFromReport() async {
+    setState(() {
+      _isLoadingQuests = true;
+      _questError = null;
+    });
+
+    final lifestyleResult = await _lifestyleService.getLifestyleData();
+    if (!mounted) return;
+
+    if (lifestyleResult['success'] != true) {
+      setState(() {
+        _isLoadingQuests = false;
+        _questError = '생활습관 데이터를 불러오지 못했습니다.';
+      });
+      return;
+    }
+
+    final lifestyleData = lifestyleResult['data'];
+    final lifestyleId = _toInt(
+      lifestyleData is Map<String, dynamic> ? lifestyleData['lifestyle_id'] : null,
+    );
+
+    if (lifestyleId == null) {
+      setState(() {
+        _isLoadingQuests = false;
+        _questError = '분석 리포트가 아직 없습니다.';
+      });
+      return;
+    }
+
+    final reportResult = await _lifestyleService.getHealthReport(lifestyleId);
+    if (!mounted) return;
+
+    if (reportResult['success'] != true) {
+      setState(() {
+        _isLoadingQuests = false;
+        _questError = '리포트를 불러오지 못했습니다.';
+      });
+      return;
+    }
+
+    final extractedItems = _extractSolutionItems(reportResult['report']);
+
+    if (extractedItems.isEmpty) {
+      setState(() {
+        _lifestyleId = lifestyleId;
+        _isLoadingQuests = false;
+        _questError = '맞춤 솔루션이 아직 생성되지 않았습니다.';
+        _questItems = [];
+      });
+      return;
+    }
+
+    await _restorePracticedState(lifestyleId, extractedItems);
+
+    if (!mounted) return;
+
+    setState(() {
+      _lifestyleId = lifestyleId;
+      _questItems = extractedItems;
+      _isLoadingQuests = false;
+      _questError = null;
+    });
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  List<_QuestItem> _extractSolutionItems(dynamic report) {
+    final items = <_QuestItem>[];
+    final seenTitles = <String>{};
+
+    void addItem(String title, String detail) {
+      final normalizedTitle = _cleanText(title);
+      final normalizedDetail = _cleanText(detail);
+
+      if (normalizedTitle.isEmpty) return;
+      if (seenTitles.contains(normalizedTitle)) return;
+
+      seenTitles.add(normalizedTitle);
+      items.add(
+        _QuestItem(
+          id: normalizedTitle,
+          title: normalizedTitle,
+          detail: normalizedDetail,
+        ),
+      );
+    }
+
+    void collectCards(dynamic cards) {
+      if (cards is! List) return;
+      for (final card in cards) {
+        if (card is! Map<String, dynamic>) continue;
+        if (card['type'] != 'action') continue;
+
+        final cardItems = card['items'];
+        if (cardItems is! List) continue;
+
+        for (final entry in cardItems) {
+          if (entry is! Map<String, dynamic>) continue;
+          final title = (entry['title'] ?? '').toString();
+          final detail = (entry['detail'] ?? '').toString();
+          addItem(title, detail);
+        }
+      }
+    }
+
+    void collectSection(dynamic section) {
+      if (section is! Map<String, dynamic>) return;
+      collectCards(section['cards']);
+
+      final subsections = section['subsections'];
+      if (subsections is List) {
+        for (final subsection in subsections) {
+          collectSection(subsection);
+        }
+      }
+    }
+
+    if (report is Map<String, dynamic>) {
+      final sections = report['sections'];
+      if (sections is Map<String, dynamic>) {
+        for (final section in sections.values) {
+          collectSection(section);
+        }
+      }
+
+      collectCards(report['cards']);
+
+      final actionItems = report['action_items'];
+      if (actionItems is List) {
+        for (final entry in actionItems) {
+          if (entry is! Map<String, dynamic>) continue;
+          addItem((entry['title'] ?? '').toString(), (entry['detail'] ?? '').toString());
+        }
+      }
+    }
+
+    return items.take(3).toList();
+  }
+
+  String _cleanText(String text) {
+    return text
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'PMC\d+', caseSensitive: false), '')
+        .replaceAll(RegExp(r'PMID\s*:?\s*\d+', caseSensitive: false), '')
+        .trim();
+  }
+
+  String _questStorageKey(int lifestyleId) => 'home_quest_done_$lifestyleId';
+
+  Future<void> _restorePracticedState(int lifestyleId, List<_QuestItem> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    final doneIds = prefs.getStringList(_questStorageKey(lifestyleId)) ?? [];
+    for (final item in items) {
+      item.isDone = doneIds.contains(item.id);
+    }
+  }
+
+  Future<void> _savePracticedState() async {
+    final lifestyleId = _lifestyleId;
+    if (lifestyleId == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final doneIds = _questItems
+        .where((item) => item.isDone)
+        .map((item) => item.id)
+        .toList();
+
+    await prefs.setStringList(_questStorageKey(lifestyleId), doneIds);
+  }
+
+  Future<void> _toggleQuestItem(_QuestItem item) async {
+    setState(() {
+      item.isDone = !item.isDone;
+    });
+    await _savePracticedState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +233,7 @@ class HomeScreen extends StatelessWidget {
                         const SizedBox(height: 28),
                         _buildSimulationSection(context),
                         const SizedBox(height: 20),
-                        _buildQuestSection(),
+                        _buildQuestSection(context),
                         const SizedBox(height: 28),
                       ],
                     ),
@@ -209,7 +411,10 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQuestSection() {
+  Widget _buildQuestSection(BuildContext context) {
+    final int totalCount = _questItems.length;
+    final int doneCount = _questItems.where((item) => item.isDone).length;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -246,7 +451,7 @@ class HomeScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '1/3 완료',
+                  '$doneCount/$totalCount 완료',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.65),
                     fontSize: 10,
@@ -256,150 +461,145 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          _buildQuestDoneItem(),
-          const SizedBox(height: 12),
-          _buildQuestTodoItem(),
-          const SizedBox(height: 18),
-          Container(
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _primary.withValues(alpha: 0.2)),
+          const SizedBox(height: 8),
+          Text(
+            '당신을 위한 맞춤 솔루션',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
-            child: Text(
-              '전체 퀘스트 보기',
-              style: TextStyle(
-                color: _primary.withValues(alpha: 0.6),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+          ),
+          const SizedBox(height: 16),
+          if (_isLoadingQuests)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: CircularProgressIndicator(color: _primary),
+              ),
+            )
+          else if (_questError != null)
+            _buildQuestFallback(context)
+          else
+            ..._questItems.map((item) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildQuestItem(item),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestFallback(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _questError ?? '맞춤 솔루션을 불러오지 못했습니다.',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.65),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 44,
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FaceScanScreen()),
+              );
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _primary,
+              side: BorderSide(color: _primary.withValues(alpha: 0.25)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
+            child: const Text('리포트 만들러 가기'),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildQuestDoneItem() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _primary.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _primary.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_circle, color: _primary, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '수분 2L 섭취하기',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: 1,
-                    minHeight: 6,
-                    backgroundColor: Colors.white.withValues(alpha: 0.1),
-                    color: _primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            '+50XP',
-            style: TextStyle(
-              color: _primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildQuestItem(_QuestItem item) {
+    final bool isDone = item.isDone;
 
-  Widget _buildQuestTodoItem() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.02),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.radio_button_unchecked,
-              color: Colors.white.withValues(alpha: 0.25),
-              size: 22,
-            ),
+    return InkWell(
+      onTap: () => _toggleQuestItem(item),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDone
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.white.withValues(alpha: 0.02),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDone
+                ? _primary.withValues(alpha: 0.12)
+                : Colors.white.withValues(alpha: 0.05),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '선크림 바르기',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isDone
+                    ? _primary.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.05),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isDone ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: isDone
+                    ? _primary
+                    : Colors.white.withValues(alpha: 0.25),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      color: isDone
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.85),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: 0,
-                    minHeight: 6,
-                    backgroundColor: Colors.white.withValues(alpha: 0.1),
-                    color: _primary,
-                  ),
-                ),
-              ],
+                  if (item.detail.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      item.detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '+30XP',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -457,6 +657,20 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class _QuestItem {
+  _QuestItem({
+    required this.id,
+    required this.title,
+    required this.detail,
+    this.isDone = false,
+  });
+
+  final String id;
+  final String title;
+  final String detail;
+  bool isDone;
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
@@ -474,7 +688,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color primary = Color(0xFF2BEE75);
     final Color itemColor =
-      isActive ? primary : Colors.white.withValues(alpha: 0.4);
+        isActive ? primary : Colors.white.withValues(alpha: 0.4);
 
     return InkWell(
       onTap: onTap,
