@@ -54,7 +54,7 @@ class SimulationCard extends StatelessWidget {
               SizedBox(width: Responsive.padding(context, 8)),
               Expanded(
                 child: Text(
-                  '예상 경로',
+                  '예상 효과',
                   style: TextStyle(
                     fontSize: Responsive.fontSize(context, 16),
                     fontWeight: FontWeight.bold,

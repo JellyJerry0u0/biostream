@@ -39,6 +39,18 @@ if backend_dir not in sys.path:
 
 class NotionBlockBuilder:
     """Notion Block 생성 헬퍼 클래스"""
+
+    @staticmethod
+    def _normalize_emoji(emoji: Optional[str], default: str = "💡") -> str:
+        """Notion callout icon용 emoji 정규화 (빈 값 방지)"""
+        if emoji is None:
+            return default
+
+        normalized = str(emoji).strip()
+        if not normalized:
+            return default
+
+        return normalized
     
     @staticmethod
     def heading_1(text: str) -> Dict[str, Any]:
@@ -110,12 +122,13 @@ class NotionBlockBuilder:
     @staticmethod
     def callout(text: str, emoji: str = "💡", color: str = "gray_background") -> Dict[str, Any]:
         """Callout 블록"""
+        icon_emoji = NotionBlockBuilder._normalize_emoji(emoji)
         return {
             "object": "block",
             "type": "callout",
             "callout": {
                 "rich_text": [{"type": "text", "text": {"content": text}}],
-                "icon": {"type": "emoji", "emoji": emoji},
+                "icon": {"type": "emoji", "emoji": icon_emoji},
                 "color": color
             }
         }
@@ -173,7 +186,7 @@ class NotionBlockBuilder:
 
 
 class NotionReportFormatter:
-    """final_report → Notion Blocks 변환기 (예쁜 디자인)"""
+    """개선된 시각적 디자인을 적용한 Notion Report Formatter"""
     
     def __init__(self):
         self.builder = NotionBlockBuilder()
@@ -215,18 +228,18 @@ class NotionReportFormatter:
         # 🎨 카드 타입별 스타일
         self.card_styles = {
             "problem": {
-                "title": "문제 진단",
+                "title": "현재 상태",
                 "emoji": "🔍",
                 "color": "red_background"
             },
             "cause": {
-                "title": "원인 분석",
+                "title": "왜 이런 상태인가",
                 "emoji": "🧬",
                 "color": "orange_background"
             },
             #왜 실제 노션에서는 실천 방안이 보이지 않을까?
             "action": {
-                "title": "실천 방안",
+                "title": "당신에게 필요한 행동 3가지",
                 "emoji": "💡",
                 "color": "green_background"
             },
@@ -302,19 +315,19 @@ class NotionReportFormatter:
 
             #KPI 스타일 카드 3개 
             blocks.append(self.builder.callout(
-            f" **주요 피부 고민**\n{outcome_text}",
+            f"주요 피부 고민\n{outcome_text}",
             emoji="🎯",
             color="purple_background"
         ))
  
             blocks.append(self.builder.callout(
-            f" **목표 연령**\n{target_years}세",
+            f"목표 연령\n{target_years}세",
             emoji="🎂",
             color="blue_background"
         ))
 
             blocks.append(self.builder.callout(
-                f"**리포트 생성**\n{generated_at}",
+                f"리포트 생성\n{generated_at}",
                 emoji="📅",
                 color="gray_background"
             ))
@@ -326,9 +339,11 @@ class NotionReportFormatter:
         intro = (
             "이 리포트는 당신의 생활습관 데이터와 관련 연구 자료를 기반으로 "
             "개인 맞춤형 건강 개선 방안을 제시합니다. "
-            "각 섹션은 문제 진단, 원인 분석, 실천 방안, 예상 효과로 구성되어 있습니다."
+            "각 섹션은 현재 상태, 문제 진단, 당신에게 필요한 행동 3가지, 예상 효과로 구성되어 있습니다."
         )
         blocks.append(self.builder.callout(intro, emoji="💡", color="gray_background"))
+
+
 
         generated_image_url = final_report.get("generated_image_url")
         if generated_image_url:
@@ -395,6 +410,12 @@ class NotionReportFormatter:
             ))
         
         blocks.append(self.builder.paragraph(""))
+
+        # 신뢰도 점수 (카드 상단 배치)
+        reliability_score = section_data.get("reliability_score")
+        if reliability_score is not None:
+            blocks.extend(self._create_reliability(reliability_score))
+            blocks.append(self.builder.paragraph(""))
         
         # 카드 또는 서브섹션
         if "subsections" in section_data:
@@ -402,12 +423,6 @@ class NotionReportFormatter:
                 blocks.extend(self._create_subsection(subsection))
         elif "cards" in section_data:
             blocks.extend(self._create_cards(section_data.get("cards", [])))
-        
-        
-        # 신뢰도 점수
-        #reliability_score = section_data.get("reliability_score")
-        #if reliability_score is not None:
-         #   blocks.extend(self._create_reliability(reliability_score))
         
         # 과학적 근거
         evidence_refs = section_data.get("evidence_refs", {})
@@ -437,66 +452,94 @@ class NotionReportFormatter:
     def _create_cards(self, cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
      blocks = []
 
+     card_map: Dict[str, Dict[str, Any]] = {}
      for card in cards:
-        card_type = card.get("type", "")
-        text = card.get("text", "")
+        card_type = card.get("type")
+        if card_type:
+            card_map[card_type] = card
 
-        if not text:
-            continue
+     # 1) 진단 섹션 (problem + cause)
+     problem_text = str(card_map.get("problem", {}).get("text", "")).strip()
+     cause_text = str(card_map.get("cause", {}).get("text", "")).strip()
 
-        style = self.card_styles.get(card_type, {
-            "title": card_type,
-            "emoji": "📝",
-            "color": "gray_background"
-        })
+     if problem_text or cause_text:
+        diagnosis_lines = []
+        if problem_text:
+            diagnosis_lines.append(f"🚩 현상: {problem_text}")
+        if cause_text:
+            diagnosis_lines.append(f"🧬 원인: {cause_text}")
 
-        # 제목
-        blocks.append(self.builder.heading_3(f"{style['emoji']} {style['title']}"))
-
-        # 문단형 강조 텍스트
+        blocks.append(self.builder.heading_3("🔍 핵심 진단"))
         blocks.append(self.builder.callout(
-            text,
-            emoji=style["emoji"],
-            color=style["color"]
+            "\n".join(diagnosis_lines),
+            emoji="🔍",
+            color="red_background"
         ))
+        blocks.append(self.builder.paragraph(""))
 
+     # 2) 솔루션 섹션 (action)
+     action_card = card_map.get("action", {})
+     action_text = str(action_card.get("text", "")).strip()
+     action_items = action_card.get("items", [])
+
+     has_action_items = isinstance(action_items, list) and len(action_items) > 0
+     if action_text or has_action_items:
+        blocks.append(self.builder.heading_3("✅ 당신을 위한 맞춤 솔루션"))
+
+        if action_text:
+            blocks.append(self.builder.callout(
+                action_text,
+                emoji="💡",
+                color="green_background"
+            ))
+
+        if has_action_items:
+            for idx, item in enumerate(action_items, 1):
+                if isinstance(item, dict):
+                    item_title = str(item.get("title", "")).strip()
+                    item_detail = str(item.get("detail", "")).strip()
+
+                    if item_title and item_detail:
+                        item_text = f"{idx}. {item_title}: {item_detail}"
+                    elif item_title:
+                        item_text = f"{idx}. {item_title}"
+                    elif item_detail:
+                        item_text = f"{idx}. {item_detail}"
+                    else:
+                        continue
+                else:
+                    item_text = str(item).strip()
+                    if not item_text:
+                        continue
+                    item_text = f"{idx}. {item_text}"
+
+                blocks.append(self.builder.bulleted_list_item(item_text))
+
+        blocks.append(self.builder.paragraph(""))
+
+     # 3) 시뮬레이션 섹션 (simulation)
+     simulation_text = str(card_map.get("simulation", {}).get("text", "")).strip()
+     if simulation_text:
+        blocks.append(self.builder.heading_3("📈 예상 효과"))
+        blocks.append(self.builder.quote(
+            f"미래 예측: {simulation_text}",
+            color="blue_background"
+        ))
         blocks.append(self.builder.paragraph(""))
 
      return blocks
 
     
     def _create_reliability(self, score: float) -> List[Dict[str, Any]]:
-        """신뢰도 Progress Bar 스타일"""
-        blocks = []
-        
-        # 레벨 판정
-        if score >= 0.9:
-            level, emoji, color = "Verified", "✅", "green_background"
-            bar = "🟩" * 10
-        elif score >= 0.8:
-            level, emoji, color = "Excellent", "🌟", "green_background"
-            bar = "🟩" * 8 + "⬜" * 2
-        elif score >= 0.7:
-            level, emoji, color = "Good", "👍", "blue_background"
-            bar = "🟦" * 7 + "⬜" * 3
-        elif score >= 0.5:
-            level, emoji, color = "Fair", "⚡", "yellow_background"
-            bar = "🟨" * 5 + "⬜" * 5
-        else:
-            level, emoji, color = "Needs Review", "⚠️", "yellow_background"
-            bar = "🟥" * 3 + "⬜" * 7
-        
-        score_percent = int(score * 100)
-        
-        blocks.append(self.builder.heading_3("📊 신뢰도 평가"))
-        blocks.append(self.builder.callout(
-            f"{emoji} {score_percent}% - {level}\n\n{bar}",
-            emoji="📊",
-            color=color
-        ))
-        blocks.append(self.builder.paragraph(""))
-        
-        return blocks
+        """신뢰도 점수를 직관적인 게이지로 표시"""
+        percent = int(max(0.0, min(1.0, score)) * 100)
+        filled_blocks = int(max(0.0, min(1.0, score)) * 10)
+        bar = "🟩" * filled_blocks + "⬜" * (10 - filled_blocks)
+
+        return [
+            self.builder.paragraph(f"데이터 분석 신뢰도: {percent}%", bold=True),
+            self.builder.paragraph(bar)
+        ]
     
     def _create_evidence(self, evidence_refs: Dict[str, Any]) -> List[Dict[str, Any]]:
         """과학적 근거 (Toggle로 접기)"""

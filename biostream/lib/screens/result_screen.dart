@@ -588,7 +588,7 @@ class _ResultScreenState extends State<ResultScreen> {
       case 'action':
         return '당신에게 필요한 행동 3가지';
       case 'simulation':
-        return '예상 경로';
+        return '예상 효과';
       default:
         return '';
     }

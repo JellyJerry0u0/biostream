@@ -6,6 +6,7 @@ MCP (Model Context Protocol)를 사용하여 Notion API와 통신
 import os
 import sys
 import asyncio
+import json
 from typing import Dict, Any, List, Optional
 
 # 경로 설정
@@ -115,6 +116,33 @@ class NotionMCPClient:
                 "success": False,
                 "error": str(e)
             }
+
+    @staticmethod
+    def _extract_page_data(content_item: Any) -> Dict[str, Any]:
+        """MCP content item에서 페이지 JSON(dict) 추출"""
+        if isinstance(content_item, dict):
+            return content_item
+
+        raw_text = ""
+        if hasattr(content_item, "text"):
+            raw_text = getattr(content_item, "text") or ""
+        elif isinstance(content_item, str):
+            raw_text = content_item
+        else:
+            raw_text = str(content_item)
+
+        raw_text = raw_text.strip()
+        if not raw_text:
+            return {}
+
+        try:
+            parsed = json.loads(raw_text)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+
+        return {}
     
     def list_tools(self) -> List[str]:
         """사용 가능한 도구 목록 (동기 래퍼)"""
@@ -189,21 +217,18 @@ class NotionMCPClient:
                 return result
             
             # 결과 파싱
-            page_data = result.get("result", [{}])[0]
-            if isinstance(page_data, dict):
-                page_id = page_data.get("id") or page_data.get("page_id")
-                page_url = page_data.get("url") or f"https://notion.so/{page_id}"
-            else:
-                # 텍스트 응답인 경우 파싱
-                import json
-                try:
-                    parsed = json.loads(str(page_data))
-                    page_id = parsed.get("id")
-                    page_url = parsed.get("url")
-                except:
-                    # 단순 ID만 반환된 경우
-                    page_id = str(page_data).strip()
-                    page_url = f"https://notion.so/{page_id}"
+            result_content = result.get("result", [])
+            first_item = result_content[0] if result_content else {}
+            page_data = self._extract_page_data(first_item)
+
+            page_id = page_data.get("id") or page_data.get("page_id")
+            page_url = page_data.get("url") or page_data.get("public_url")
+
+            # 파싱 실패 fallback
+            if not page_id:
+                page_id = str(first_item).strip()
+            if not page_url and page_id:
+                page_url = f"https://notion.so/{page_id}"
             
             print(f"✅ [Notion MCP] 페이지 생성 완료 (페이지 ID: {page_id})")
             
