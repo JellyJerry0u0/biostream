@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/responsive.dart';
-import 'facescan_screen.dart';
+import 'home_screen.dart';
 import 'signup_screen.dart';
 import '../services/auth_service.dart';
 
@@ -38,9 +38,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   if (result['success']) {
     debugPrint('${result['nickname']}님 환영합니다!');
-    // 로그인 성공 시 FaceScanScreen으로 이동
+    // 로그인 성공 시 메인 홈 화면으로 이동
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const FaceScanScreen()),
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
     );
   } else {
     _showSnackBar(result['message']);

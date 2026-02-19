@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/responsive.dart';
+import 'home_screen.dart';
 import 'login_screen.dart';
 import '../services/auth_service.dart';
 
@@ -138,10 +139,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
     debugPrint('[SignUpScreen] 회원가입 결과: $result');
 
     if (result['success']) {
-      _showSnackBar('회원가입 성공! 로그인해주세요.');
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      final loginResult = await _authService.login(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
+
+      if (!mounted) return;
+
+      if (loginResult['success'] == true) {
+        _showSnackBar('회원가입 및 로그인 성공!');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else {
+        _showSnackBar('회원가입 성공! 로그인해주세요.');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
     } else {
       _showSnackBar(result['message']);
     }
