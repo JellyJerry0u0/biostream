@@ -527,6 +527,7 @@ def calculate_user_profile_derived(user_id: int, survey: dict) -> Dict[str, Any]
     """사용자 기본 정보로부터 파생 지표 계산 (BMI, age_bucket, gender_label 등)"""
     profile = {
         "user_id": user_id,
+        "nickname": None,
         "gender": None,
         "age": None,
         "age_bucket": None,
@@ -542,6 +543,7 @@ def calculate_user_profile_derived(user_id: int, survey: dict) -> Dict[str, Any]
         db = next(db_gen)
         user = db.query(User).filter(User.id == user_id).first()
         if user:
+            profile["nickname"] = user.nickname
             profile["gender"] = user.gender
             if user.birthdate:
                 today = date.today()
@@ -3139,6 +3141,8 @@ def assemble_report(state: ReportState) -> ReportState:
             }
     
     final_report = {
+        "user_id": state.get("user_id"),
+        "user_name": (state.get("user_profile") or {}).get("nickname") or "사용자",
         "tabs": sections,
         "sections": sections_dict,
         "survey_summary": {

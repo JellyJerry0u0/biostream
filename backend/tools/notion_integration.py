@@ -72,6 +72,32 @@ def _format_generated_at_for_title(generated_at: Any) -> str:
     return f"{dt:%Y-%m-%d} {period} {hour_12}:{dt:%M}"
 
 
+def _resolve_user_name(final_report: Dict[str, Any], user_id: Optional[int] = None) -> str:
+    """리포트 사용자 이름(닉네임) 결정: final_report 우선, 없으면 DB 조회"""
+    raw_name = str(final_report.get("user_name", "")).strip()
+    if raw_name and raw_name != "사용자":
+        return raw_name
+
+    resolved_user_id = user_id if user_id is not None else final_report.get("user_id")
+    if not resolved_user_id:
+        return "사용자"
+
+    try:
+        from app.database import get_db
+        from app.models import User
+
+        db_gen = get_db()
+        db = next(db_gen)
+        try:
+            user = db.query(User).filter(User.id == resolved_user_id).first()
+            nickname = str(getattr(user, "nickname", "")).strip() if user else ""
+            return nickname or "사용자"
+        finally:
+            db.close()
+    except Exception:
+        return "사용자"
+
+
 class NotionMCPClient:
     """Notion MCP 클라이언트"""
     
@@ -352,7 +378,7 @@ def export_report_to_notion(final_report: Dict[str, Any]) -> Dict[str, Any]:
         survey_summary = final_report.get("survey_summary", {})
         outcomes = survey_summary.get("outcomes", [])
         generated_at = _format_generated_at_for_title(final_report.get("generated_at", ""))
-        user_name = final_report.get("user_name", "사용자")
+        user_name = _resolve_user_name(final_report)
         
         #사용자 이름이 제목에 포함되게 수정 ex> "***사용자의 분석 리포트 결과- 2026-02-10 15:30:00"
         title = f"{user_name}님의 분석 리포트 결과 - {generated_at}"
@@ -420,7 +446,7 @@ def export_report_from_db_to_notion(
         survey_summary = final_report.get("survey_summary", {})
         outcomes = survey_summary.get("outcomes", [])
         generated_at = _format_generated_at_for_title(final_report.get("generated_at", ""))
-        user_name = final_report.get("user_name", "사용자")
+        user_name = _resolve_user_name(final_report, user_id=user_id)
         title = f"{user_name}님의 분석 리포트 결과 - {generated_at}"
         
         # 4. Notion MCP Client로 페이지 생성
