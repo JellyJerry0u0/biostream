@@ -13,6 +13,8 @@ from app.database import get_db
 from app import models
 from app.auth.security import verify_token
 
+from app.services.image_service import image_service
+
 # MCP tools 함수 import (MCP 서버의 함수를 사용)
 try:
     # 컨테이너 환경에서 MCP 서버의 tools 모듈 import
@@ -237,3 +239,18 @@ async def get_image(file_path: str):
     except Exception as e:
         print(f"❌ 이미지 제공 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"이미지 제공 실패: {str(e)}")
+
+@router.post("/generate-aging/{lifestyle_id}")
+async def generate_aging_image(
+    lifestyle_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    노화 이미지 생성 API
+    """
+    result = await image_service.request_aging_simulation(
+        db=db,
+        lifestyle_id=lifestyle_id
+    )
+
+    return result
