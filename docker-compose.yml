@@ -54,6 +54,11 @@ services:
       - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-gemini-embedding-001}  # 임베딩 모델명
       - EMBED_DIM=${EMBED_DIM:-768}
       - REPORT_DEBUG=${REPORT_DEBUG:-0}  # 리포트 생성 디버그 모드 (1로 설정 시 상세 로그)
+      # Notion 설정
+      - ENABLE_NOTION_EXPORT=${ENABLE_NOTION_EXPORT:-true}
+      - NOTION_TOKEN=${NOTION_TOKEN:-}
+      - NOTION_PAGE_ID=${NOTION_PAGE_ID:-}
+      - NOTION_FORMAT_MODE=${NOTION_FORMAT_MODE:-manual}  # manual/llm/compare
       # MCP 서버 도구를 사용하기 위한 환경변수
       - RUNNING_IN_DOCKER=true
       - DB_HOST_DOCKER=db

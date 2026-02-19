@@ -293,8 +293,10 @@ def export_report_to_notion(final_report: Dict[str, Any]) -> Dict[str, Any]:
         survey_summary = final_report.get("survey_summary", {})
         outcomes = survey_summary.get("outcomes", [])
         generated_at = final_report.get("generated_at", "")
+        user_name = final_report.get("user_name", "사용자")
         
-        title = f"report-{generated_at}"
+        #사용자 이름이 제목에 포함되게 수정 ex> "***사용자의 분석 리포트 결과- 2026-02-10 15:30:00"
+        title = f"{user_name}님의 분석 리포트 결과 - {generated_at}"
         
         # 4. Notion 페이지 생성
         result = client.create_page(title=title, blocks=blocks)
@@ -359,7 +361,8 @@ def export_report_from_db_to_notion(
         survey_summary = final_report.get("survey_summary", {})
         outcomes = survey_summary.get("outcomes", [])
         generated_at = final_report.get("generated_at", "")
-        title = f"BioStream 리포트 - User {user_id} - {', '.join(outcomes[:2])} - {generated_at}"
+        user_name = final_report.get("user_name", "사용자")
+        title = f"{user_name}님의 분석 리포트 결과 - {generated_at}"
         
         # 4. Notion MCP Client로 페이지 생성
         client = NotionMCPClient()

@@ -38,6 +38,7 @@ from tools.qdrant_search import qdrant_search
 from tools.report_store import save_report
 from tools.schemas import QdrantSearchInput, EvidenceItem
 from tools.notion_integration import export_report_to_notion
+#from tools.notion_integration_mcp import export_report_to_notion
 from app.database import get_db
 from app.models import User
 from datetime import date

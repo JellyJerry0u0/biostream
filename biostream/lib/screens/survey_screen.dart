@@ -1287,15 +1287,18 @@ class _SurveyScreenState extends State<SurveyScreen> {
                 ? '미입력'
                 : _outcomes.map((o) {
                     final labels = {
-                      'wrinkle': '주름',
-                      'elasticity': '탄력',
-                      'pigmentation': '색소',
-                      'hydration': '수분',
-                      'hydration_barrier': '장벽',
-                      'acne': '여드름',
-                      'redness': '홍조',
-                      'general_aging': '전체 노화',
-                    };
+                     
+  "wrinkles": "주름",
+  "elasticity": "탄력",
+  "pigmentation": "색소침착",
+  "hydration": "수분",
+  "skin_barrier": "피부 장벽",
+  "acne": "여드름",
+  "redness": "홍조",
+  "overall_aging": "전체 노화",
+};
+
+                   
                     return labels[o] ?? o;
                   }).join(', '),
             isDark: isDark,

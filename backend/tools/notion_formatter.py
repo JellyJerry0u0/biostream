@@ -215,27 +215,29 @@ class NotionReportFormatter:
         # 🎨 카드 타입별 스타일
         self.card_styles = {
             "problem": {
-                "title": "🔍 문제 진단",
+                "title": "문제 진단",
                 "emoji": "🔍",
                 "color": "red_background"
             },
             "cause": {
-                "title": "🧬 원인 분석",
+                "title": "원인 분석",
                 "emoji": "🧬",
                 "color": "orange_background"
             },
+            #왜 실제 노션에서는 실천 방안이 보이지 않을까?
             "action": {
-                "title": "💡 실천 방안",
+                "title": "실천 방안",
                 "emoji": "💡",
                 "color": "green_background"
             },
             "simulation": {
-                "title": "📊 예상 효과",
+                "title": "예상 효과",
                 "emoji": "📊",
                 "color": "blue_background"
             }
         }
     
+    #핵심 컨트롤러
     def convert_report_to_blocks(self, final_report: Dict[str, Any]) -> List[Dict[str, Any]]:
         """리포트를 Notion Block으로 변환"""
         blocks = []
@@ -266,24 +268,55 @@ class NotionReportFormatter:
         
         return blocks
     
+    #리포트 상단 디자인 생성
     def _create_hero_section(self, final_report: Dict[str, Any]) -> List[Dict[str, Any]]:
         """멋진 Hero Section 생성"""
         blocks = []
         
         # 메인 타이틀
-        blocks.append(self.builder.heading_1("🧬 BioStream 개인 맞춤 건강 리포트"))
-        blocks.append(self.builder.paragraph(""))
-        
+        blocks.append(self.builder.heading_1("🧬 개인 맞춤 건강 리포트 결과"))
+        blocks.append(self.builder.paragraph("AI 기반 피부 분석 및 맞춤 케어 인사이트 제공"))
+        blocks.append(self.builder.divider())
+
         # 요약 정보 Callout
         survey_summary = final_report.get("survey_summary", {})
         generated_at = final_report.get("generated_at", "")
         
         if survey_summary:
-            summary_text = self._format_summary(survey_summary)
+           
+            outcomes = survey_summary.get("outcomes", [])
+            target_years = survey_summary.get("target_years", 30)
+            
+            outcome_labels = {
+                "wrinkles": "주름",
+                "elasticity": "탄력",
+                "pigmentation": "색소침착",
+                "hydration": "수분",
+                "skin_barrier": "피부 장벽",
+                "acne": "여드름",
+                "redness": "홍조",
+                "overall_aging": "전체 노화"
+            }
+
+            outcome_text = ", ".join([outcome_labels.get(o, o) for o in outcomes])
+
+            #KPI 스타일 카드 3개 
             blocks.append(self.builder.callout(
-                f"🎯 {summary_text}\n\n📅 리포트 생성: {generated_at}",
-                emoji="🧬",
-                color="purple_background"
+            f" **주요 피부 고민**\n{outcome_text}",
+            emoji="🎯",
+            color="purple_background"
+        ))
+ 
+            blocks.append(self.builder.callout(
+            f" **목표 연령**\n{target_years}세",
+            emoji="🎂",
+            color="blue_background"
+        ))
+
+            blocks.append(self.builder.callout(
+                f"**리포트 생성**\n{generated_at}",
+                emoji="📅",
+                color="gray_background"
             ))
         
         blocks.append(self.builder.divider())
@@ -291,11 +324,26 @@ class NotionReportFormatter:
         
         # 안내 메시지
         intro = (
-            "이 리포트는 당신의 생활습관 데이터와 최신 과학 연구를 기반으로 "
+            "이 리포트는 당신의 생활습관 데이터와 관련 연구 자료를 기반으로 "
             "개인 맞춤형 건강 개선 방안을 제시합니다. "
             "각 섹션은 문제 진단, 원인 분석, 실천 방안, 예상 효과로 구성되어 있습니다."
         )
         blocks.append(self.builder.callout(intro, emoji="💡", color="gray_background"))
+
+        generated_image_url = final_report.get("generated_image_url")
+        if generated_image_url:
+            blocks.append(self.builder.paragraph(""))
+            blocks.append(self.builder.heading_3("🖼️ AI 예측 시뮬레이션"))
+            blocks.append(self.builder.callout(
+                "아래 이미지는 현재 입력 데이터를 바탕으로 생성된 AI 예측 이미지입니다.",
+                emoji="🔮",
+                color="blue_background"
+            ))
+            blocks.append(self.builder.image(
+                generated_image_url,
+                caption="AI 생성 미래 예측 이미지"
+            ))
+
         blocks.append(self.builder.divider())
         blocks.append(self.builder.paragraph(""))
         
@@ -307,12 +355,21 @@ class NotionReportFormatter:
         target_years = survey_summary.get("target_years", 30)
         
         outcome_labels = {
-            "acne": "여드름", "wrinkles": "주름", "pigmentation": "색소침착",
-            "skin_tone": "피부톤", "elasticity": "탄력", "texture": "결", "redness": "홍조"
+           {
+  "wrinkles": "주름",
+  "elasticity": "탄력",
+  "pigmentation": "색소침착",
+  "hydration": "수분",
+  "skin_barrier": "피부 장벽",
+  "acne": "여드름",
+  "redness": "홍조",
+  "overall_aging": "전체 노화"
+}
+
         }
         
         outcome_text = ", ".join([outcome_labels.get(o, o) for o in outcomes])
-        return f"분석 목표: {outcome_text} | 목표 기간: {target_years}세까지"
+        return f"주요 피부 고민: {outcome_text} | 목표 연도: {target_years}세"
     
     def _create_section(self, section_key: str, section_data: Dict[str, Any], section_number: int) -> List[Dict[str, Any]]:
         """섹션 생성"""
@@ -346,10 +403,11 @@ class NotionReportFormatter:
         elif "cards" in section_data:
             blocks.extend(self._create_cards(section_data.get("cards", [])))
         
+        
         # 신뢰도 점수
-        reliability_score = section_data.get("reliability_score")
-        if reliability_score is not None:
-            blocks.extend(self._create_reliability(reliability_score))
+        #reliability_score = section_data.get("reliability_score")
+        #if reliability_score is not None:
+         #   blocks.extend(self._create_reliability(reliability_score))
         
         # 과학적 근거
         evidence_refs = section_data.get("evidence_refs", {})
@@ -357,7 +415,7 @@ class NotionReportFormatter:
             blocks.extend(self._create_evidence(evidence_refs))
         
         # AI 예측 이미지
-        image_url = section_data.get("future_image_url")
+        image_url = section_data.get("future_image_url") or section_data.get("image_url")
         if image_url:
             blocks.extend(self._create_image_section(image_url, theme))
         
@@ -377,30 +435,35 @@ class NotionReportFormatter:
         return blocks
     
     def _create_cards(self, cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """카드 생성 (Heading 3 + Quote 스타일)"""
-        blocks = []
-        
-        for card in cards:
-            card_type = card.get("type", "")
-            text = card.get("text", "")
-            
-            if not text:
-                continue
-            
-            style = self.card_styles.get(card_type, {
-                "title": card_type,
-                "emoji": "📝",
-                "color": "gray_background"
-            })
-            
-            # 카드 제목
-            blocks.append(self.builder.heading_3(f"{style['emoji']} {style['title']}"))
-            
-            # 카드 내용 (Quote로 강조)
-            blocks.append(self.builder.quote(text, color=style["color"]))
-            blocks.append(self.builder.paragraph(""))
-        
-        return blocks
+     blocks = []
+
+     for card in cards:
+        card_type = card.get("type", "")
+        text = card.get("text", "")
+
+        if not text:
+            continue
+
+        style = self.card_styles.get(card_type, {
+            "title": card_type,
+            "emoji": "📝",
+            "color": "gray_background"
+        })
+
+        # 제목
+        blocks.append(self.builder.heading_3(f"{style['emoji']} {style['title']}"))
+
+        # 문단형 강조 텍스트
+        blocks.append(self.builder.callout(
+            text,
+            emoji=style["emoji"],
+            color=style["color"]
+        ))
+
+        blocks.append(self.builder.paragraph(""))
+
+     return blocks
+
     
     def _create_reliability(self, score: float) -> List[Dict[str, Any]]:
         """신뢰도 Progress Bar 스타일"""
@@ -573,6 +636,7 @@ def load_report_from_db(user_id: int, lifestyle_id: Optional[int] = None) -> Opt
         db.close()
 
 
+# 리포트를 Notion Block으로 변환하는 메인 함수
 def format_report_to_notion(final_report: Dict[str, Any], output_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """리포트를 Notion Block으로 변환"""
     formatter = NotionReportFormatter()
@@ -586,7 +650,7 @@ def format_report_to_notion(final_report: Dict[str, Any], output_file: Optional[
         except Exception as e:
             print(f"⚠️ 파일 저장 실패: {e}")
     
-    return blocks
+    return blocks #Notion에 바로 POST 가능한 블록 리스트 반환
 
 
 # ════════════════════════════════════════════════════════════════
