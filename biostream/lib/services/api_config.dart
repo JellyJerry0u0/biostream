@@ -3,6 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 class ApiConfig {
+  /// 카카오 Native App Key (developers.kakao.com에서 앱 생성 후 발급)
+  /// 실제 키로 교체 후 사용하세요.
+  static const String kakaoNativeAppKey = '2a989319843d4d7fa3409daeb094d0ca';
+
   static const String _keyBaseOrigin = 'api_base_origin';
 
   static const String _releaseOrigin =

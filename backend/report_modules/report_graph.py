@@ -2223,6 +2223,13 @@ def _build_card_prompt_enhanced(section: str, survey: dict, section_quant: dict,
     # 섹션별 개인화 강조
     personalization_note = _get_personalization_note(section, survey)
     
+    # 프로필 정보가 없을 때 LLM이 예시를 그대로 복사하지 않도록 명시적 지시
+    profile_guidance = (
+        '예: "30대 중반 남성에서", "BMI가 높은 편이라", "연령대 특성상..."'
+        if profile_text != "사용자 기본 정보 없음"
+        else '⚠️ 성별·연령 정보가 없습니다. "30대 남성", "여성" 등 추측하지 말고, 연령/성별을 특정하는 표현을 사용하지 마세요. 중립적 표현으로 작성하세요.'
+    )
+    
     return f"""섹션: {section}
 
 ⚠️ 중요: 반드시 사용자 설문 데이터와 구조화된 주장(claims)을 바탕으로 개인화된 리포트를 작성하세요.
@@ -2236,7 +2243,7 @@ def _build_card_prompt_enhanced(section: str, survey: dict, section_quant: dict,
 
 [사용자 기본 정보 - 의학적으로 자연스럽게 반영하세요]
 {profile_text}
-예: "30대 중반 남성에서", "BMI가 높은 편이라", "연령대 특성상..."
+{profile_guidance}
 
 [정량 근거]
 {quant_text}

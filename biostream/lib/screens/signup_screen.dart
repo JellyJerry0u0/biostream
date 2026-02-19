@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/responsive.dart';
+import 'facescan_screen.dart';
 import 'login_screen.dart';
 import '../services/auth_service.dart';
 
@@ -157,9 +158,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  void _onKakaoSignUp() {
-    // TODO: Implement Kakao sign up
-    debugPrint('Kakao sign up tapped');
+  void _onKakaoSignUp() async {
+    _showSnackBar('카카오로 가입 중...');
+    final result = await _authService.loginWithKakao();
+    if (!mounted) return;
+    if (result['success']) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const FaceScanScreen()),
+      );
+    } else {
+      _showSnackBar(result['message']);
+    }
   }
 
   @override

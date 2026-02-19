@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/responsive.dart';
 import 'facescan_screen.dart';
+import 'profile_completion_screen.dart';
 import 'signup_screen.dart';
 import '../services/auth_service.dart';
 
@@ -64,9 +65,23 @@ void _showSnackBar(String message) {
     );
   }
 
-  void _onKakaoLogin() {
-    // TODO: Implement Kakao login
-    debugPrint('Kakao login tapped');
+  void _onKakaoLogin() async {
+    _showSnackBar('카카오 로그인 중...');
+    final result = await _authService.loginWithKakao();
+    if (!mounted) return;
+    if (result['success']) {
+      if (result['needs_profile'] == true) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const ProfileCompletionScreen()),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const FaceScanScreen()),
+        );
+      }
+    } else {
+      _showSnackBar(result['message']);
+    }
   }
 
   @override
