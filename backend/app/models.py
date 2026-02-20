@@ -27,6 +27,19 @@ class User(Base):
 
     # User와 Lifestyle 간의 일대다 관계 설정(한명의 유저는 여러번 설문 조사 가능)
     lifestyles=relationship("Lifestyle", back_populates="owner")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    profile_image_url = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="profile")
 
 
 #설문 조사 데이터 모델

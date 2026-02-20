@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/responsive.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
@@ -12,6 +13,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const String _keyProfileEmail = 'profile_email';
+  static const String _keyProfileNickname = 'profile_nickname';
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
@@ -24,32 +28,40 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   final _authService = AuthService(); // 서비스 인스턴스 추가
-  
+
   void _onLogin() async {
-  if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-    _showSnackBar('이메일과 비밀번호를 모두 입력해주세요.');
-    return;
-  }
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showSnackBar('이메일과 비밀번호를 모두 입력해주세요.');
+      return;
+    }
 
-  final result = await _authService.login(
-    _emailController.text.trim(),
-    _passwordController.text,
-  );
-
-  if (result['success']) {
-    debugPrint('${result['nickname']}님 환영합니다!');
-    // 로그인 성공 시 메인 홈 화면으로 이동
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+    final result = await _authService.login(
+      _emailController.text.trim(),
+      _passwordController.text,
     );
-  } else {
-    _showSnackBar(result['message']);
-  }
-}
 
-void _showSnackBar(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-}
+    if (result['success']) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyProfileEmail, _emailController.text.trim());
+      final nickname = (result['nickname'] ?? '').toString().trim();
+      if (nickname.isNotEmpty) {
+        await prefs.setString(_keyProfileNickname, nickname);
+      }
+
+      debugPrint('${result['nickname']}님 환영합니다!');
+      // 로그인 성공 시 메인 홈 화면으로 이동
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } else {
+      _showSnackBar(result['message']);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 
   void _onForgotPassword() {
     // TODO: Navigate to forgot password screen
@@ -167,7 +179,9 @@ void _showSnackBar(String message) {
                             style: TextStyle(
                               fontSize: Responsive.fontSize(context, 30),
                               fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : const Color(0xFF101B0D),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF101B0D),
                               letterSpacing: -0.5,
                             ),
                             textAlign: TextAlign.center,
@@ -178,7 +192,8 @@ void _showSnackBar(String message) {
                             '미래의 나를 만나는 시간,\n지금 바로 시작하세요.',
                             style: TextStyle(
                               fontSize: Responsive.fontSize(context, 14),
-                              color: isDark ? Colors.grey[400] : Colors.grey[500],
+                              color:
+                                  isDark ? Colors.grey[400] : Colors.grey[500],
                               height: 1.5,
                             ),
                             textAlign: TextAlign.center,
@@ -188,7 +203,8 @@ void _showSnackBar(String message) {
                     ),
                     // Form Section
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: horizontalPadding),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: maxWidth),
                         child: Column(
@@ -205,9 +221,12 @@ void _showSnackBar(String message) {
                                     child: Text(
                                       '이메일',
                                       style: TextStyle(
-                                        fontSize: Responsive.fontSize(context, 14),
+                                        fontSize:
+                                            Responsive.fontSize(context, 14),
                                         fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.white : Colors.black87,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
                                       ),
                                     ),
                                   ),
@@ -237,28 +256,36 @@ void _showSnackBar(String message) {
                                     keyboardType: TextInputType.emailAddress,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      fontSize: Responsive.fontSize(context, 16),
-                                      color: isDark ? Colors.white : Colors.black87,
+                                      fontSize:
+                                          Responsive.fontSize(context, 16),
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
                                     ),
                                     decoration: InputDecoration(
                                       hintText: 'example@email.com',
                                       hintStyle: TextStyle(
                                         color: Colors.grey[400],
-                                        fontSize: Responsive.fontSize(context, 16),
+                                        fontSize:
+                                            Responsive.fontSize(context, 16),
                                       ),
                                       border: InputBorder.none,
                                       contentPadding: EdgeInsets.symmetric(
-                                        horizontal: Responsive.padding(context, 20),
-                                        vertical: Responsive.padding(context, 16),
+                                        horizontal:
+                                            Responsive.padding(context, 20),
+                                        vertical:
+                                            Responsive.padding(context, 16),
                                       ),
                                       suffixIcon: Padding(
                                         padding: EdgeInsets.only(
-                                          right: Responsive.padding(context, 16),
+                                          right:
+                                              Responsive.padding(context, 16),
                                         ),
                                         child: Icon(
                                           Icons.mail_outline,
                                           color: Colors.grey[400],
-                                          size: Responsive.iconSize(context, 20),
+                                          size:
+                                              Responsive.iconSize(context, 20),
                                         ),
                                       ),
                                     ),
@@ -279,9 +306,12 @@ void _showSnackBar(String message) {
                                     child: Text(
                                       '비밀번호',
                                       style: TextStyle(
-                                        fontSize: Responsive.fontSize(context, 14),
+                                        fontSize:
+                                            Responsive.fontSize(context, 14),
                                         fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.white : Colors.black87,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
                                       ),
                                     ),
                                   ),
@@ -311,23 +341,30 @@ void _showSnackBar(String message) {
                                     obscureText: _obscurePassword,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      fontSize: Responsive.fontSize(context, 16),
-                                      color: isDark ? Colors.white : Colors.black87,
+                                      fontSize:
+                                          Responsive.fontSize(context, 16),
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
                                     ),
                                     decoration: InputDecoration(
                                       hintText: '••••••••',
                                       hintStyle: TextStyle(
                                         color: Colors.grey[400],
-                                        fontSize: Responsive.fontSize(context, 16),
+                                        fontSize:
+                                            Responsive.fontSize(context, 16),
                                       ),
                                       border: InputBorder.none,
                                       contentPadding: EdgeInsets.symmetric(
-                                        horizontal: Responsive.padding(context, 20),
-                                        vertical: Responsive.padding(context, 16),
+                                        horizontal:
+                                            Responsive.padding(context, 20),
+                                        vertical:
+                                            Responsive.padding(context, 16),
                                       ),
                                       suffixIcon: Padding(
                                         padding: EdgeInsets.only(
-                                          right: Responsive.padding(context, 16),
+                                          right:
+                                              Responsive.padding(context, 16),
                                         ),
                                         child: IconButton(
                                           icon: Icon(
@@ -335,11 +372,13 @@ void _showSnackBar(String message) {
                                                 ? Icons.visibility_off_outlined
                                                 : Icons.visibility_outlined,
                                             color: Colors.grey[400],
-                                            size: Responsive.iconSize(context, 20),
+                                            size: Responsive.iconSize(
+                                                context, 20),
                                           ),
                                           onPressed: () {
                                             setState(() {
-                                              _obscurePassword = !_obscurePassword;
+                                              _obscurePassword =
+                                                  !_obscurePassword;
                                             });
                                           },
                                         ),
@@ -392,7 +431,8 @@ void _showSnackBar(String message) {
                                     Text(
                                       '로그인',
                                       style: TextStyle(
-                                        fontSize: Responsive.fontSize(context, 18),
+                                        fontSize:
+                                            Responsive.fontSize(context, 18),
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -425,7 +465,8 @@ void _showSnackBar(String message) {
                                   child: Text(
                                     'SNS 계정으로 간편 로그인',
                                     style: TextStyle(
-                                      fontSize: Responsive.fontSize(context, 12),
+                                      fontSize:
+                                          Responsive.fontSize(context, 12),
                                       fontWeight: FontWeight.w500,
                                       color: isDark
                                           ? Colors.grey[500]
@@ -488,9 +529,8 @@ void _showSnackBar(String message) {
                       child: TextButton(
                         onPressed: _onSignUp,
                         style: TextButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.grey[400]
-                              : Colors.grey[500],
+                          foregroundColor:
+                              isDark ? Colors.grey[400] : Colors.grey[500],
                           padding: EdgeInsets.zero,
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -500,9 +540,8 @@ void _showSnackBar(String message) {
                           text: TextSpan(
                             style: TextStyle(
                               fontSize: Responsive.fontSize(context, 14),
-                              color: isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[500],
+                              color:
+                                  isDark ? Colors.grey[400] : Colors.grey[500],
                             ),
                             children: [
                               const TextSpan(text: '계정이 없으신가요? '),
@@ -541,36 +580,54 @@ class _KakaoIconPainter extends CustomPainter {
     final path = Path()
       ..moveTo(size.width * 0.5, size.height * 0.125)
       ..cubicTo(
-        size.width * 0.2917, size.height * 0.125,
-        size.width * 0.1667, size.height * 0.2413,
-        size.width * 0.1667, size.height * 0.385,
+        size.width * 0.2917,
+        size.height * 0.125,
+        size.width * 0.1667,
+        size.height * 0.2413,
+        size.width * 0.1667,
+        size.height * 0.385,
       )
       ..cubicTo(
-        size.width * 0.1667, size.height * 0.4683,
-        size.width * 0.2179, size.height * 0.5413,
-        size.width * 0.2979, size.height * 0.5896,
+        size.width * 0.1667,
+        size.height * 0.4683,
+        size.width * 0.2179,
+        size.height * 0.5413,
+        size.width * 0.2979,
+        size.height * 0.5896,
       )
       ..lineTo(size.width * 0.2596, size.height * 0.7325)
       ..cubicTo(
-        size.width * 0.2563, size.height * 0.7433,
-        size.width * 0.2704, size.height * 0.7558,
-        size.width * 0.2808, size.height * 0.7463,
+        size.width * 0.2563,
+        size.height * 0.7433,
+        size.width * 0.2704,
+        size.height * 0.7558,
+        size.width * 0.2808,
+        size.height * 0.7463,
       )
       ..lineTo(size.width * 0.4567, size.height * 0.6296)
       ..cubicTo(
-        size.width * 0.465, size.height * 0.6258,
-        size.width * 0.475, size.height * 0.6258,
-        size.width * 0.5, size.height * 0.6296,
+        size.width * 0.465,
+        size.height * 0.6258,
+        size.width * 0.475,
+        size.height * 0.6258,
+        size.width * 0.5,
+        size.height * 0.6296,
       )
       ..cubicTo(
-        size.width * 0.7083, size.height * 0.6296,
-        size.width * 0.8333, size.height * 0.5133,
-        size.width * 0.8333, size.height * 0.3696,
+        size.width * 0.7083,
+        size.height * 0.6296,
+        size.width * 0.8333,
+        size.height * 0.5133,
+        size.width * 0.8333,
+        size.height * 0.3696,
       )
       ..cubicTo(
-        size.width * 0.8333, size.height * 0.2258,
-        size.width * 0.7083, size.height * 0.125,
-        size.width * 0.5, size.height * 0.125,
+        size.width * 0.8333,
+        size.height * 0.2258,
+        size.width * 0.7083,
+        size.height * 0.125,
+        size.width * 0.5,
+        size.height * 0.125,
       )
       ..close();
 
@@ -580,4 +637,3 @@ class _KakaoIconPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

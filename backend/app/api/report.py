@@ -347,6 +347,150 @@ def get_report(
     }
 
 
+@router.get("/report-archives")
+def get_report_archives(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """현재 사용자의 리포트 아카이브 목록(생성일 + 생성 이미지 URL) 조회"""
+    current_user = get_current_user(authorization, db)
+
+    lifestyles = (
+        db.query(Lifestyle)
+        .filter(
+            Lifestyle.user_id == current_user.id,
+            Lifestyle.health_report_generated_at.isnot(None),
+            Lifestyle.health_report.isnot(None),
+        )
+        .order_by(Lifestyle.health_report_generated_at.desc())
+        .all()
+    )
+
+    origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+    items = []
+
+    for lifestyle in lifestyles:
+        image_url = lifestyle.generated_image_url
+
+        if not image_url and isinstance(lifestyle.health_report, dict):
+            image_url = (
+                lifestyle.health_report.get("generated_image_url")
+                or lifestyle.health_report.get("image_url")
+                or lifestyle.health_report.get("future_image_url")
+            )
+
+        if image_url and os.path.exists(image_url) and "uploads" in image_url:
+            uploads_dir = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "../../uploads")
+            )
+            relative_path = os.path.relpath(image_url, uploads_dir).replace("\\", "/")
+            image_url = f"{origin}/data/image/{relative_path}"
+
+        if not image_url:
+            continue
+
+        items.append(
+            {
+                "lifestyle_id": lifestyle.id,
+                "target_years": lifestyle.target_years,
+                "generated_at": lifestyle.health_report_generated_at.isoformat()
+                if lifestyle.health_report_generated_at
+                else None,
+                "image_url": image_url,
+            }
+        )
+
+    return {
+        "success": True,
+        "items": items,
+        "total_count": len(items),
+    }
+
+
+def _extract_report_summary_text(report: object) -> str:
+    if not isinstance(report, dict):
+        return ""
+
+    final_report = report.get("final_report")
+    if isinstance(final_report, str) and final_report.strip():
+        return final_report.strip()
+
+    report_text = report.get("report")
+    if isinstance(report_text, str) and report_text.strip():
+        return report_text.strip()
+
+    sections = report.get("sections")
+    if isinstance(sections, dict):
+        for _, section in sections.items():
+            if isinstance(section, str) and section.strip():
+                return section.strip()
+            if isinstance(section, dict):
+                cards = section.get("cards")
+                if isinstance(cards, list):
+                    for card in cards:
+                        if not isinstance(card, dict):
+                            continue
+                        text = card.get("text")
+                        if isinstance(text, str) and text.strip():
+                            return text.strip()
+                        items = card.get("items")
+                        if isinstance(items, list):
+                            for item in items:
+                                if not isinstance(item, dict):
+                                    continue
+                                title = str(item.get("title", "")).strip()
+                                detail = str(item.get("detail", "")).strip()
+                                joined = " ".join(part for part in [title, detail] if part)
+                                if joined:
+                                    return joined
+
+    return ""
+
+
+@router.get("/report-history")
+def get_report_history(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """현재 사용자의 과거 리포트 목록(생성일/요약/타겟 연차) 조회"""
+    current_user = get_current_user(authorization, db)
+
+    lifestyles = (
+        db.query(Lifestyle)
+        .filter(
+            Lifestyle.user_id == current_user.id,
+            Lifestyle.health_report_generated_at.isnot(None),
+            Lifestyle.health_report.isnot(None),
+        )
+        .order_by(Lifestyle.health_report_generated_at.desc())
+        .all()
+    )
+
+    items = []
+    for lifestyle in lifestyles:
+        summary_text = _extract_report_summary_text(lifestyle.health_report)
+        if len(summary_text) > 180:
+            summary_text = f"{summary_text[:180].rstrip()}..."
+
+        items.append(
+            {
+                "lifestyle_id": lifestyle.id,
+                "target_years": lifestyle.target_years,
+                "generated_at": lifestyle.health_report_generated_at.isoformat()
+                if lifestyle.health_report_generated_at
+                else None,
+                "summary": summary_text,
+                "notion_url": lifestyle.notion_url,
+            }
+        )
+
+    return {
+        "success": True,
+        "items": items,
+        "total_count": len(items),
+    }
+
+
 @router.patch("/report/{lifestyle_id}/quest-progress")
 def update_quest_progress(
     lifestyle_id: int,

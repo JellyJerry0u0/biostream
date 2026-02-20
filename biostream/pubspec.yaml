@@ -21,6 +21,7 @@ dependencies:
   intl: ^0.19.0  # 날짜 포맷팅용
   web_socket_channel: ^3.0.1  # 코치 챗봇 WebSocket
   url_launcher: ^6.2.5  # URL 열기용 (Notion 링크)
+  share_plus: ^10.0.2  # 외부 앱 공유용
 
 dev_dependencies:
   flutter_test:
