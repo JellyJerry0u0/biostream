@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/lifestyle_service.dart';
 import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
+import 'result_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +24,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _questError;
   int? _lifestyleId;
   List<_QuestItem> _questItems = [];
+  String? _originalImageUrl;
+  String? _generatedImageUrl;
+  String? _predictionPoint;
 
   @override
   void initState() {
@@ -48,6 +52,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final lifestyleData = lifestyleResult['data'];
+    final images = lifestyleData is Map<String, dynamic>
+        ? lifestyleData['images'] as Map<String, dynamic>?
+        : null;
+
+    _originalImageUrl = images?['original_image_url']?.toString();
+    _generatedImageUrl = images?['generated_image_url']?.toString();
+
     final lifestyleId = _toInt(
       lifestyleData is Map<String, dynamic> ? lifestyleData['lifestyle_id'] : null,
     );
@@ -72,6 +83,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final report = reportResult['report'];
+    _predictionPoint = _extractPredictionPoint(report);
+
+    final reportGeneratedImage = _extractGeneratedImageFromReport(report);
+    if ((_generatedImageUrl == null || _generatedImageUrl!.isEmpty) &&
+        reportGeneratedImage.isNotEmpty) {
+      _generatedImageUrl = reportGeneratedImage;
+    }
+
     final extractedItems = _extractSolutionItems(report);
     final completedIdsFromServer = _extractCompletedIdsFromServer(report);
 
@@ -191,6 +210,56 @@ class _HomeScreenState extends State<HomeScreen> {
         .trim();
   }
 
+  String _extractGeneratedImageFromReport(dynamic report) {
+    if (report is! Map<String, dynamic>) return '';
+    final generatedImage = report['generated_image_url']?.toString() ?? '';
+    return generatedImage.trim();
+  }
+
+  String _extractPredictionPoint(dynamic report) {
+    if (report is! Map<String, dynamic>) return '';
+
+    String extractFromCards(List<dynamic>? cards) {
+      if (cards == null) return '';
+      for (final card in cards) {
+        if (card is! Map<String, dynamic>) continue;
+        if (card['type'] != 'simulation') continue;
+        final rawText = (card['text'] ?? '').toString().trim();
+        if (rawText.isNotEmpty) {
+          final firstSentence = rawText.split(RegExp(r'[.!?\n]')).first.trim();
+          return firstSentence;
+        }
+      }
+      return '';
+    }
+
+    final sections = report['sections'];
+    if (sections is Map<String, dynamic>) {
+      for (final section in sections.values) {
+        if (section is! Map<String, dynamic>) continue;
+        final direct = extractFromCards(section['cards'] as List<dynamic>?);
+        if (direct.isNotEmpty) return direct;
+
+        final subsections = section['subsections'];
+        if (subsections is List) {
+          for (final subsection in subsections) {
+            if (subsection is! Map<String, dynamic>) continue;
+            final fromSub = extractFromCards(subsection['cards'] as List<dynamic>?);
+            if (fromSub.isNotEmpty) return fromSub;
+          }
+        }
+      }
+    }
+
+    final cards = report['cards'];
+    if (cards is List<dynamic>) {
+      final fromRoot = extractFromCards(cards);
+      if (fromRoot.isNotEmpty) return fromRoot;
+    }
+
+    return '';
+  }
+
   String _questStorageKey(int lifestyleId) => 'home_quest_done_$lifestyleId';
 
   Set<String> _extractCompletedIdsFromServer(dynamic report) {
@@ -278,6 +347,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         _buildEngineLabel(),
                         const SizedBox(height: 28),
                         _buildSimulationSection(context),
+                        const SizedBox(height: 16),
+                        _buildRecentPredictionSection(context),
                         const SizedBox(height: 20),
                         _buildQuestSection(context),
                         const SizedBox(height: 28),
@@ -533,6 +604,188 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _buildQuestItem(item),
               );
             }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentPredictionSection(BuildContext context) {
+    final hasOriginal = _originalImageUrl != null && _originalImageUrl!.isNotEmpty;
+    final hasGenerated = _generatedImageUrl != null && _generatedImageUrl!.isNotEmpty;
+    final hasPoint = _predictionPoint != null && _predictionPoint!.isNotEmpty;
+
+    if (!hasOriginal && !hasGenerated && !hasPoint) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              '최근 노화 예측 결과',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ResultScreen()),
+                );
+              },
+              child: const Text(
+                '전체 보기',
+                style: TextStyle(
+                  color: _primary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _gameCard,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Row(
+            children: [
+              _buildPredictionImage(
+                imageUrl: _originalImageUrl,
+                fallbackLabel: 'NOW',
+              ),
+              const SizedBox(width: 10),
+              _buildPredictionImage(
+                imageUrl: _generatedImageUrl,
+                fallbackLabel: '+YEARS',
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '예측 포인트',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      hasPoint ? _predictionPoint! : '최근 예측 결과를 확인해보세요.',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 38,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ResultScreen()),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: _backgroundDark,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        child: const Text(
+                          'AI 분석 리포트',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPredictionImage({
+    required String? imageUrl,
+    required String fallbackLabel,
+  }) {
+    return Container(
+      width: 78,
+      height: 108,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _primary.withValues(alpha: 0.25)),
+        color: Colors.white.withValues(alpha: 0.05),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          if (imageUrl != null && imageUrl.isNotEmpty)
+            Positioned.fill(
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      color: Colors.white.withValues(alpha: 0.35),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            Container(
+              color: Colors.white.withValues(alpha: 0.04),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.image_outlined,
+                color: Colors.white.withValues(alpha: 0.35),
+              ),
+            ),
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                fallbackLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
