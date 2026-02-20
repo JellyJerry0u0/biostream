@@ -1,14 +1,40 @@
 #사용자의 요청을 받아 DB에 저장하고 인증 토큰을 발급하는 
 
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import time
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import User, UserProfile
 from app.auth.security import hash_password, verify_password, create_access_token
 from pydantic import BaseModel, EmailStr
 from datetime import date
 
 router = APIRouter()
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _get_user_from_auth(authorization: Optional[str], db: Session) -> User:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
+
+    token = authorization.replace("Bearer ", "")
+    from app.auth.security import verify_token
+
+    email = verify_token(token)
+    if not email:
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    return user
 
 # 입력을 위한 데이터 모델
 class UserCreate(BaseModel):
@@ -145,3 +171,80 @@ def kakao_login(user_in: KakaoLogin, db: Session = Depends(get_db)):
     # 4. 우리 서비스 전용 JWT 토큰 발급
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer", "nickname": user.nickname}
+
+
+@router.get("/me")
+def get_my_profile(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    user = _get_user_from_auth(authorization, db)
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+
+    image_url = None
+    if profile and profile.profile_image_url:
+        raw_path = profile.profile_image_url
+        origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+        if os.path.exists(raw_path) and UPLOAD_DIR in raw_path:
+            relative_path = os.path.relpath(raw_path, UPLOAD_DIR)
+            image_url = f"{origin}/data/image/{relative_path}"
+        else:
+            image_url = raw_path
+
+    return {
+        "email": user.email,
+        "nickname": user.nickname,
+        "profile_image_url": image_url,
+    }
+
+
+@router.put("/me")
+async def update_my_profile(
+    nickname: str = Form(...),
+    email: EmailStr = Form(...),
+    profile_image: Optional[UploadFile] = File(None),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    user = _get_user_from_auth(authorization, db)
+
+    existing_user = db.query(User).filter(User.email == email, User.id != user.id).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+
+    user.nickname = nickname
+    user.email = email
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=user.id)
+        db.add(profile)
+
+    if profile_image is not None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        safe_name = f"profile_{user.id}_{timestamp}_{profile_image.filename}"
+        save_path = os.path.join(UPLOAD_DIR, safe_name)
+        contents = await profile_image.read()
+        with open(save_path, "wb") as f:
+            f.write(contents)
+        profile.profile_image_url = save_path
+
+    db.commit()
+    db.refresh(user)
+    db.refresh(profile)
+
+    origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+    image_url = None
+    if profile.profile_image_url:
+        if os.path.exists(profile.profile_image_url) and UPLOAD_DIR in profile.profile_image_url:
+            relative_path = os.path.relpath(profile.profile_image_url, UPLOAD_DIR)
+            image_url = f"{origin}/data/image/{relative_path}"
+        else:
+            image_url = profile.profile_image_url
+
+    return {
+        "message": "프로필이 업데이트되었습니다.",
+        "email": user.email,
+        "nickname": user.nickname,
+        "profile_image_url": image_url,
+    }

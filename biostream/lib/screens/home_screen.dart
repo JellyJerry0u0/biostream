@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/lifestyle_service.dart';
 import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
+import 'future_face_compare_screen.dart';
+import 'my_info_screen.dart';
 import 'result_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -15,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const Color _primary = Color(0xFF2BEE75);
+  static const Color _backgroundLight = Color(0xFFF6F8F6);
   static const Color _backgroundDark = Color(0xFF050C08);
   static const Color _gameCard = Color(0xFF0D1F14);
 
@@ -330,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _backgroundDark,
+      backgroundColor: _backgroundLight,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -367,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 128,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: Colors.black.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -627,7 +630,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text(
               '최근 노화 예측 결과',
               style: TextStyle(
-                color: Colors.white,
+                color: Color(0xFF102217),
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
               ),
@@ -913,9 +916,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Container(
           height: 90,
           decoration: BoxDecoration(
-            color: _backgroundDark.withValues(alpha: 0.85),
+            color: Colors.white.withValues(alpha: 0.96),
             border: Border(
-              top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+              top: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
             ),
           ),
           child: Row(
@@ -935,10 +938,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: '홈 화면',
                 isActive: true,
               ),
-               const _NavItem(
+              _NavItem(
                 icon: Icons.face_retouching_natural,
                 label: '내 미래 얼굴',
-                isActive: true,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const FutureFaceCompareScreen(),
+                    ),
+                  );
+                },
               ),
               _NavItem(
                 icon: Icons.chat_bubble,
@@ -949,9 +958,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-              const _NavItem(
+              _NavItem(
                 icon: Icons.person,
                 label: '내 정보',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MyInfoScreen()),
+                  );
+                },
               ),
             ],
           ),
@@ -991,8 +1005,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const Color primary = Color(0xFF2BEE75);
-    final Color itemColor =
-        isActive ? primary : Colors.white.withValues(alpha: 0.4);
+    final Color itemColor = isActive ? primary : const Color(0xFF7A8380);
 
     return InkWell(
       onTap: onTap,
