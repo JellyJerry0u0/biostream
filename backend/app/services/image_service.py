@@ -97,3 +97,4 @@ class ImageGenerationService:
 
 
 image_service = ImageGenerationService()
+image_gen_service = image_service
