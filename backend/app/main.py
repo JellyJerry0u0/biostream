@@ -8,11 +8,22 @@ from .database import engine, get_db
 
 from .database import engine, get_db
 from . import models
-from .api import auth, data  # 만약 경로 에러가 나면 from app.api import auth로 시도
+from .api import auth, data, health  # 만약 경로 에러가 나면 from app.api import auth로 시도
+from .scheduler import start_scheduler, stop_scheduler
 
 load_dotenv()
 
 app = FastAPI(title="BioStream API")
+
+
+@app.on_event("startup")
+async def startup_event():
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    stop_scheduler()
 
 # [1] CORS 설정: 브라우저(Chrome) 테스트를 위해 필수입니다.
 app.add_middleware(
@@ -42,6 +53,7 @@ init_db()
 # [3] 라우터 등록
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(data.router, prefix="/data", tags=["Data Collection"])
+app.include_router(health.router)
 
 # Lifestyle 설문조사 API (Lifestyle 모델 기반)
 from .api import lifestyle_survey

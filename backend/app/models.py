@@ -28,6 +28,7 @@ class User(Base):
     # User와 Lifestyle 간의 일대다 관계 설정(한명의 유저는 여러번 설문 조사 가능)
     lifestyles=relationship("Lifestyle", back_populates="owner")
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    health_data_records = relationship("HealthData", back_populates="user")
 
 
 class UserProfile(Base):
@@ -111,3 +112,18 @@ class Lifestyle(Base):
 
     # Lifestyle과 User 간의 다대일 관계 설정
     owner=relationship("User", back_populates="lifestyles")
+
+
+class HealthData(Base):
+    __tablename__ = "health_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    steps = Column(Integer, default=0, nullable=False)
+    sleep_minutes = Column(Integer, default=0, nullable=False)
+    sync_date = Column(Date, index=True, nullable=False)
+    is_processed = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="health_data_records")
