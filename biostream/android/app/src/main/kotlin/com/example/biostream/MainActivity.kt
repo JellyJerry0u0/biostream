@@ -2,6 +2,7 @@ package com.example.biostream
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.request.AggregateRequest
@@ -12,7 +13,10 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.lifecycle.lifecycleScope
 import com.example.biostream.network.HealthDataDto
+import com.example.biostream.worker.ChronoWorkScheduler
+import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
@@ -23,6 +27,7 @@ class MainActivity : FlutterFragmentActivity() {
 
 	companion object {
 		private const val TAG = "MainActivity"
+		private const val DEV_CHANNEL = "com.example.biostream/dev"
 	}
 
 	private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(this) }
@@ -49,6 +54,20 @@ class MainActivity : FlutterFragmentActivity() {
 		}
 	}
 
+	override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+		super.configureFlutterEngine(flutterEngine)
+		MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEV_CHANNEL)
+			.setMethodCallHandler { call, result ->
+				when (call.method) {
+					"enqueueOneTimeHealthSync" -> {
+						ChronoWorkScheduler.enqueueOneTimeSync(applicationContext)
+						result.success("queued")
+					}
+					else -> result.notImplemented()
+				}
+			}
+	}
+
 	private suspend fun checkAndRequestPermissions() {
 		val granted = healthConnectClient.permissionController.getGrantedPermissions()
 		if (!granted.containsAll(permissions)) {
@@ -59,6 +78,7 @@ class MainActivity : FlutterFragmentActivity() {
 	}
 
 	private fun onHealthPermissionsGranted() {
+		ChronoWorkScheduler.scheduleDailySync(this)
 		lifecycleScope.launch {
 			val healthData = fetchYesterdayHealthData(healthConnectClient)
 			Log.d(TAG, "Yesterday health data: $healthData")
@@ -67,6 +87,11 @@ class MainActivity : FlutterFragmentActivity() {
 
 	private fun onHealthPermissionsDenied() {
 		Log.w(TAG, "Health Connect permissions denied")
+		Toast.makeText(
+			this,
+			"Health Connect 권한이 필요합니다. 권한을 허용해 주세요.",
+			Toast.LENGTH_LONG
+		).show()
 	}
 
 	private suspend fun fetchYesterdayHealthData(
