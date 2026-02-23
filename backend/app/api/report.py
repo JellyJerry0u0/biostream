@@ -115,8 +115,13 @@ def generate_report(
         print(f"✅ [리포트 생성] 최신 레코드 사용 - lifestyle_id={lifestyle.id}")
         lifestyle_id = lifestyle.id  # 실제 사용할 lifestyle_id 업데이트
     
-    # 이미 리포트가 생성되어 있는지 확인 (force=False일 때만)
-    if not force and lifestyle.health_report:
+    # situation_text가 있으면 캐시 사용 안 함 (사용자가 새 참고 상황을 입력했으므로 반영 필요)
+    situation_text = body.situation_text if body and body.situation_text else None
+    skip_cache = bool(situation_text and situation_text.strip())
+    print(f"[리포트 생성] body={'있음' if body else '없음'}, situation_text 수신: {repr(situation_text)[:100] if situation_text else 'None/빈값'} | skip_cache={skip_cache}")
+
+    # 이미 리포트가 생성되어 있는지 확인 (force=False일 때만, situation_text 없을 때만)
+    if not force and not skip_cache and lifestyle.health_report:
         # 리포트 유효성 검사: 신규 리포트 구조 확인
         report_data = lifestyle.health_report
         # 신규 리포트는 final_report 또는 sections 키를 가짐
@@ -149,7 +154,6 @@ def generate_report(
         print(f"[리포트 생성] 신규 리포트 생성 시작 - lifestyle_id: {lifestyle_id}, user_id: {current_user.id}")
         
         # 신규 generate_report 호출 (lifestyle_id 지정)
-        situation_text = body.situation_text if body and body.situation_text else None
         report_result = generate_report_new(
             user_id=current_user.id,
             lifestyle_id=lifestyle_id,

@@ -1,4 +1,4 @@
-package com.example.biostream
+package com.biostream.app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
