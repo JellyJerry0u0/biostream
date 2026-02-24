@@ -50,6 +50,52 @@ def migrate():
                 ADD COLUMN IF NOT EXISTS image_gen_params JSON;
             """))
             print("✅ image_gen_params 컬럼 추가 완료")
+
+            # health_data 테이블 생성 (Health Connect 동기화 데이터 저장)
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS health_data (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    steps INTEGER NOT NULL DEFAULT 0,
+                    sleep_minutes INTEGER NOT NULL DEFAULT 0,
+                    sync_date DATE NOT NULL,
+                    is_processed BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE
+                );
+            """))
+            print("✅ health_data 테이블 확인/생성 완료")
+
+            # 유니크 인덱스 생성 전 중복 데이터 정리 (가장 최신 1건만 유지)
+            conn.execute(text("""
+                DELETE FROM health_data
+                WHERE ctid IN (
+                    SELECT ctid FROM (
+                        SELECT ctid,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY user_id, sync_date
+                                   ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+                               ) AS rn
+                        FROM health_data
+                    ) t
+                    WHERE t.rn > 1
+                );
+            """))
+            print("✅ health_data 중복 데이터 정리 완료")
+
+            # 중복 업서트를 위한 유니크 키
+            conn.execute(text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_health_data_user_sync_date
+                ON health_data (user_id, sync_date);
+            """))
+            print("✅ health_data 유니크 인덱스(user_id, sync_date) 확인/생성 완료")
+
+            # 스케줄러 조회 최적화 인덱스
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_health_data_is_processed
+                ON health_data (is_processed);
+            """))
+            print("✅ health_data 인덱스(is_processed) 확인/생성 완료")
             
             conn.commit()
             print("✅ 마이그레이션 완료!")

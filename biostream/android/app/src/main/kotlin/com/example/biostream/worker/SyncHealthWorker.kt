@@ -25,6 +25,8 @@ class SyncHealthWorker(
 
     companion object {
         private const val TAG = "SyncHealthWorker"
+        private const val FLUTTER_PREFS = "FlutterSharedPreferences"
+        private const val KEY_PROFILE_USER_ID = "flutter.profile_user_id"
     }
 
     override suspend fun doWork(): Result {
@@ -62,6 +64,11 @@ class SyncHealthWorker(
     private suspend fun fetchYesterdayHealthData(
         client: HealthConnectClient
     ): HealthDataDto {
+        val userId = getStoredUserId()
+        if (userId <= 0) {
+            throw IllegalStateException("profile_user_id is missing. Please log in first.")
+        }
+
         val zoneId = ZoneId.systemDefault()
         val yesterdayDate = LocalDate.now(zoneId).minusDays(1)
         val startOfYesterday = yesterdayDate.atStartOfDay(zoneId).toInstant()
@@ -89,7 +96,13 @@ class SyncHealthWorker(
         return HealthDataDto(
             date = yesterdayDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
             steps = steps,
-            sleepMinutes = sleepMinutes
+            sleepMinutes = sleepMinutes,
+            userId = userId
         )
+    }
+
+    private fun getStoredUserId(): Int {
+        val prefs = applicationContext.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_PROFILE_USER_ID, -1)
     }
 }

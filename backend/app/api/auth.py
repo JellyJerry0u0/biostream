@@ -126,7 +126,12 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
     
     # 로그인 성공 시 토큰 발급
     token = create_access_token(data={"sub": user.email})
-    return {"access_token": token, "token_type": "bearer", "nickname": user.nickname}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "nickname": user.nickname,
+        "user_id": user.id,
+    }
 
 # 3. 카카오 로그인 API
 @router.post("/kakao-login")
