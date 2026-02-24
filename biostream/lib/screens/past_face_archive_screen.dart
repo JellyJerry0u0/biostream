@@ -6,6 +6,7 @@ import 'facescan_screen.dart';
 import 'future_face_compare_screen.dart';
 import 'home_screen.dart';
 import 'my_info_screen.dart';
+import 'today_me_screen.dart';
 
 class PastFaceArchiveScreen extends StatefulWidget {
   const PastFaceArchiveScreen({super.key});
@@ -385,6 +386,15 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              _BottomNavItem(
+                icon: Icons.timer,
+                label: '오늘의 나',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TodayMeScreen()),
+                  );
+                },
+              ),
               _BottomNavItem(
                 icon: Icons.assignment,
                 label: '설문 조사',

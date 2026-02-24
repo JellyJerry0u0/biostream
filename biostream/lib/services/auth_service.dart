@@ -69,7 +69,11 @@ class AuthService {
         final data = jsonDecode(response.body);
         // JWT 토큰을 기기에 안전하게 저장
         await storage.write(key: 'jwt_token', value: data['access_token']);
-        return {"success": true, "nickname": data['nickname']};
+        return {
+          "success": true,
+          "nickname": data['nickname'],
+          "user_id": data['user_id'],
+        };
       } else {
         return {"success": false, "message": "이메일 또는 비밀번호가 틀렸습니다."};
       }

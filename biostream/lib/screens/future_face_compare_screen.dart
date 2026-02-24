@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
 import 'home_screen.dart';
 import 'my_info_screen.dart';
+import 'today_me_screen.dart';
 
 class FutureFaceCompareScreen extends StatefulWidget {
   const FutureFaceCompareScreen({super.key});
 
   @override
-  State<FutureFaceCompareScreen> createState() =>
-      _FutureFaceCompareScreenState();
+  State<FutureFaceCompareScreen> createState() => _FutureFaceCompareScreenState();
 }
 
 class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen> {
@@ -24,34 +23,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen> {
       'https://lh3.googleusercontent.com/aida-public/AB6AXuBZV-jDDioxTCoeHPdxBORf9Cqaeq3knCDN8yF2F2MqIwQocXv9IaY3ImcI7pjMa2irdLPRDoDDdjAvyDQAeUlWJCquXL4pXkW5NqkPtVRhlMZLnLSJCjHGa18mlQNecxsq8L56c61sI-Jk931BbBIuUgfE2cUuL637l-O6_1mEtDxXQOFehDStgd39FB1s6ephU8okbYq2XUC_hqgVdHFGypbmjqDLEY5vGd594kB7-eLuuDefiMZ20dejz2B_9gdlF9ArrZW4AY0';
   static const String _currentImageUrl =
       'https://lh3.googleusercontent.com/aida-public/AB6AXuDxIxJH9oWFTxoU35FE3EcoqKP31UypIBGEyY2F8gKH2Ve3lJCkDJfhzL4P14vr233LsdCKzEfc47JFKo_fLBzrso6z_G9TitQ5JlmTwgPGCBgQvTnH9Huj9cIFctm8iTv1wkGX-YoTyuSPUaTOXl4G6sPrakvLvvcUXH-QmnQKN-mdhfTCgIKdLTY303_Q5qABRj4QhBwBTNlRBGFksz2mGPmdtzXQJIrFTWI2V0Jmfq4VsQPv6ESZy8N4GMDh3aeO5XPmf9Ix1Z0';
-
-  Future<void> _shareFutureFaceResult() async {
-    final scenarioText = _wellManaged ? '관리 잘했을 때' : '관리가 부족할 때';
-    final elasticity = _wellManaged ? '82%' : '61%';
-    final wrinkle = _wellManaged ? '-12%' : '+18%';
-
-    final text = '''
-BioStream 미래 얼굴 비교 결과
-- 시나리오: $scenarioText
-- 피부 탄력 유지: $elasticity
-- 예상 주름 깊이: $wrinkle
-
-현재 이미지: $_currentImageUrl
-미래 이미지: $_futureImageUrl
-''';
-
-    try {
-      await Share.share(
-        text,
-        subject: 'BioStream 미래 얼굴 비교 결과',
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('공유를 실행하지 못했습니다. 잠시 후 다시 시도해주세요.')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,8 +46,7 @@ BioStream 미래 얼굴 비교 결과
                       child: Column(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: _primary.withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(999),
@@ -124,7 +94,7 @@ BioStream 미래 얼굴 비교 결과
                 ),
               ),
             ),
-            _buildBottomNavigation(),
+            _buildBottomNavigation(isDark),
           ],
         ),
       ),
@@ -145,8 +115,7 @@ BioStream 미래 얼굴 비교 결과
   }
 
   Widget _buildTopBar(bool isDark, Color textColor) {
-    final topBg = (isDark ? const Color(0xFF102217) : Colors.white)
-        .withValues(alpha: 0.86);
+    final topBg = (isDark ? const Color(0xFF102217) : Colors.white).withValues(alpha: 0.86);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -175,7 +144,7 @@ BioStream 미래 얼굴 비교 결과
           ),
           _roundIconButton(
             icon: Icons.share,
-            onTap: _shareFutureFaceResult,
+            onTap: () {},
             color: textColor,
           ),
         ],
@@ -243,8 +212,7 @@ BioStream 미래 얼굴 비교 결과
                         widthFactor: _sliderRatio,
                         child: SizedBox(
                           width: width,
-                          child: Image.network(_currentImageUrl,
-                              fit: BoxFit.cover),
+                          child: Image.network(_currentImageUrl, fit: BoxFit.cover),
                         ),
                       ),
                     ),
@@ -323,17 +291,14 @@ BioStream 미래 얼굴 비교 결과
   }
 
   Widget _buildScenarioAndCards(bool isDark, Color textColor) {
-    final panelBg =
-        isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white;
+    final panelBg = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white;
 
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.05),
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -473,17 +438,27 @@ BioStream 미래 얼굴 비교 결과
     );
   }
 
-  Widget _buildBottomNavigation() {
+  Widget _buildBottomNavigation(bool isDark) {
+    final navBg = (isDark ? const Color(0xFF102217) : Colors.white).withValues(alpha: 0.95);
+
     return Container(
-      height: 90,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        border:
-            Border(top: BorderSide(color: _primary.withValues(alpha: 0.14))),
+        color: navBg,
+        border: Border(top: BorderSide(color: _primary.withValues(alpha: 0.14))),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          _BottomNavItem(
+            icon: Icons.timer,
+            label: '오늘의 나',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TodayMeScreen()),
+              );
+            },
+          ),
           _BottomNavItem(
             icon: Icons.assignment,
             label: '설문 조사',
@@ -551,14 +526,14 @@ class _BottomNavItem extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 23),
-            const SizedBox(height: 6),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(

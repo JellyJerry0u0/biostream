@@ -9,8 +9,16 @@ import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.BloodGlucoseRecord
+import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.NutritionRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.Vo2MaxRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.lifecycle.lifecycleScope
 import com.example.biostream.network.HealthDataDto
 import com.example.biostream.worker.ChronoWorkScheduler
@@ -28,13 +36,23 @@ class MainActivity : FlutterFragmentActivity() {
 	companion object {
 		private const val TAG = "MainActivity"
 		private const val DEV_CHANNEL = "com.example.biostream/dev"
+		private const val FLUTTER_PREFS = "FlutterSharedPreferences"
+		private const val KEY_PROFILE_USER_ID = "flutter.profile_user_id"
 	}
 
 	private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(this) }
 
 	private val permissions = setOf(
 		HealthPermission.getReadPermission(StepsRecord::class),
-		HealthPermission.getReadPermission(SleepSessionRecord::class)
+		HealthPermission.getReadPermission(SleepSessionRecord::class),
+		HealthPermission.getReadPermission(DistanceRecord::class),
+		HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+		HealthPermission.getReadPermission(NutritionRecord::class),
+		HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+		HealthPermission.getReadPermission(WeightRecord::class),
+		HealthPermission.getReadPermission(BodyFatRecord::class),
+		HealthPermission.getReadPermission(Vo2MaxRecord::class),
+		HealthPermission.getReadPermission(BloodGlucoseRecord::class)
 	)
 
 	private val requestPermissions = registerForActivityResult(
@@ -124,7 +142,13 @@ class MainActivity : FlutterFragmentActivity() {
 		return HealthDataDto(
 			date = yesterdayDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
 			steps = stepCount,
-			sleepMinutes = totalSleepMinutes
+			sleepMinutes = totalSleepMinutes,
+			userId = getStoredUserId()
 		)
+	}
+
+	private fun getStoredUserId(): Int {
+		val prefs = getSharedPreferences(FLUTTER_PREFS, MODE_PRIVATE)
+		return prefs.getInt(KEY_PROFILE_USER_ID, -1)
 	}
 }

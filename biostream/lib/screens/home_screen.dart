@@ -7,6 +7,7 @@ import 'facescan_screen.dart';
 import 'future_face_compare_screen.dart';
 import 'my_info_screen.dart';
 import 'result_screen.dart';
+import 'today_me_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1030,6 +1031,15 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _NavItem(
+                icon: Icons.timer,
+                label: '오늘의 나',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TodayMeScreen()),
+                  );
+                },
+              ),
+              _NavItem(
                 icon: Icons.assignment,
                 label: '설문 조사',
                 onTap: () {
@@ -1039,7 +1049,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               const _NavItem(
-                icon: Icons.face_retouching_natural,
+                icon: Icons.home,
                 label: '홈 화면',
                 isActive: true,
               ),

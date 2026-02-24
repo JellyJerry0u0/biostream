@@ -15,6 +15,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   static const String _keyProfileEmail = 'profile_email';
   static const String _keyProfileNickname = 'profile_nickname';
+  static const String _keyProfileUserId = 'profile_user_id';
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -46,6 +47,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final nickname = (result['nickname'] ?? '').toString().trim();
       if (nickname.isNotEmpty) {
         await prefs.setString(_keyProfileNickname, nickname);
+      }
+      final userId = result['user_id'];
+      if (userId is int) {
+        await prefs.setInt(_keyProfileUserId, userId);
+      } else if (userId is num) {
+        await prefs.setInt(_keyProfileUserId, userId.toInt());
       }
 
       debugPrint('${result['nickname']}님 환영합니다!');

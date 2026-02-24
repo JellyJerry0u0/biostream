@@ -18,6 +18,7 @@ def run_daily_analysis() -> None:
 
         for entry in unprocessed_list:
             try:
+                #리포트 생성 함수 호출(LangGraph 워크플로우 실행)
                 result = generate_report(user_id=entry.user_id)
 
                 if result.get("success"):
