@@ -58,6 +58,16 @@ def migrate():
                     user_id INTEGER NOT NULL REFERENCES users(id),
                     steps INTEGER NOT NULL DEFAULT 0,
                     sleep_minutes INTEGER NOT NULL DEFAULT 0,
+                    distance_meters DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    oxygen_saturation DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    average_speed_mps DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    nutrition_calories_kcal DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    exercise_minutes INTEGER NOT NULL DEFAULT 0,
+                    fitness_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    weight_kg DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    body_fat_percentage DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    vo2_max DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    blood_glucose_mg_dl DOUBLE PRECISION NOT NULL DEFAULT 0,
                     sync_date DATE NOT NULL,
                     is_processed BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -65,6 +75,21 @@ def migrate():
                 );
             """))
             print("✅ health_data 테이블 확인/생성 완료")
+
+            # 기존 DB 대비 health_data 확장 컬럼 보강
+            conn.execute(text("""
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS oxygen_saturation DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS average_speed_mps DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS nutrition_calories_kcal DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS exercise_minutes INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS fitness_score DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS weight_kg DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS body_fat_percentage DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS vo2_max DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS blood_glucose_mg_dl DOUBLE PRECISION NOT NULL DEFAULT 0;
+            """))
+            print("✅ health_data 확장 컬럼 보강 완료")
 
             # 유니크 인덱스 생성 전 중복 데이터 정리 (가장 최신 1건만 유지)
             conn.execute(text("""
