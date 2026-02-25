@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -14,6 +15,14 @@ class NotificationService {
 
   static final NotificationService instance = NotificationService._();
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static const AndroidNotificationChannel _androidChannel = AndroidNotificationChannel(
+    'report_notifications',
+    'Report Notifications',
+    description: '건강 리포트 알림 채널',
+    importance: Importance.high,
+  );
+  static final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
 
@@ -43,6 +52,8 @@ class NotificationService {
     }
 
     try {
+      await _initializeLocalNotifications();
+
       final settings = await FirebaseMessaging.instance.requestPermission(
         alert: true,
         badge: true,
@@ -59,10 +70,56 @@ class NotificationService {
         await _registerToken(newToken);
       });
 
+      FirebaseMessaging.onMessage.listen((message) async {
+        await _showForegroundNotification(message);
+      });
+
       _initialized = true;
     } catch (e) {
       debugPrint('⚠️ FCM 초기화 실패: $e');
     }
+  }
+
+  Future<void> _initializeLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initializationSettings = InitializationSettings(android: androidSettings);
+
+    await _localNotifications.initialize(initializationSettings);
+
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_androidChannel);
+
+    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+  }
+
+  Future<void> _showForegroundNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) {
+      return;
+    }
+
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'report_notifications',
+        'Report Notifications',
+        channelDescription: '건강 리포트 알림 채널',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    );
+
+    await _localNotifications.show(
+      message.hashCode,
+      notification.title ?? '알림',
+      notification.body ?? '',
+      details,
+      payload: jsonEncode(message.data),
+    );
   }
 
   Future<void> syncTokenToServer() async {

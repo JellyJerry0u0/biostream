@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import User, Lifestyle
 from app.auth.security import verify_token
+from app.services.push_service import send_push_to_user
 
 # 신규 LangGraph 기반 리포트 생성 모듈 import
 app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -181,6 +182,18 @@ def generate_report(
         db.refresh(lifestyle)
         
         print(f"[리포트 생성] 리포트 생성 및 저장 완료 - lifestyle_id: {lifestyle_id}")
+
+        try:
+            push_ok = send_push_to_user(
+                db=db,
+                user_id=current_user.id,
+                title="리포트 도착",
+                body="방금 생성된 건강 리포트를 확인해 보세요.",
+                data={"type": "report_ready", "lifestyle_id": str(lifestyle_id)},
+            )
+            print(f"[리포트 생성] 즉시 푸시 발송 결과: {push_ok}")
+        except Exception as push_error:
+            print(f"[리포트 생성] 즉시 푸시 발송 실패(무시): {push_error}")
         
         # 새로운 스키마 (tabs + sections.cards)를 기존 형식으로 변환 (프론트엔드 호환성)
         cards = []

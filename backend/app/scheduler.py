@@ -24,9 +24,19 @@ def run_daily_analysis() -> None:
 
                 if result.get("success"):
                     entry.is_processed = True
-                    entry.notification_sent = False
+                    sent_now = send_push_to_user(
+                        db=db,
+                        user_id=entry.user_id,
+                        title="리포트 도착",
+                        body="오늘의 건강 분석 리포트가 준비되었습니다.",
+                        data={"type": "report_ready", "sync_date": str(entry.sync_date)},
+                    )
+                    entry.notification_sent = sent_now
                     db.commit()
-                    print(f"✅ User {entry.user_id} 리포트 생성 완료")
+                    if sent_now:
+                        print(f"✅ User {entry.user_id} 리포트 생성 + 즉시 푸시 발송 완료")
+                    else:
+                        print(f"⚠️ User {entry.user_id} 리포트 생성 완료 (즉시 푸시 실패, 07:00 재시도)")
                 else:
                     db.rollback()
                     print(f"⚠️ User {entry.user_id} 분석 실패: {result.get('error')}")
@@ -52,7 +62,7 @@ def run_morning_push() -> None:
                 sent = send_push_to_user(
                     db=db,
                     user_id=entry.user_id,
-                    title="ChronoLens 리포트 도착",
+                    title="리포트 도착",
                     body="오늘의 건강 분석 리포트가 준비되었습니다.",
                     data={"type": "daily_report", "sync_date": str(entry.sync_date)},
                 )
