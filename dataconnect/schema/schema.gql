@@ -1,0 +1,43 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  email: String
+  photoUrl: String
+}
+
+type Habit @table {
+  user: User!
+  name: String!
+  frequency: String!
+  createdAt: Timestamp!
+  isPrivate: Boolean!
+  description: String
+  goalUnit: String
+  defaultGoalValue: Int
+}
+
+type HabitEntry @table {
+  user: User!
+  habit: Habit!
+  entryDate: Date!
+  isCompleted: Boolean!
+  actualValue: Int
+  notes: String
+}
+
+type HabitReminder @table {
+  user: User!
+  habit: Habit!
+  timeOfDay: String!
+  isEnabled: Boolean!
+  daysOfWeek: [String]
+}
+
+type PublicHabit @table {
+  name: String!
+  description: String!
+  category: String!
+  createdAt: Timestamp!
+  defaultGoalUnit: String
+  defaultGoalValue: Int
+}

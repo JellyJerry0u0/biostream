@@ -73,6 +73,7 @@ async def sync_health_data(
         existing_data.vo2_max = req.vo2_max
         existing_data.blood_glucose_mg_dl = req.blood_glucose_mg_dl
         existing_data.is_processed = False
+        existing_data.notification_sent = False
     else:
         new_data = HealthData(
             user_id=effective_user_id,
@@ -89,7 +90,8 @@ async def sync_health_data(
             vo2_max=req.vo2_max,
             blood_glucose_mg_dl=req.blood_glucose_mg_dl,
             sync_date=sync_date,
-            is_processed=False
+            is_processed=False,
+            notification_sent=False,
         )
         db.add(new_data)
 

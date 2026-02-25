@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import HealthData
 from report_modules.report_graph import generate_report
+from app.services.push_service import send_push_to_user
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -23,6 +24,7 @@ def run_daily_analysis() -> None:
 
                 if result.get("success"):
                     entry.is_processed = True
+                    entry.notification_sent = False
                     db.commit()
                     print(f"✅ User {entry.user_id} 리포트 생성 완료")
                 else:
@@ -31,6 +33,39 @@ def run_daily_analysis() -> None:
             except Exception as e:
                 db.rollback()
                 print(f"❌ User {entry.user_id} 분석 중 치명적 오류: {e}")
+    finally:
+        db.close()
+
+
+def run_morning_push() -> None:
+    """매일 07:00에 실행: 생성 완료 + 미발송 사용자에게 푸시 발송"""
+    db: Session = SessionLocal()
+    try:
+        target_list = db.query(HealthData).filter(
+            HealthData.is_processed.is_(True),
+            HealthData.notification_sent.is_(False)
+        ).all()
+        print(f"🔔 [ChronoLens] 아침 푸시 시작: {len(target_list)}건")
+
+        for entry in target_list:
+            try:
+                sent = send_push_to_user(
+                    db=db,
+                    user_id=entry.user_id,
+                    title="ChronoLens 리포트 도착",
+                    body="오늘의 건강 분석 리포트가 준비되었습니다.",
+                    data={"type": "daily_report", "sync_date": str(entry.sync_date)},
+                )
+                if sent:
+                    entry.notification_sent = True
+                    db.commit()
+                    print(f"✅ User {entry.user_id} 아침 푸시 발송 완료")
+                else:
+                    db.rollback()
+                    print(f"⚠️ User {entry.user_id} 아침 푸시 발송 실패")
+            except Exception as e:
+                db.rollback()
+                print(f"❌ User {entry.user_id} 아침 푸시 중 치명적 오류: {e}")
     finally:
         db.close()
 
@@ -50,8 +85,16 @@ def start_scheduler() -> None:
         misfire_grace_time=3600,
         coalesce=True,
     )
+    _scheduler.add_job(
+        run_morning_push,
+        trigger=CronTrigger(hour=7, minute=0),
+        id="morning_push_job",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
     _scheduler.start()
-    print("🚀 [ChronoLens] 분석 스케줄러 가동 시작 (01:00 AM)")
+    print("🚀 [ChronoLens] 스케줄러 가동 시작 (분석 01:00 / 푸시 07:00)")
 
 
 def stop_scheduler() -> None:

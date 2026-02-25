@@ -29,6 +29,7 @@ class User(Base):
     lifestyles=relationship("Lifestyle", back_populates="owner")
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     health_data_records = relationship("HealthData", back_populates="user")
+    device_tokens = relationship("UserDeviceToken", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserProfile(Base):
@@ -133,7 +134,21 @@ class HealthData(Base):
     blood_glucose_mg_dl = Column(Float, default=0.0, nullable=False)
     sync_date = Column(Date, index=True, nullable=False)
     is_processed = Column(Boolean, default=False, nullable=False)
+    notification_sent = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="health_data_records")
+
+
+class UserDeviceToken(Base):
+    __tablename__ = "user_device_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    device_token = Column(String, nullable=False, index=True)
+    platform = Column(String, nullable=False, default="android")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="device_tokens")

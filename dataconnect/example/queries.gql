@@ -1,0 +1,47 @@
+query GetMyHabits @auth(level: USER) {
+  habits(where: {userId: {eq_expr: "auth.uid"}}) {
+    id
+    name
+    description
+    frequency
+    isPrivate
+    createdAt
+    defaultGoalValue
+    goalUnit
+  }
+}
+
+mutation CreateMyHabit($name: String!, $frequency: String!, $isPrivate: Boolean!, $description: String, $defaultGoalValue: Int, $goalUnit: String) @auth(level: USER) {
+  habit_insert(data: {
+    name: $name,
+    frequency: $frequency,
+    isPrivate: $isPrivate,
+    description: $description,
+    defaultGoalValue: $defaultGoalValue,
+    goalUnit: $goalUnit,
+    userId_expr: "auth.uid"
+  })
+}
+
+query GetPublicHabitsByCategory($category: String!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public as it queries public habits.") {
+  publicHabits(where: {category: {eq: $category}}) {
+    id
+    name
+    description
+    category
+    createdAt
+    defaultGoalValue
+    defaultGoalUnit
+  }
+}
+
+mutation LogHabitEntry($habitId: UUID!, $entryDate: Date!, $isCompleted: Boolean!, $actualValue: Int, $notes: String) @auth(level: USER) {
+  habitEntry_insert(data: {
+    habitId: $habitId,
+    entryDate: $entryDate,
+    isCompleted: $isCompleted,
+    actualValue: $actualValue,
+    notes: $notes,
+    userId_expr: "auth.uid"
+  })
+}

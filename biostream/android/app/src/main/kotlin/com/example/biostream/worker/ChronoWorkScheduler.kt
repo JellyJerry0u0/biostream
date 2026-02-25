@@ -25,7 +25,7 @@ object ChronoWorkScheduler {
             .setRequiresBatteryNotLow(true)
             .build()
 
-        val initialDelay = calculateDelayUntil0030()
+        val initialDelay = calculateDelayUntil0100()
 
         val dailyWorkRequest = PeriodicWorkRequestBuilder<SyncHealthWorker>(
             24, TimeUnit.HOURS
@@ -60,9 +60,9 @@ object ChronoWorkScheduler {
         )
     }
 
-    private fun calculateDelayUntil0030(): Long {
+    private fun calculateDelayUntil0100(): Long {
         val now = LocalDateTime.now()
-        var target = now.withHour(0).withMinute(30).withSecond(0).withNano(0)
+        var target = now.withHour(1).withMinute(0).withSecond(0).withNano(0)
 
         if (now.isAfter(target)) {
             target = target.plusDays(1)

@@ -4,6 +4,7 @@ import '../utils/responsive.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -56,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       debugPrint('${result['nickname']}님 환영합니다!');
+      await NotificationService.instance.syncTokenToServer();
       // 로그인 성공 시 메인 홈 화면으로 이동
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const HomeScreen()),
