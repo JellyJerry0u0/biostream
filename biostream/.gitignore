@@ -46,6 +46,8 @@ pubspec.lock
 **/android/**/GeneratedPluginRegistrant.java
 **/android/**/GeneratedPluginRegistrant.kt
 **/android/key.properties
+**/android/**/google-services.json
+!**/android/**/google-services.template.json
 *.jks
 
 # Symbolication related
@@ -87,6 +89,8 @@ app.*.map.json
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/ServiceDefinitions.json
 **/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/**/GoogleService-Info.plist
+!**/ios/**/GoogleService-Info.template.plist
 
 # Coverage
 coverage/
