@@ -35,6 +35,10 @@ migrate_working_dir/
 /build/
 pubspec.lock
 
+# Local secrets for --dart-define-from-file
+dev.secrets.json
+!dev.secrets.json.example
+
 # Android related
 **/android/**/local.properties
 **/android/**/gradle-wrapper.jar
