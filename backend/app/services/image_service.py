@@ -1,6 +1,7 @@
 import os
 import httpx
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 from app.models import Lifestyle
 from app.database import SessionLocal
@@ -97,6 +98,16 @@ class ImageGenerationService:
                     "habits": effective_habits,
                 },
             }
+        except httpx.ConnectError as e:
+            host = urlparse(self.gpu_server_url).hostname if self.gpu_server_url else None
+            raise Exception(
+                f"이미지 생성 서버 연결 실패 (host={host}, url={self.gpu_server_url}): {e}"
+            ) from e
+        except httpx.RequestError as e:
+            host = urlparse(self.gpu_server_url).hostname if self.gpu_server_url else None
+            raise Exception(
+                f"이미지 생성 요청 실패 (host={host}, url={self.gpu_server_url}): {e}"
+            ) from e
         finally:
             if owns_session and db is not None:
                 db.close()

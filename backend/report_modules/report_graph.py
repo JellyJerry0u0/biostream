@@ -3225,24 +3225,38 @@ def generate_aging_image_node(state: ReportState) -> ReportState:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    result = loop.run_until_complete(
-        image_gen_service.request_aging_simulation(
-            lifestyle_id=lifestyle_id,
-            gender=gender,
-            target_years=target_years,
-            habits=habits
+    try:
+        result = loop.run_until_complete(
+            image_gen_service.request_aging_simulation(
+                lifestyle_id=lifestyle_id,
+                gender=gender,
+                target_years=target_years,
+                habits=habits
+            )
         )
-    )
-    
-    print(f"✅ [GenerateAgingImage] 이미지 생성 완료: {result['image_url']}")
-    
-    # 3. 결과 반환하여 State 업데이트
-    return {
-        **state,
-        "generated_image_url": result["image_url"],
-        "generation_status": result["status"],
-        "image_gen_params": result["params"]
-    }
+
+        print(f"✅ [GenerateAgingImage] 이미지 생성 완료: {result['image_url']}")
+
+        # 3. 결과 반환하여 State 업데이트
+        return {
+            **state,
+            "generated_image_url": result["image_url"],
+            "generation_status": result["status"],
+            "image_gen_params": result["params"]
+        }
+    except Exception as e:
+        # 이미지 생성 실패는 리포트 본문 생성 실패로 전파하지 않음
+        print(f"⚠️ [GenerateAgingImage] 이미지 생성 실패 (리포트는 계속 진행): {e}")
+        return {
+            **state,
+            "generated_image_url": None,
+            "generation_status": "failed",
+            "image_gen_params": {
+                "error": str(e),
+                "gender": gender,
+                "target_years": target_years,
+            },
+        }
 
 
 # ════════════════════════════════════════════════════════════════
