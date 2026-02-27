@@ -15,8 +15,19 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 class DefaultFirebaseOptions {
+  static const Map<String, String> _fallbackApiKeys = {
+    'FIREBASE_API_KEY_ANDROID': 'AIzaSyAIbnovBWofy6gMFlG_lBHJ_Y2c6BR8nBk',
+    'FIREBASE_API_KEY_IOS': 'AIzaSyAIbnovBWofy6gMFlG_lBHJ_Y2c6BR8nBk',
+    'FIREBASE_API_KEY_MACOS': 'AIzaSyAIbnovBWofy6gMFlG_lBHJ_Y2c6BR8nBk',
+    'FIREBASE_API_KEY_WEB': 'AIzaSyDJzfS6kvNWeglRInK3HyPPyRTQIEWDgA8',
+    'FIREBASE_API_KEY_WINDOWS': 'AIzaSyDJzfS6kvNWeglRInK3HyPPyRTQIEWDgA8',
+  };
+
   static String _requiredDefine(String name) {
-    final value = String.fromEnvironment(name);
+    final value = String.fromEnvironment(
+      name,
+      defaultValue: _fallbackApiKeys[name] ?? '',
+    );
     if (value.isEmpty) {
       throw StateError('Missing required --dart-define: $name');
     }

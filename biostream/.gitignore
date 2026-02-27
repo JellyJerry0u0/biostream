@@ -38,6 +38,7 @@ pubspec.lock
 # Local secrets for --dart-define-from-file
 dev.secrets.json
 !dev.secrets.json.example
+lib/firebase_options.dart
 
 # Android related
 **/android/**/local.properties
