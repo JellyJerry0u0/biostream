@@ -21,6 +21,7 @@ import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.lifecycle.lifecycleScope
 import com.example.biostream.network.HealthDataDto
+import com.example.biostream.network.RetrofitClient
 import com.example.biostream.worker.ChronoWorkScheduler
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -78,8 +79,48 @@ class MainActivity : FlutterFragmentActivity() {
 			.setMethodCallHandler { call, result ->
 				when (call.method) {
 					"enqueueOneTimeHealthSync" -> {
+						Log.i(TAG, "MethodChannel enqueueOneTimeHealthSync invoked")
 						ChronoWorkScheduler.enqueueOneTimeSync(applicationContext)
+						Log.i(TAG, "MethodChannel enqueueOneTimeHealthSync queued")
 						result.success("queued")
+					}
+					"runImmediateHealthSync" -> {
+						Log.i(TAG, "MethodChannel runImmediateHealthSync invoked")
+						lifecycleScope.launch {
+							try {
+								val granted = healthConnectClient.permissionController.getGrantedPermissions()
+								if (!granted.containsAll(permissions)) {
+									result.error("PERMISSION_DENIED", "Health Connect 권한이 모두 허용되지 않았습니다.", null)
+									return@launch
+								}
+
+								val payload = fetchYesterdayHealthData(healthConnectClient)
+								Log.i(TAG, "Immediate sync payload => $payload")
+
+								val response = RetrofitClient
+									.getChronoLensService(applicationContext)
+									.syncHealthData(payload)
+
+								if (response.isSuccessful) {
+									Log.i(TAG, "Immediate sync success")
+									result.success(
+										hashMapOf(
+											"ok" to true,
+											"steps" to payload.steps,
+											"sleepMinutes" to payload.sleepMinutes,
+											"date" to payload.date,
+											"statusCode" to response.code(),
+										)
+									)
+								} else {
+									Log.e(TAG, "Immediate sync failed: ${response.code()}")
+									result.error("HTTP_ERROR", "서버 응답 실패: ${response.code()}", null)
+								}
+							} catch (e: Exception) {
+								Log.e(TAG, "Immediate sync error", e)
+								result.error("SYNC_ERROR", e.message ?: "즉시 동기화 실패", null)
+							}
+						}
 					}
 					else -> result.notImplemented()
 				}
@@ -149,6 +190,14 @@ class MainActivity : FlutterFragmentActivity() {
 
 	private fun getStoredUserId(): Int {
 		val prefs = getSharedPreferences(FLUTTER_PREFS, MODE_PRIVATE)
-		return prefs.getInt(KEY_PROFILE_USER_ID, -1)
+		val raw = prefs.all[KEY_PROFILE_USER_ID] ?: return -1
+		return when (raw) {
+			is Int -> raw
+			is Long -> raw.toInt()
+			is Float -> raw.toInt()
+			is Double -> raw.toInt()
+			is String -> raw.toIntOrNull() ?: -1
+			else -> -1
+		}
 	}
 }

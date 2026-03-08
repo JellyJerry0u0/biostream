@@ -128,10 +128,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
 
                 try {
-                  await _devChannel.invokeMethod('enqueueOneTimeHealthSync');
+                  final result = await _devChannel.invokeMethod<Map<dynamic, dynamic>>('runImmediateHealthSync');
                   if (context.mounted) {
+                    final steps = result?['steps'];
+                    final sleep = result?['sleepMinutes'];
+                    final date = result?['date'];
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('동기화 테스트 작업을 큐에 등록했습니다.')),
+                      SnackBar(content: Text('즉시 동기화 성공 ($date) · 걸음 $steps · 수면 $sleep분')),
                     );
                   }
                 } on PlatformException catch (e) {

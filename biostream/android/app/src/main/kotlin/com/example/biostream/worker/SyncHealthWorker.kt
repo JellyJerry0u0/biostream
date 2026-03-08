@@ -212,6 +212,14 @@ class SyncHealthWorker(
 
     private fun getStoredUserId(): Int {
         val prefs = applicationContext.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
-        return prefs.getInt(KEY_PROFILE_USER_ID, -1)
+        val raw = prefs.all[KEY_PROFILE_USER_ID] ?: return -1
+        return when (raw) {
+            is Int -> raw
+            is Long -> raw.toInt()
+            is Float -> raw.toInt()
+            is Double -> raw.toInt()
+            is String -> raw.toIntOrNull() ?: -1
+            else -> -1
+        }
     }
 }

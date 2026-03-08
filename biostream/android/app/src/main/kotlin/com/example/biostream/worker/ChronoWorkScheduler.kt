@@ -1,6 +1,7 @@
 package com.example.biostream.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -14,6 +15,7 @@ import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 
 object ChronoWorkScheduler {
+    private const val TAG = "ChronoWorkScheduler"
     private const val WORK_NAME = "DailyHealthSyncWork"
     private const val ONE_TIME_WORK_NAME = "DebugHealthSyncWork"
 
@@ -43,9 +45,9 @@ object ChronoWorkScheduler {
     }
 
     fun enqueueOneTimeSync(context: Context) {
+        // 디버그 테스트는 가능한 즉시 실행되도록 배터리 조건을 제거
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
             .build()
 
         val oneTimeRequest = OneTimeWorkRequestBuilder<SyncHealthWorker>()
@@ -58,6 +60,8 @@ object ChronoWorkScheduler {
             ExistingWorkPolicy.REPLACE,
             oneTimeRequest
         )
+
+        Log.i(TAG, "One-time sync enqueued: id=${oneTimeRequest.id}")
     }
 
     private fun calculateDelayUntil0100(): Long {
