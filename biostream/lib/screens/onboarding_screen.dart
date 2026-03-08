@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../widgets/onboarding_slide.dart';
 import '../widgets/slide_indicator.dart';
 import '../utils/responsive.dart';
@@ -14,6 +15,7 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
+  static const MethodChannel _devChannel = MethodChannel('com.example.biostream/dev');
   final PageController _pageController = PageController();
   int _currentPage = 0;
   String? _currentApiOrigin;
@@ -115,6 +117,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Navigator.of(context).pop();
               },
               child: const Text('닫기'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await ApiConfig.setBaseOrigin(controller.text.trim());
+                final refreshed = await ApiConfig.getBaseOrigin();
+                if (!context.mounted) return;
+                setState(() {
+                  _currentApiOrigin = refreshed;
+                });
+
+                try {
+                  final result = await _devChannel.invokeMethod<Map<dynamic, dynamic>>('runImmediateHealthSync');
+                  if (context.mounted) {
+                    final steps = result?['steps'];
+                    final sleep = result?['sleepMinutes'];
+                    final date = result?['date'];
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('즉시 동기화 성공 ($date) · 걸음 $steps · 수면 $sleep분')),
+                    );
+                  }
+                } on PlatformException catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('동기화 테스트 실패: ${e.message ?? e.code}')),
+                    );
+                  }
+                } on MissingPluginException {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('현재 플랫폼에서는 동기화 테스트를 지원하지 않습니다.')),
+                    );
+                  }
+                }
+              },
+              child: const Text('동기화 테스트'),
             ),
             ElevatedButton(
               onPressed: () async {

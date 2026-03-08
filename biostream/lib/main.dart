@@ -4,14 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 import 'services/api_config.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   // 카카오 SDK 초기화 (카카오 로그인용)
   KakaoSdk.init(
     nativeAppKey: ApiConfig.kakaoNativeAppKey,
   );
+  await NotificationService.instance.initialize();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

@@ -11,6 +11,7 @@ import 'future_face_compare_screen.dart';
 import 'home_screen.dart';
 import 'past_face_archive_screen.dart';
 import 'past_report_history_screen.dart';
+import 'today_me_screen.dart';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -621,6 +622,15 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              _BottomNavItem(
+                icon: Icons.timer,
+                label: '오늘의 나',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TodayMeScreen()),
+                  );
+                },
+              ),
               _BottomNavItem(
                 icon: Icons.assignment,
                 label: '설문 조사',

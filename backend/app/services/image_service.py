@@ -1,7 +1,10 @@
 import os
 import httpx
+from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 from app.models import Lifestyle
+from app.database import SessionLocal
 
 '''
 .env루트 (추가해야함)
@@ -13,87 +16,132 @@ class ImageGenerationService:
     def __init__(self):
         self.gpu_server_url = os.getenv("IMAGE_GENERATION_API_URL")
         self.api_key = os.getenv("IMAGE_GENERATION_API_KEY")
-
-        if not self.gpu_server_url:
-            raise ValueError("IMAGE_GENERATION_API_URL not set")
+        self.enabled = bool(self.gpu_server_url)
 
     async def request_aging_simulation(
         self,
-        db: Session,
-        lifestyle_id: int
+        lifestyle_id: int,
+        db: Optional[Session] = None,
+        gender: Optional[str] = None,
+        target_years: Optional[int] = None,
+        habits: Optional[Dict[str, Any]] = None,
     ):
-        """
-        1. Lifestyle 조회
-        2. 노화 점수 계산
-        3. GPU 서버 호출
-        4. 결과 DB 저장
-        """
+        if not self.enabled:
+            raise Exception("IMAGE_GENERATION_API_URL not set")
 
-        # 1️⃣ lifestyle 조회
-        lifestyle = db.query(Lifestyle).filter(
-            Lifestyle.id == lifestyle_id
-        ).first()
+        owns_session = db is None
+        if db is None:
+            db = SessionLocal()
 
-        if not lifestyle:
-            raise Exception("Lifestyle not found")
+        try:
+            lifestyle = db.query(Lifestyle).filter(
+                Lifestyle.id == lifestyle_id
+            ).first()
 
-        if not lifestyle.image_url:
-            raise Exception("Original image not found")
+            if not lifestyle:
+                raise Exception("Lifestyle not found")
 
-        # 2️⃣ 노화 점수 계산
-        aging_score = self._calculate_score(lifestyle)
+            source_image_url = lifestyle.original_image_url
+            if not source_image_url:
+                raise Exception("Original image not found")
 
-        # 3️⃣ GPU 서버 호출
-        payload = {
-            "image_url": lifestyle.image_url,
-            "aging_strength": aging_score
-        }
+            effective_habits = habits or {
+                "smoking_status": lifestyle.smoking_status,
+                "uv_exposure_10to16": lifestyle.uv_exposure_10to16,
+                "drinking_days_per_week": lifestyle.drinking_days_per_week,
+                "sleep_hours_weekday": lifestyle.sleep_hours_weekday,
+                "stress_score": lifestyle.stress_score,
+            }
 
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            effective_gender = gender or (lifestyle.owner.gender if lifestyle.owner else None)
+            effective_target_years = target_years or lifestyle.target_years or 30
 
-        async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(
-                self.gpu_server_url,
-                json=payload,
-                headers=headers
-            )
+            aging_score = self._calculate_score(effective_habits)
 
-        response.raise_for_status()
-        result = response.json()
+            payload = {
+                "image_url": source_image_url,
+                "aging_strength": aging_score,
+                "gender": effective_gender,
+                "target_years": effective_target_years,
+                "habits": effective_habits,
+            }
 
-        output_url = result.get("output_url")
-        if not output_url:
-            raise Exception("GPU server did not return output_url")
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
 
-        # 4️⃣ 결과 DB 저장
-        lifestyle.aged_image_url = output_url
-        db.commit()
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    self.gpu_server_url,
+                    json=payload,
+                    headers=headers
+                )
 
-        return {"output_url": output_url}
+            response.raise_for_status()
+            result = response.json()
 
-    def _calculate_score(self, lifestyle):
-        """
-        설문 데이터를 기반으로 노화 강도 계산 (0.0 ~ 1.0)
-        """
+            output_url = result.get("output_url") or result.get("image_url")
+            if not output_url:
+                raise Exception("GPU server did not return output_url")
 
-        score = 0.2  # 기본 노화값
+            lifestyle.generated_image_url = output_url
+            db.commit()
 
-        # 흡연
-        if lifestyle.smoking == "current":
-            score += 0.4
+            return {
+                "output_url": output_url,
+                "image_url": output_url,
+                "status": "completed",
+                "params": {
+                    "aging_strength": aging_score,
+                    "gender": effective_gender,
+                    "target_years": effective_target_years,
+                    "habits": effective_habits,
+                },
+            }
+        except httpx.ConnectError as e:
+            host = urlparse(self.gpu_server_url).hostname if self.gpu_server_url else None
+            raise Exception(
+                f"이미지 생성 서버 연결 실패 (host={host}, url={self.gpu_server_url}): {e}"
+            ) from e
+        except httpx.RequestError as e:
+            host = urlparse(self.gpu_server_url).hostname if self.gpu_server_url else None
+            raise Exception(
+                f"이미지 생성 요청 실패 (host={host}, url={self.gpu_server_url}): {e}"
+            ) from e
+        finally:
+            if owns_session and db is not None:
+                db.close()
 
-        # 자외선 노출
-        if lifestyle.UV in ["1~2h", ">2h"]:
-            score += 0.3
+    def _calculate_score(self, habits: Dict[str, Any]) -> float:
+        score = 0.2
 
-        # 수면 부족
-        if lifestyle.sleep in ["<5h", "5~6h"]:
+        if habits.get("smoking_status") == "current":
+            score += 0.25
+
+        uv_exposure = habits.get("uv_exposure_10to16")
+        if uv_exposure in ["1~2h", ">2h"]:
             score += 0.2
 
-        # 최대 1.0 제한
-        return min(score, 1.0)
+        sleep_hours = habits.get("sleep_hours_weekday")
+        try:
+            if sleep_hours is not None and float(sleep_hours) < 6:
+                score += 0.15
+        except (TypeError, ValueError):
+            pass
+
+        stress_score = habits.get("stress_score")
+        try:
+            if stress_score is not None and float(stress_score) >= 7:
+                score += 0.1
+        except (TypeError, ValueError):
+            pass
+
+        drinking = habits.get("drinking_days_per_week")
+        if drinking in ["4-5", "6-7", "4~5", "6~7"]:
+            score += 0.1
+
+        return min(max(score, 0.0), 1.0)
 
 
 image_service = ImageGenerationService()
+image_gen_service = image_service

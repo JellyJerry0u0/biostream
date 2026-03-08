@@ -30,6 +30,40 @@ flutter pub get
 flutter run
 ```
 
+### Firebase API 키 주입 (필수)
+
+보안상 `lib/firebase_options.dart`에는 API 키를 하드코딩하지 않습니다.
+실행 시 아래와 같이 `--dart-define`으로 전달해야 합니다.
+
+```bash
+flutter run --dart-define=FIREBASE_API_KEY_WEB=YOUR_WEB_KEY --dart-define=FIREBASE_API_KEY_ANDROID=YOUR_ANDROID_KEY --dart-define=FIREBASE_API_KEY_IOS=YOUR_IOS_KEY --dart-define=FIREBASE_API_KEY_MACOS=YOUR_MACOS_KEY --dart-define=FIREBASE_API_KEY_WINDOWS=YOUR_WINDOWS_KEY
+```
+
+### `--dart-define-from-file` 권장 방식
+
+로컬에서 비밀값 파일로 실행하려면 예시 파일을 복사해 사용하세요.
+
+```bash
+copy dev.secrets.json.example dev.secrets.json
+```
+
+`dev.secrets.json`에 실제 키를 넣고 아래처럼 실행합니다.
+
+```bash
+flutter run --dart-define-from-file=dev.secrets.json
+```
+
+`dev.secrets.json`은 `.gitignore`로 Git 추적에서 제외됩니다.
+
+### Android Firebase 설정 파일 (커밋 금지)
+
+`android/app/google-services.json`은 Git에 올리지 않습니다.
+처음 세팅 시 템플릿을 복사해 실제 값으로 채우세요.
+
+```bash
+copy android\app\google-services.template.json android\app\google-services.json
+```
+
 ## 프로젝트 구조
 
 ```

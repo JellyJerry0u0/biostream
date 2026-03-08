@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_config.dart';
+import 'notification_service.dart';
 
 class LifestyleService {
   final storage = const FlutterSecureStorage();
@@ -95,6 +96,9 @@ class LifestyleService {
       if (token == null) {
         return {"success": false, "message": "로그인이 필요합니다."};
       }
+
+      // 리포트 생성 직전에 FCM 토큰 동기화를 강제하여 즉시 푸시 대상을 보장
+      await NotificationService.instance.syncTokenToServer();
 
       final origin = await ApiConfig.getBaseOrigin();
       final uri = force

@@ -81,7 +81,7 @@ async def collect_data(payload: HealthPayload):
         print(f"  ... 외 {len(payload.metrics) - 3}개의 데이터 생략")
     print("="*50 + "\n")
     
-    return {"status": "success", "message": f"{len(payload.metrics)}개의 데이터가 Kafka로 전송되었습니다."}
+    return {"status": "success", "message": f"{len(payload.metrics)}개의 데이터가 전송되었습니다."}
 
 # [3] 이미지 업로드 엔드포인트
 @router.post("/upload")

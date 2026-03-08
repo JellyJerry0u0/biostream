@@ -1,0 +1,74 @@
+mutation SeedData @transaction @auth(level: PUBLIC, insecureReason: "This is seed data and does not expose sensitive user information.") {
+  user_insertMany(data: [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      displayName: "Demo User 1",
+      createdAt: "2023-01-01T00:00:00Z",
+      email: "demouser1@example.com"
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      displayName: "Demo User 2",
+      createdAt: "2023-01-02T00:00:00Z",
+      email: "demouser2@example.com"
+    }
+  ])
+  habit_insertMany(data: [
+    {
+      id: "6a3c91d8-a0c5-4f4c-8b8d-6a3c91d8a0c5",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Drink Water",
+      frequency: "Daily",
+      createdAt: "2023-01-01T08:00:00Z",
+      isPrivate: false,
+      description: "Drink 8 glasses of water each day.",
+      goalUnit: "glasses",
+      defaultGoalValue: 8
+    },
+    {
+      id: "7b4d02e9-b1d6-5g5d-9c9e-7b4d02e9b1d6",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      name: "Read Book",
+      frequency: "Weekly",
+      createdAt: "2023-01-03T09:00:00Z",
+      isPrivate: true,
+      description: "Read for at least 30 minutes, three times a week.",
+      goalUnit: "minutes",
+      defaultGoalValue: 30
+    }
+  ])
+  habitEntry_insertMany(data: [
+    {
+      habitId: "6a3c91d8-a0c5-4f4c-8b8d-6a3c91d8a0c5",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      entryDate: "2023-01-01",
+      isCompleted: true,
+      actualValue: 8,
+      notes: "Drank all water today!"
+    },
+    {
+      habitId: "6a3c91d8-a0c5-4f4c-8b8d-6a3c91d8a0c5",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      entryDate: "2023-01-02",
+      isCompleted: false,
+      actualValue: 6,
+      notes: "Missed two glasses."
+    }
+  ])
+  habitReminder_insertMany(data: [
+    {
+      habitId: "6a3c91d8-a0c5-4f4c-8b8d-6a3c91d8a0c5",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      timeOfDay: "09:00",
+      isEnabled: true,
+      daysOfWeek: ["Monday", "Wednesday", "Friday"]
+    },
+    {
+      habitId: "7b4d02e9-b1d6-5g5d-9c9e-7b4d02e9b1d6",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      timeOfDay: "20:00",
+      isEnabled: true,
+      daysOfWeek: ["Tuesday", "Thursday"]
+    }
+  ])
+}

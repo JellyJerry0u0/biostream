@@ -104,3 +104,14 @@ class Lifestyle(Base):
 
     # Lifestyle과 User 간의 다대일 관계 설정
     owner=relationship("User", back_populates="lifestyles")
+
+
+class HealthData(Base):
+    __tablename__ = "health_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    steps = Column(Integer, default=0)
+    sleep_minutes = Column(Integer, default=0)
+    sync_date = Column(Date, index=True) # 데이터를 생성한 날짜 (어제 날짜)
+    is_processed = Column(Boolean, default=False) # 분석 완료 여부 플래그

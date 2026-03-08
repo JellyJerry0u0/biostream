@@ -20,3 +20,5 @@ notion-client>=2.2.1  # Notion API
 mcp>=1.0.0  # Model Context Protocol for Notion integration
 python-dotenv>=1.0.0
 websockets>=12.0  # WebSocket 지원 (코치 챗봇)
+apscheduler>=3.10.4
+firebase-admin>=6.5.0

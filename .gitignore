@@ -69,5 +69,9 @@ backend/uploads/
 .env.local
 .env.*.local
 
+# Local secrets for Flutter --dart-define-from-file
+dev.secrets.json
+!dev.secrets.json.example
+
 # Google Cloud Service Account Credentials
 ai_service/gen-lang-client-*.json
