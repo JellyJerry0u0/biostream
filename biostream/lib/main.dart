@@ -40,17 +40,7 @@ class MyApp extends StatelessWidget {
         textTheme: GoogleFonts.spaceGroteskTextTheme(),
         fontFamily: GoogleFonts.spaceGrotesk().fontFamily,
       ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF37EC13),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF132210),
-        textTheme: GoogleFonts.spaceGroteskTextTheme(ThemeData.dark().textTheme),
-        fontFamily: GoogleFonts.spaceGrotesk().fontFamily,
-      ),
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       home: const OnboardingScreen(),
     );
   }

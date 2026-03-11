@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'coach_chat_screen.dart';
-import 'facescan_screen.dart';
-import 'home_screen.dart';
-import 'my_info_screen.dart';
-import 'today_me_screen.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
 class FutureFaceCompareScreen extends StatefulWidget {
   const FutureFaceCompareScreen({super.key});
@@ -13,11 +9,27 @@ class FutureFaceCompareScreen extends StatefulWidget {
   State<FutureFaceCompareScreen> createState() => _FutureFaceCompareScreenState();
 }
 
-class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen> {
+class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
+    with TickerProviderStateMixin {
   static const Color _primary = Color(0xFF2BEE75);
 
   double _sliderRatio = 0.5;
   bool _wellManaged = true;
+  bool _wasVisibleInShell = false;
+  bool _didInitVisibility = false;
+  bool _showBlankCanvas = false;
+  int _visibilityEpoch = 0;
+
+  late final AnimationController _introCtrl;
+  late final AnimationController _visibilityCtrl;
+  late final Animation<double> _pageOpacity;
+  late final Animation<Offset> _heroSlide;
+  late final Animation<Offset> _sliderSlide;
+  late final Animation<Offset> _cardsSlide;
+  late final Animation<double> _heroOpacity;
+  late final Animation<double> _sliderOpacity;
+  late final Animation<double> _cardsOpacity;
+  late final Animation<double> _fabOpacity;
 
   static const String _futureImageUrl =
       'https://lh3.googleusercontent.com/aida-public/AB6AXuBZV-jDDioxTCoeHPdxBORf9Cqaeq3knCDN8yF2F2MqIwQocXv9IaY3ImcI7pjMa2irdLPRDoDDdjAvyDQAeUlWJCquXL4pXkW5NqkPtVRhlMZLnLSJCjHGa18mlQNecxsq8L56c61sI-Jk931BbBIuUgfE2cUuL637l-O6_1mEtDxXQOFehDStgd39FB1s6ephU8okbYq2XUC_hqgVdHFGypbmjqDLEY5vGd594kB7-eLuuDefiMZ20dejz2B_9gdlF9ArrZW4AY0';
@@ -25,150 +37,255 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen> {
       'https://lh3.googleusercontent.com/aida-public/AB6AXuDxIxJH9oWFTxoU35FE3EcoqKP31UypIBGEyY2F8gKH2Ve3lJCkDJfhzL4P14vr233LsdCKzEfc47JFKo_fLBzrso6z_G9TitQ5JlmTwgPGCBgQvTnH9Huj9cIFctm8iTv1wkGX-YoTyuSPUaTOXl4G6sPrakvLvvcUXH-QmnQKN-mdhfTCgIKdLTY303_Q5qABRj4QhBwBTNlRBGFksz2mGPmdtzXQJIrFTWI2V0Jmfq4VsQPv6ESZy8N4GMDh3aeO5XPmf9Ix1Z0';
 
   @override
+  void initState() {
+    super.initState();
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 860),
+    );
+    _visibilityCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
+    _pageOpacity = CurvedAnimation(
+      parent: _visibilityCtrl,
+      curve: Curves.easeOut,
+    );
+    _heroSlide = Tween<Offset>(
+      begin: const Offset(0, -0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.0, 0.45, curve: Curves.easeOutCubic),
+      ),
+    );
+    _sliderSlide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.15, 0.65, curve: Curves.easeOutCubic),
+      ),
+    );
+    _cardsSlide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.34, 0.84, curve: Curves.easeOutCubic),
+      ),
+    );
+    _heroOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
+    );
+    _sliderOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.15, 0.65, curve: Curves.easeOut),
+    );
+    _cardsOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.34, 0.84, curve: Curves.easeOut),
+    );
+    _fabOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isVisibleNow = _isFutureScreenVisible();
+
+    if (!_didInitVisibility) {
+      _didInitVisibility = true;
+      if (isVisibleNow) {
+        _showBlankCanvas = false;
+        _visibilityCtrl.value = 1;
+        _playIntroAnimation();
+      } else {
+        _showBlankCanvas = true;
+        _visibilityCtrl.value = 0;
+      }
+      _wasVisibleInShell = isVisibleNow;
+      return;
+    }
+
+    if (isVisibleNow) {
+      _visibilityEpoch++;
+      if (_showBlankCanvas) {
+        setState(() {
+          _showBlankCanvas = false;
+        });
+      }
+      _visibilityCtrl.forward();
+      if (!_wasVisibleInShell) {
+        _playIntroAnimation();
+      }
+    } else if (_wasVisibleInShell) {
+      final epoch = ++_visibilityEpoch;
+      _visibilityCtrl.reverse().then((_) {
+        if (!mounted || epoch != _visibilityEpoch) return;
+        if (!_isFutureScreenVisible()) {
+          setState(() {
+            _showBlankCanvas = true;
+          });
+        }
+      });
+    }
+
+    _wasVisibleInShell = isVisibleNow;
+  }
+
+  @override
+  void dispose() {
+    _introCtrl.dispose();
+    _visibilityCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _isFutureScreenVisible() {
+    final shellScope = NavShellScope.maybeOf(context);
+    if (shellScope == null) {
+      return true;
+    }
+    return shellScope.activeTab == AppNavTab.future;
+  }
+
+  void _playIntroAnimation() {
+    _introCtrl.stop();
+    _introCtrl.forward(from: 0);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF132210) : const Color(0xFFF6F8F6);
     final textColor = isDark ? Colors.white : const Color(0xFF0F1E14);
     final subTextColor = isDark ? Colors.white70 : Colors.black54;
+    final isVisible = _isFutureScreenVisible();
+
+    if (!isVisible && _showBlankCanvas) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        body: const SafeArea(
+          bottom: false,
+          child: SizedBox.expand(),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            _buildTopBar(isDark, textColor),
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 10),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _primary.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              'AI Prediction',
-                              style: TextStyle(
-                                color: _primary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.2,
+              child: IgnorePointer(
+                ignoring: !isVisible,
+                child: FadeTransition(
+                  opacity: _pageOpacity,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        SlideTransition(
+                          position: _heroSlide,
+                          child: FadeTransition(
+                            opacity: _heroOpacity,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 16, 24, 10),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: _primary.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Text(
+                                      'AI Prediction',
+                                      style: TextStyle(
+                                        color: _primary,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    '+20년 후의 모습 변화',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '슬라이더를 움직여 노화 과정을 확인하세요',
+                                    style: TextStyle(
+                                      color: subTextColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '+20년 후의 모습 변화',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
+                        ),
+                        SlideTransition(
+                          position: _sliderSlide,
+                          child: FadeTransition(
+                            opacity: _sliderOpacity,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: _buildComparisonSlider(isDark),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '슬라이더를 움직여 노화 과정을 확인하세요',
-                            style: TextStyle(
-                              color: subTextColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
+                        ),
+                        SlideTransition(
+                          position: _cardsSlide,
+                          child: FadeTransition(
+                            opacity: _cardsOpacity,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                              child: _buildScenarioAndCards(isDark, textColor),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildComparisonSlider(isDark),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                      child: _buildScenarioAndCards(isDark, textColor),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-            _buildBottomNavigation(isDark),
+            _buildBottomNavigation(),
           ],
         ),
       ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 66),
-        child: FloatingActionButton.extended(
-          onPressed: () {},
-          backgroundColor: _primary,
-          foregroundColor: const Color(0xFF102217),
-          label: const Text(
-            '솔루션 보기',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          icon: const Icon(Icons.auto_awesome),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar(bool isDark, Color textColor) {
-    final topBg = (isDark ? const Color(0xFF102217) : Colors.white).withValues(alpha: 0.86);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: topBg,
-        border: Border(
-          bottom: BorderSide(color: _primary.withValues(alpha: 0.12)),
-        ),
-      ),
-      child: Row(
-        children: [
-          _roundIconButton(
-            icon: Icons.arrow_back_ios_new,
-            onTap: () => Navigator.of(context).pop(),
-            color: textColor,
-          ),
-          Expanded(
-            child: Text(
-              '미래 얼굴 비교',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+        child: FadeTransition(
+          opacity: _fabOpacity,
+          child: FloatingActionButton.extended(
+            onPressed: () {},
+            backgroundColor: _primary,
+            foregroundColor: const Color(0xFF102217),
+            label: const Text(
+              '솔루션 보기',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
+            icon: const Icon(Icons.auto_awesome),
           ),
-          _roundIconButton(
-            icon: Icons.share,
-            onTap: () {},
-            color: textColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _roundIconButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    required Color color,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _primary.withValues(alpha: 0.08),
         ),
-        child: Icon(icon, color: color, size: 20),
       ),
     );
   }
@@ -438,113 +555,7 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen> {
     );
   }
 
-  Widget _buildBottomNavigation(bool isDark) {
-    final navBg = (isDark ? const Color(0xFF102217) : Colors.white).withValues(alpha: 0.95);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-      decoration: BoxDecoration(
-        color: navBg,
-        border: Border(top: BorderSide(color: _primary.withValues(alpha: 0.14))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _BottomNavItem(
-            icon: Icons.timer,
-            label: '오늘의 나',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TodayMeScreen()),
-              );
-            },
-          ),
-          _BottomNavItem(
-            icon: Icons.assignment,
-            label: '설문 조사',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-              );
-            },
-          ),
-          _BottomNavItem(
-            icon: Icons.home,
-            label: '홈 화면',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const HomeScreen()),
-              );
-            },
-          ),
-          const _BottomNavItem(
-            icon: Icons.face_retouching_natural,
-            label: '내 미래 얼굴',
-            isActive: true,
-          ),
-          _BottomNavItem(
-            icon: Icons.chat_bubble,
-            label: '챗봇',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CoachChatScreen()),
-              );
-            },
-          ),
-          _BottomNavItem(
-            icon: Icons.person,
-            label: '내 정보',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const MyInfoScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = Color(0xFF2BEE75);
-    final color = isActive ? primary : const Color(0xFF7A8380);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Widget _buildBottomNavigation() {
+    return const AppBottomNavBar(activeTab: AppNavTab.future);
   }
 }

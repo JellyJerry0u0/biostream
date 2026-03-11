@@ -5,13 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/profile_service.dart';
-import 'coach_chat_screen.dart';
-import 'facescan_screen.dart';
-import 'future_face_compare_screen.dart';
-import 'home_screen.dart';
 import 'past_face_archive_screen.dart';
 import 'past_report_history_screen.dart';
-import 'today_me_screen.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -20,7 +16,8 @@ class MyInfoScreen extends StatefulWidget {
   State<MyInfoScreen> createState() => _MyInfoScreenState();
 }
 
-class _MyInfoScreenState extends State<MyInfoScreen> {
+class _MyInfoScreenState extends State<MyInfoScreen>
+    with TickerProviderStateMixin {
   static const String _keyProfileEmail = 'profile_email';
   static const String _keyProfileNickname = 'profile_nickname';
   static const String _keyProfileImagePath = 'profile_image_path';
@@ -36,11 +33,142 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   String _nickname = '김바이오';
   String _email = 'biostream@example.com';
   String? _profileImagePath;
+  bool _wasVisibleInShell = false;
+  bool _didInitVisibility = false;
+  bool _showBlankCanvas = false;
+  int _visibilityEpoch = 0;
+
+  late final AnimationController _introCtrl;
+  late final AnimationController _visibilityCtrl;
+  late final Animation<double> _pageOpacity;
+  late final Animation<Offset> _profileSlide;
+  late final Animation<Offset> _statsSlide;
+  late final Animation<Offset> _menuSlide;
+  late final Animation<double> _profileOpacity;
+  late final Animation<double> _statsOpacity;
+  late final Animation<double> _menuOpacity;
 
   @override
   void initState() {
     super.initState();
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 880),
+    );
+    _visibilityCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
+    _pageOpacity = CurvedAnimation(
+      parent: _visibilityCtrl,
+      curve: Curves.easeOut,
+    );
+    _profileSlide = Tween<Offset>(
+      begin: const Offset(0, -0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.0, 0.44, curve: Curves.easeOutCubic),
+      ),
+    );
+    _statsSlide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.16, 0.62, curve: Curves.easeOutCubic),
+      ),
+    );
+    _menuSlide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.3, 0.92, curve: Curves.easeOutCubic),
+      ),
+    );
+    _profileOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.0, 0.44, curve: Curves.easeOut),
+    );
+    _statsOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.16, 0.62, curve: Curves.easeOut),
+    );
+    _menuOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.3, 0.92, curve: Curves.easeOut),
+    );
     _loadProfile();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isVisibleNow = _isMyInfoScreenVisible();
+
+    if (!_didInitVisibility) {
+      _didInitVisibility = true;
+      if (isVisibleNow) {
+        _showBlankCanvas = false;
+        _visibilityCtrl.value = 1;
+        _playIntroAnimation();
+      } else {
+        _showBlankCanvas = true;
+        _visibilityCtrl.value = 0;
+      }
+      _wasVisibleInShell = isVisibleNow;
+      return;
+    }
+
+    if (isVisibleNow) {
+      _visibilityEpoch++;
+      if (_showBlankCanvas) {
+        setState(() {
+          _showBlankCanvas = false;
+        });
+      }
+      _visibilityCtrl.forward();
+      if (!_wasVisibleInShell) {
+        _playIntroAnimation();
+      }
+    } else if (_wasVisibleInShell) {
+      final epoch = ++_visibilityEpoch;
+      _visibilityCtrl.reverse().then((_) {
+        if (!mounted || epoch != _visibilityEpoch) return;
+        if (!_isMyInfoScreenVisible()) {
+          setState(() {
+            _showBlankCanvas = true;
+          });
+        }
+      });
+    }
+
+    _wasVisibleInShell = isVisibleNow;
+  }
+
+  @override
+  void dispose() {
+    _introCtrl.dispose();
+    _visibilityCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _isMyInfoScreenVisible() {
+    final shellScope = NavShellScope.maybeOf(context);
+    if (shellScope == null) {
+      return true;
+    }
+    return shellScope.activeTab == AppNavTab.myInfo;
+  }
+
+  void _playIntroAnimation() {
+    _introCtrl.stop();
+    _introCtrl.forward(from: 0);
   }
 
   Future<void> _loadProfile() async {
@@ -272,6 +400,18 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isVisible = _isMyInfoScreenVisible();
+
+    if (!isVisible && _showBlankCanvas) {
+      return const Scaffold(
+        backgroundColor: _backgroundLight,
+        body: SafeArea(
+          bottom: false,
+          child: SizedBox.expand(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _backgroundLight,
       body: Center(
@@ -279,135 +419,131 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
           constraints: const BoxConstraints(maxWidth: 480),
           child: Stack(
             children: [
-              SafeArea(
-                child: Column(
-                  children: [
-                    _buildTopBar(context),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 108),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildProfileHeader(context),
-                            const SizedBox(height: 22),
-                            _buildStatsPanel(),
-                            const SizedBox(height: 28),
-                            _buildSectionTitle('활동 및 설정'),
-                            const SizedBox(height: 10),
-                            _buildMenuTile(
-                              icon: Icons.payments,
-                              title: '나의 포인트 내역',
-                              subtitle: '포인트 적립 및 사용 내역 확인',
-                              trailingText: '2,450 P',
+              IgnorePointer(
+                ignoring: !isVisible,
+                child: FadeTransition(
+                  opacity: _pageOpacity,
+                  child: SafeArea(
+                    bottom: false,
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        18,
+                        20,
+                        AppBottomNavBar.height + 20,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SlideTransition(
+                            position: _profileSlide,
+                            child: FadeTransition(
+                              opacity: _profileOpacity,
+                              child: _buildProfileHeader(context),
                             ),
-                            const SizedBox(height: 10),
-                            _buildMenuTile(
-                              icon: Icons.analytics,
-                              title: '과거 리포트 조회',
-                              subtitle: '지금까지 분석된 노화 예측 리포트',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const PastReportHistoryScreen(),
+                          ),
+                          const SizedBox(height: 22),
+                          SlideTransition(
+                            position: _statsSlide,
+                            child: FadeTransition(
+                              opacity: _statsOpacity,
+                              child: _buildStatsPanel(),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          SlideTransition(
+                            position: _menuSlide,
+                            child: FadeTransition(
+                              opacity: _menuOpacity,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildSectionTitle('활동 및 설정'),
+                                  const SizedBox(height: 10),
+                                  _buildMenuTile(
+                                    icon: Icons.payments,
+                                    title: '나의 포인트 내역',
+                                    subtitle: '포인트 적립 및 사용 내역 확인',
+                                    trailingText: '2,450 P',
                                   ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            _buildMenuTile(
-                              icon: Icons.face_retouching_natural,
-                              title: '과거 얼굴 조회',
-                              subtitle: '생성했던 AI 미래 얼굴 아카이브',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const PastFaceArchiveScreen(),
+                                  const SizedBox(height: 10),
+                                  _buildMenuTile(
+                                    icon: Icons.analytics,
+                                    title: '과거 리포트 조회',
+                                    subtitle: '지금까지 분석된 노화 예측 리포트',
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const PastReportHistoryScreen(),
+                                        ),
+                                      );
+                                    },
                                   ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            _buildMenuTile(
-                              icon: Icons.person,
-                              title: '내 정보 수정',
-                              subtitle: '개인정보 및 헬스케어 목표 설정',
-                            ),
-                            const SizedBox(height: 10),
-                            _buildMenuTile(
-                              icon: Icons.notifications,
-                              title: '알림 설정',
-                              subtitle: '푸시 알림 및 분석 리마인더 관리',
-                            ),
-                            const SizedBox(height: 28),
-                            Center(
-                              child: TextButton(
-                                onPressed: () {},
-                                child: Text(
-                                  '로그아웃',
-                                  style: TextStyle(
-                                    color: const Color(0xFF7A8380),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
+                                  const SizedBox(height: 10),
+                                  _buildMenuTile(
+                                    icon: Icons.face_retouching_natural,
+                                    title: '과거 얼굴 조회',
+                                    subtitle: '생성했던 AI 미래 얼굴 아카이브',
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const PastFaceArchiveScreen(),
+                                        ),
+                                      );
+                                    },
                                   ),
-                                ),
+                                  const SizedBox(height: 10),
+                                  _buildMenuTile(
+                                    icon: Icons.person,
+                                    title: '내 정보 수정',
+                                    subtitle: '개인정보 및 헬스케어 목표 설정',
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _buildMenuTile(
+                                    icon: Icons.notifications,
+                                    title: '알림 설정',
+                                    subtitle: '푸시 알림 및 분석 리마인더 관리',
+                                  ),
+                                  const SizedBox(height: 28),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: () {},
+                                      child: Text(
+                                        '로그아웃',
+                                        style: TextStyle(
+                                          color: const Color(0xFF7A8380),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Center(
+                                    child: Text(
+                                      'BioStream v1.2.4',
+                                      style: TextStyle(
+                                        color: const Color(0xFF96A09B),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Center(
-                              child: Text(
-                                'BioStream v1.2.4',
-                                style: TextStyle(
-                                  color: const Color(0xFF96A09B),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
               _buildBottomNavigation(context),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
-        border: Border(
-          bottom: BorderSide(color: _primary.withValues(alpha: 0.12)),
-        ),
-      ),
-      child: Row(
-        children: [
-          _roundIconButton(
-            icon: Icons.arrow_back_ios_new,
-            onTap: () => Navigator.of(context).pop(),
-          ),
-          const Expanded(
-            child: Text(
-              '내 정보',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF102217),
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 40),
-        ],
       ),
     );
   }
@@ -605,101 +741,14 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   }
 
   Widget _buildBottomNavigation(BuildContext context) {
-    return Positioned(
+    return const Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 90,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.96),
-            border: Border(
-              top: BorderSide(color: _primary.withValues(alpha: 0.14)),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _BottomNavItem(
-                icon: Icons.timer,
-                label: '오늘의 나',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const TodayMeScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.assignment,
-                label: '설문 조사',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.home,
-                label: '홈 화면',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const HomeScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.face_retouching_natural,
-                label: '내 미래 얼굴',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FutureFaceCompareScreen(),
-                    ),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.chat_bubble,
-                label: '챗봇',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CoachChatScreen()),
-                  );
-                },
-              ),
-              const _BottomNavItem(
-                icon: Icons.person,
-                label: '내 정보',
-                isActive: true,
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: AppBottomNavBar(activeTab: AppNavTab.myInfo),
     );
   }
 
-  Widget _roundIconButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _primary.withValues(alpha: 0.08),
-        ),
-        child: Icon(icon, color: const Color(0xFF102217), size: 20),
-      ),
-    );
-  }
 }
 
 class _StatItem extends StatelessWidget {
@@ -754,45 +803,3 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _BottomNavItem extends StatelessWidget {
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = Color(0xFF2BEE75);
-    final color = isActive ? primary : const Color(0xFF7A8380);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 23),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

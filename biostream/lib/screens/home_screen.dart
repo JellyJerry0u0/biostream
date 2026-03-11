@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/lifestyle_service.dart';
-import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
-import 'future_face_compare_screen.dart';
-import 'my_info_screen.dart';
 import 'result_screen.dart';
-import 'today_me_screen.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   static const Color _primary = Color(0xFF2BEE75);
   static const Color _backgroundLight = Color(0xFFF6F8F6);
   static const Color _backgroundDark = Color(0xFF050C08);
@@ -31,11 +30,157 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _originalImageUrl;
   String? _generatedImageUrl;
   String? _predictionPoint;
+  bool _wasVisibleInShell = false;
+  bool _didInitVisibility = false;
+  bool _showBlankCanvas = false;
+  int _visibilityEpoch = 0;
+
+  late final AnimationController _introCtrl;
+  late final AnimationController _visibilityCtrl;
+  late final Animation<double> _pageOpacity;
+  late final Animation<Offset> _engineSlide;
+  late final Animation<Offset> _simulationSlide;
+  late final Animation<Offset> _recentSlide;
+  late final Animation<Offset> _questSlide;
+  late final Animation<double> _engineOpacity;
+  late final Animation<double> _simulationOpacity;
+  late final Animation<double> _recentOpacity;
+  late final Animation<double> _questOpacity;
 
   @override
   void initState() {
     super.initState();
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _visibilityCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
+    _pageOpacity = CurvedAnimation(
+      parent: _visibilityCtrl,
+      curve: Curves.easeOut,
+    );
+    _engineSlide = Tween<Offset>(
+      begin: const Offset(0, -0.1),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.0, 0.42, curve: Curves.easeOutCubic),
+      ),
+    );
+    _simulationSlide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.1, 0.56, curve: Curves.easeOutCubic),
+      ),
+    );
+    _recentSlide = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.24, 0.76, curve: Curves.easeOutCubic),
+      ),
+    );
+    _questSlide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.4, 0.96, curve: Curves.easeOutCubic),
+      ),
+    );
+    _engineOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.0, 0.42, curve: Curves.easeOut),
+    );
+    _simulationOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.1, 0.56, curve: Curves.easeOut),
+    );
+    _recentOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.24, 0.76, curve: Curves.easeOut),
+    );
+    _questOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
+    );
     _loadQuestFromReport();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isVisibleNow = _isHomeScreenVisible();
+
+    if (!_didInitVisibility) {
+      _didInitVisibility = true;
+      if (isVisibleNow) {
+        _showBlankCanvas = false;
+        _visibilityCtrl.value = 1;
+        _playIntroAnimation();
+      } else {
+        _showBlankCanvas = true;
+        _visibilityCtrl.value = 0;
+      }
+      _wasVisibleInShell = isVisibleNow;
+      return;
+    }
+
+    if (isVisibleNow) {
+      _visibilityEpoch++;
+      if (_showBlankCanvas) {
+        setState(() {
+          _showBlankCanvas = false;
+        });
+      }
+      _visibilityCtrl.forward();
+      if (!_wasVisibleInShell) {
+        _playIntroAnimation();
+      }
+    } else if (_wasVisibleInShell) {
+      final epoch = ++_visibilityEpoch;
+      _visibilityCtrl.reverse().then((_) {
+        if (!mounted || epoch != _visibilityEpoch) return;
+        if (!_isHomeScreenVisible()) {
+          setState(() {
+            _showBlankCanvas = true;
+          });
+        }
+      });
+    }
+
+    _wasVisibleInShell = isVisibleNow;
+  }
+
+  @override
+  void dispose() {
+    _introCtrl.dispose();
+    _visibilityCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _isHomeScreenVisible() {
+    final shellScope = NavShellScope.maybeOf(context);
+    if (shellScope == null) {
+      return true;
+    }
+    return shellScope.activeTab == AppNavTab.home;
+  }
+
+  void _playIntroAnimation() {
+    _introCtrl.stop();
+    _introCtrl.forward(from: 0);
   }
 
   Future<void> _loadQuestFromReport() async {
@@ -333,6 +478,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.embedded) {
+      return const MainTabShell(initialTab: AppNavTab.home);
+    }
+    final isVisible = _isHomeScreenVisible();
+
+    if (!isVisible && _showBlankCanvas) {
+      return const Scaffold(
+        backgroundColor: _backgroundLight,
+        body: SafeArea(
+          bottom: false,
+          child: SizedBox.expand(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _backgroundLight,
       body: Center(
@@ -340,43 +500,64 @@ class _HomeScreenState extends State<HomeScreen> {
           constraints: const BoxConstraints(maxWidth: 480),
           child: Stack(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 108),
-                child: SafeArea(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 24),
-                        _buildEngineLabel(),
-                        const SizedBox(height: 28),
-                        _buildSimulationSection(context),
-                        const SizedBox(height: 16),
-                        _buildRecentPredictionSection(context),
-                        const SizedBox(height: 20),
-                        _buildQuestSection(context),
-                        const SizedBox(height: 28),
-                      ],
+              IgnorePointer(
+                ignoring: !isVisible,
+                child: FadeTransition(
+                  opacity: _pageOpacity,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      0,
+                      24,
+                      AppBottomNavBar.height,
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 24),
+                            SlideTransition(
+                              position: _engineSlide,
+                              child: FadeTransition(
+                                opacity: _engineOpacity,
+                                child: _buildEngineLabel(),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            SlideTransition(
+                              position: _simulationSlide,
+                              child: FadeTransition(
+                                opacity: _simulationOpacity,
+                                child: _buildSimulationSection(context),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SlideTransition(
+                              position: _recentSlide,
+                              child: FadeTransition(
+                                opacity: _recentOpacity,
+                                child: _buildRecentPredictionSection(context),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            SlideTransition(
+                              position: _questSlide,
+                              child: FadeTransition(
+                                opacity: _questOpacity,
+                                child: _buildQuestSection(context),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
               _buildBottomNavigation(context),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 6,
-                child: Center(
-                  child: Container(
-                    width: 128,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1013,79 +1194,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNavigation(BuildContext context) {
-    return Positioned(
+    return const Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 90,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.96),
-            border: Border(
-              top: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _NavItem(
-                icon: Icons.timer,
-                label: '오늘의 나',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const TodayMeScreen()),
-                  );
-                },
-              ),
-              _NavItem(
-                icon: Icons.assignment,
-                label: '설문 조사',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-                  );
-                },
-              ),
-              const _NavItem(
-                icon: Icons.home,
-                label: '홈 화면',
-                isActive: true,
-              ),
-              _NavItem(
-                icon: Icons.face_retouching_natural,
-                label: '내 미래 얼굴',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FutureFaceCompareScreen(),
-                    ),
-                  );
-                },
-              ),
-              _NavItem(
-                icon: Icons.chat_bubble,
-                label: '챗봇',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CoachChatScreen()),
-                  );
-                },
-              ),
-              _NavItem(
-                icon: Icons.person,
-                label: '내 정보',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyInfoScreen()),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: AppBottomNavBar(activeTab: AppNavTab.home),
     );
   }
 }
@@ -1104,45 +1217,3 @@ class _QuestItem {
   bool isDone;
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primary = Color(0xFF2BEE75);
-    final Color itemColor = isActive ? primary : const Color(0xFF7A8380);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: itemColor, size: 23),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: itemColor,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

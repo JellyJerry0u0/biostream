@@ -6,7 +6,7 @@
 /// - 액션 버튼 클릭 → action 메시지 전송
 
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 import '../utils/responsive.dart';
 import '../models/coach_models.dart';
 import '../services/coach_ws_client.dart';
@@ -21,7 +21,8 @@ class CoachChatScreen extends StatefulWidget {
   State<CoachChatScreen> createState() => _CoachChatScreenState();
 }
 
-class _CoachChatScreenState extends State<CoachChatScreen> {
+class _CoachChatScreenState extends State<CoachChatScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   final CoachWsClient _ws = CoachWsClient();
@@ -36,13 +37,74 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
   // 도구 실행 상태 (Deep 모드)
   ToolStatusEvent? _currentToolStatus;
 
+  // 첫 진입 인트로 애니메이션
+  late final AnimationController _introCtrl;
+  late final Animation<Offset> _headerSlide;
+  late final Animation<Offset> _bottomSlide;
+  late final Animation<double> _headerOpacity;
+  late final Animation<double> _bottomOpacity;
+  late final Animation<double> _centerOpacity;
+  late final Animation<double> _centerScale;
+  bool _wasVisibleInShell = false;
+
   // (citations 토글은 RAG 근거 보기 액션으로 대체됨)
 
   @override
   void initState() {
     super.initState();
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _headerSlide = Tween<Offset>(
+      begin: const Offset(0, -0.18),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.12, 0.62, curve: Curves.easeOutCubic),
+      ),
+    );
+    _bottomSlide = Tween<Offset>(
+      begin: const Offset(0, 0.22),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.18, 0.72, curve: Curves.easeOutCubic),
+      ),
+    );
+    _headerOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.1, 0.58, curve: Curves.easeOut),
+    );
+    _bottomOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.16, 0.72, curve: Curves.easeOut),
+    );
+    _centerOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.28, 0.86, curve: Curves.easeOut),
+    );
+    _centerScale = Tween<double>(begin: 0.96, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.26, 0.86, curve: Curves.easeOutCubic),
+      ),
+    );
+
     _setupWs();
     _ws.connect(reportId: widget.reportId);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isVisibleNow = _isChatScreenVisible();
+    if (isVisibleNow && !_wasVisibleInShell) {
+      _playIntroAnimation();
+    }
+    _wasVisibleInShell = isVisibleNow;
   }
 
   @override
@@ -50,7 +112,21 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
     _ws.disconnect();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
+    _introCtrl.dispose();
     super.dispose();
+  }
+
+  bool _isChatScreenVisible() {
+    final shellScope = NavShellScope.maybeOf(context);
+    if (shellScope == null) {
+      return true;
+    }
+    return shellScope.activeTab == AppNavTab.chatbot;
+  }
+
+  void _playIntroAnimation() {
+    _introCtrl.stop();
+    _introCtrl.forward(from: 0);
   }
 
   // ── WebSocket 콜백 설정 ──
@@ -176,9 +252,16 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
   }
 
   void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-      (route) => false,
+    final shellScope = NavShellScope.maybeOf(context);
+    if (shellScope != null) {
+      shellScope.onTabSelected(AppNavTab.home);
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => const MainTabShell(initialTab: AppNavTab.home),
+      ),
     );
   }
 
@@ -247,16 +330,52 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final hp = Responsive.padding(context, 16);
+    final isVisible = _isChatScreenVisible();
+    final bgColor = isDark ? const Color(0xFF132210) : const Color(0xFFF6F8F6);
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF132210) : const Color(0xFFF6F8F6),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(isDark, hp),
-            Expanded(child: _buildChatArea(isDark, hp)),
-            _buildBottomBar(isDark, hp),
-          ],
+    // PageView 인접 페이지 프리렌더링 시 챗봇 내용을 미리 노출하지 않기 위해
+    // 활성 탭이 아닐 때는 빈 캔버스만 렌더링한다.
+    if (!isVisible) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        body: const SafeArea(
+          child: SizedBox.expand(),
+        ),
+      );
+    }
+
+    return WillPopScope(
+      onWillPop: () async {
+        _goHome();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: bgColor,
+        body: SafeArea(
+          child: Column(
+            children: [
+              SlideTransition(
+                position: _headerSlide,
+                child: FadeTransition(
+                  opacity: _headerOpacity,
+                  child: _buildHeader(isDark, hp),
+                ),
+              ),
+              Expanded(
+                child: FadeTransition(
+                  opacity: _centerOpacity,
+                  child: _buildChatArea(isDark, hp),
+                ),
+              ),
+              SlideTransition(
+                position: _bottomSlide,
+                child: FadeTransition(
+                  opacity: _bottomOpacity,
+                  child: _buildBottomBar(isDark, hp),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -287,9 +406,8 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
       child: Row(
         children: [
           // 뒤로가기
-          _iconButton(Icons.arrow_back, isDark, () => Navigator.of(context).pop()),
+          _iconButton(Icons.arrow_back, isDark, _goHome),
           const SizedBox(width: 6),
-          _iconButton(Icons.home_outlined, isDark, _goHome),
           const SizedBox(width: 8),
           // 타이틀 + 상태
           Expanded(
@@ -412,34 +530,54 @@ class _CoachChatScreenState extends State<CoachChatScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.spa_outlined,
-              size: 56,
-              color: const Color(0xFF37EC13).withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '피부 코칭을 시작해보세요',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white70 : Colors.black54,
+        child: ScaleTransition(
+          scale: _centerScale,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 78,
+                height: 78,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF37EC13).withOpacity(0.28),
+                      const Color(0xFF37EC13).withOpacity(0.04),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: const Color(0xFF37EC13).withOpacity(0.26),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  size: 34,
+                  color: Color(0xFF37EC13),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '리포트 기반 맞춤 코칭과\n생활습관 개선 팁을 제공합니다',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.grey[500] : Colors.grey[600],
-                height: 1.5,
+              const SizedBox(height: 16),
+              Text(
+                'AI Skin Coach',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: isDark ? Colors.white : const Color(0xFF0F1E14),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                '리포트 기반 맞춤 코칭과\n생활습관 개선 팁을 제공합니다',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

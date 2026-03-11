@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/lifestyle_service.dart';
-import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
-import 'future_face_compare_screen.dart';
-import 'home_screen.dart';
-import 'my_info_screen.dart';
-import 'today_me_screen.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
 class PastFaceArchiveScreen extends StatefulWidget {
   const PastFaceArchiveScreen({super.key});
@@ -132,6 +128,7 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
           child: Stack(
             children: [
               SafeArea(
+                bottom: false,
                 child: Column(
                   children: [
                     _buildTopBar(context),
@@ -180,7 +177,9 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
                     ),
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.only(bottom: 98),
+                        padding: EdgeInsets.only(
+                          bottom: AppBottomNavBar.height + 10,
+                        ),
                         child: _buildBodyContent(itemCount),
                       ),
                     ),
@@ -369,84 +368,11 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
   }
 
   Widget _buildBottomNavigation(BuildContext context) {
-    return Positioned(
+    return const Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 90,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.96),
-            border: Border(
-              top: BorderSide(color: _primary.withValues(alpha: 0.14)),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _BottomNavItem(
-                icon: Icons.timer,
-                label: '오늘의 나',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const TodayMeScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.assignment,
-                label: '설문 조사',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.home,
-                label: '홈 화면',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const HomeScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.face_retouching_natural,
-                label: '내 미래 얼굴',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FutureFaceCompareScreen(),
-                    ),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.chat_bubble,
-                label: '챗봇',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CoachChatScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.person,
-                label: '내 정보',
-                isActive: true,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyInfoScreen()),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: AppBottomNavBar(activeTab: AppNavTab.myInfo),
     );
   }
 
@@ -578,45 +504,3 @@ class _ArchiveItem {
   final String imageUrl;
 }
 
-class _BottomNavItem extends StatelessWidget {
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = Color(0xFF2BEE75);
-    final color = isActive ? primary : const Color(0xFF7A8380);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 23),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

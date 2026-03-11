@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'coach_chat_screen.dart';
 import 'facescan_screen.dart';
-import 'future_face_compare_screen.dart';
-import 'home_screen.dart';
-import 'my_info_screen.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
 class TodayMeScreen extends StatefulWidget {
   const TodayMeScreen({super.key});
@@ -13,12 +10,28 @@ class TodayMeScreen extends StatefulWidget {
   State<TodayMeScreen> createState() => _TodayMeScreenState();
 }
 
-class _TodayMeScreenState extends State<TodayMeScreen> {
+class _TodayMeScreenState extends State<TodayMeScreen>
+    with TickerProviderStateMixin {
   static const Color _primary = Color(0xFF2BEE75);
   static const Color _backgroundLight = Color(0xFFF6F8F6);
 
   final PageController _pageController = PageController(viewportFraction: 0.86);
   int _activeFaceIndex = 0;
+  bool _wasVisibleInShell = false;
+  bool _didInitVisibility = false;
+  bool _showBlankCanvas = false;
+  int _visibilityEpoch = 0;
+
+  late final AnimationController _introCtrl;
+  late final AnimationController _visibilityCtrl;
+  late final Animation<Offset> _headerSlide;
+  late final Animation<Offset> _carouselSlide;
+  late final Animation<Offset> _metricsSlide;
+  late final Animation<double> _pageOpacity;
+  late final Animation<double> _headerOpacity;
+  late final Animation<double> _carouselOpacity;
+  late final Animation<double> _metricsOpacity;
+  late final Animation<double> _recordOpacity;
 
   final List<_FaceCardItem> _faceCards = const [
     _FaceCardItem(
@@ -55,24 +68,200 @@ class _TodayMeScreenState extends State<TodayMeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 880),
+    );
+    _visibilityCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
+    _pageOpacity = CurvedAnimation(
+      parent: _visibilityCtrl,
+      curve: Curves.easeOut,
+    );
+    _headerSlide = Tween<Offset>(
+      begin: const Offset(0, -0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.0, 0.46, curve: Curves.easeOutCubic),
+      ),
+    );
+    _carouselSlide = Tween<Offset>(
+      begin: const Offset(-0.12, 0),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.12, 0.62, curve: Curves.easeOutCubic),
+      ),
+    );
+    _metricsSlide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introCtrl,
+        curve: const Interval(0.3, 0.78, curve: Curves.easeOutCubic),
+      ),
+    );
+    _headerOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.0, 0.46, curve: Curves.easeOut),
+    );
+    _carouselOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.12, 0.62, curve: Curves.easeOut),
+    );
+    _metricsOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.3, 0.78, curve: Curves.easeOut),
+    );
+    _recordOpacity = CurvedAnimation(
+      parent: _introCtrl,
+      curve: const Interval(0.56, 1.0, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isVisibleNow = _isTodayScreenVisible();
+
+    if (!_didInitVisibility) {
+      _didInitVisibility = true;
+      if (isVisibleNow) {
+        _showBlankCanvas = false;
+        _visibilityCtrl.value = 1;
+        _playIntroAnimation();
+      } else {
+        _showBlankCanvas = true;
+        _visibilityCtrl.value = 0;
+      }
+      _wasVisibleInShell = isVisibleNow;
+      return;
+    }
+
+    if (isVisibleNow) {
+      _visibilityEpoch++;
+      if (_showBlankCanvas) {
+        setState(() {
+          _showBlankCanvas = false;
+        });
+      }
+      _visibilityCtrl.forward();
+      if (!_wasVisibleInShell) {
+        _playIntroAnimation();
+      }
+    } else if (_wasVisibleInShell) {
+      final epoch = ++_visibilityEpoch;
+      _visibilityCtrl.reverse().then((_) {
+        if (!mounted || epoch != _visibilityEpoch) return;
+        if (!_isTodayScreenVisible()) {
+          setState(() {
+            _showBlankCanvas = true;
+          });
+        }
+      });
+    }
+
+    _wasVisibleInShell = isVisibleNow;
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _introCtrl.dispose();
+    _visibilityCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _isTodayScreenVisible() {
+    final shellScope = NavShellScope.maybeOf(context);
+    if (shellScope == null) {
+      return true;
+    }
+    return shellScope.activeTab == AppNavTab.today;
+  }
+
+  void _playIntroAnimation() {
+    _introCtrl.stop();
+    _introCtrl.forward(from: 0);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isVisible = _isTodayScreenVisible();
+
+    if (!isVisible && _showBlankCanvas) {
+      return Scaffold(
+        backgroundColor: _backgroundLight,
+        body: const SafeArea(
+          bottom: false,
+          child: SizedBox.expand(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _backgroundLight,
       body: SafeArea(
+        bottom: false,
         child: Stack(
           children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 4),
-                  _buildFaceCarousel(),
-                  _buildIndicator(),
-                  _buildMetricsPanel(),
-                  _buildRecordButton(),
-                ],
+            IgnorePointer(
+              ignoring: !isVisible,
+              child: FadeTransition(
+                opacity: _pageOpacity,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    0,
+                    0,
+                    0,
+                    AppBottomNavBar.height + 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SlideTransition(
+                        position: _headerSlide,
+                        child: FadeTransition(
+                          opacity: _headerOpacity,
+                          child: _buildHeader(),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      SlideTransition(
+                        position: _carouselSlide,
+                        child: FadeTransition(
+                          opacity: _carouselOpacity,
+                          child: Column(
+                            children: [
+                              _buildFaceCarousel(),
+                              _buildIndicator(),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SlideTransition(
+                        position: _metricsSlide,
+                        child: FadeTransition(
+                          opacity: _metricsOpacity,
+                          child: _buildMetricsPanel(),
+                        ),
+                      ),
+                      FadeTransition(
+                        opacity: _recordOpacity,
+                        child: _buildRecordButton(),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             _buildBottomNavigation(context),
@@ -374,79 +563,11 @@ class _TodayMeScreenState extends State<TodayMeScreen> {
   }
 
   Widget _buildBottomNavigation(BuildContext context) {
-    return Positioned(
+    return const Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 90,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.96),
-            border: Border(
-              top: BorderSide(color: _primary.withValues(alpha: 0.14)),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              const _BottomNavItem(
-                icon: Icons.timer,
-                label: '오늘의 나',
-                isActive: true,
-              ),
-              _BottomNavItem(
-                icon: Icons.assignment,
-                label: '설문 조사',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.home,
-                label: '홈 화면',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const HomeScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.face_retouching_natural,
-                label: '내 미래 얼굴',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FutureFaceCompareScreen(),
-                    ),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.chat_bubble,
-                label: '챗봇',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CoachChatScreen()),
-                  );
-                },
-              ),
-              _BottomNavItem(
-                icon: Icons.person,
-                label: '내 정보',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyInfoScreen()),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: AppBottomNavBar(activeTab: AppNavTab.today),
     );
   }
 
@@ -538,48 +659,6 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _BottomNavItem extends StatelessWidget {
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = Color(0xFF2BEE75);
-    final color = isActive ? primary : const Color(0xFF7A8380);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 23),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _FaceCardItem {
   const _FaceCardItem({
