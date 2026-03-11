@@ -128,25 +128,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
 
                 try {
-                  final result = await _devChannel.invokeMethod<Map<dynamic, dynamic>>('runImmediateHealthSync');
+                  final syncResult = await _devChannel.invokeMethod<String>('enqueueOneTimeHealthSync');
                   if (context.mounted) {
-                    final steps = result?['steps'];
-                    final sleep = result?['sleepMinutes'];
-                    final date = result?['date'];
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('즉시 동기화 성공 ($date) · 걸음 $steps · 수면 $sleep분')),
+                      SnackBar(
+                        content: Text(
+                          syncResult == 'synced'
+                              ? '동기화 테스트를 완료했습니다.'
+                              : '동기화 테스트 작업을 시작했습니다.',
+                        ),
+                      ),
                     );
                   }
                 } on PlatformException catch (e) {
                   if (context.mounted) {
+                    final details = e.details?.toString();
+                    final msg = details != null && details.isNotEmpty
+                        ? '동기화 테스트 실패: ${e.message ?? e.code} ($details)'
+                        : '동기화 테스트 실패: ${e.message ?? e.code}';
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('동기화 테스트 실패: ${e.message ?? e.code}')),
+                      SnackBar(content: Text(msg)),
                     );
                   }
-                } on MissingPluginException {
+                } on MissingPluginException catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('현재 플랫폼에서는 동기화 테스트를 지원하지 않습니다.')),
+                      SnackBar(content: Text('동기화 테스트 경로를 찾을 수 없습니다: ${e.message ?? 'plugin missing'}')),
                     );
                   }
                 }
