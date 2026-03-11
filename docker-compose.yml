@@ -48,6 +48,7 @@ services:
       - DATABASE_URL=postgresql://myuser:mypassword@db:5432/biostream
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}  # Gemini API 키 (선택적, .env 파일에서 로드)
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}  # Google API 키 (LangGraph용)
+      - COACH_LLM_MODEL=${COACH_LLM_MODEL:-gemini-2.5-flash}  # 코치 챗 모델명
       - QDRANT_URL=http://qdrant:6333  # Docker 내부 네트워크에서 Qdrant 접근
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-biostream_corpus_v1}
       - QDRANT_QUANT_COLLECTION=${QDRANT_QUANT_COLLECTION:-quant_evidence}  # 정량 근거 컬렉션

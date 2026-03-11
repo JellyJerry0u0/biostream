@@ -70,7 +70,7 @@ def _get_llm_with_tools(tools):
     """Gemini LLM에 tools를 바인딩하여 반환"""
     from langchain_google_genai import ChatGoogleGenerativeAI
 
-    model_name = os.getenv("COACH_LLM_MODEL", "gemini-2.0-flash")
+    model_name = os.getenv("COACH_LLM_MODEL", "gemini-2.5-flash")
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
     if not api_key:

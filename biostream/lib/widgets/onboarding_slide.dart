@@ -28,141 +28,151 @@ class _Slide1 extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final horizontalPadding = Responsive.padding(context, 24);
-    
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Image Container
-          Expanded(
-            flex: 3,
-            child: Container(
+
+    final imageCard = Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            // Background Image
+            Image.network(
+              'https://lh3.googleusercontent.com/aida-public/AB6AXuBeITGKq5j-sHdMyN_GgekxyBnlmU569R5bfEprvrxNNw07O619OqY94CgAgjxKtNr-MYRLCOE1dPyZtgLgBm8iTZuX2UP_W5YuOsdUSQO1ZAjJdFFcGiSdIyr589uVyFovgwu9gZ1u8jiXhSq_EemJYz3JpPr-ds47SnS_TCd4MqZvxe0EKz7BR4b9JP74cLf5X-hicyWmitfN0aIlllPPBNY43e8xXCVhVUTdvP3P3EGoz6-EzE0EA4YjuZZCNZ3xKWy20RwE5lk',
               width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    spreadRadius: 2,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: Icon(Icons.image, size: 64, color: Colors.grey),
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Stack(
+                );
+              },
+            ),
+            Positioned(
+              top: Responsive.padding(context, 16),
+              left: Responsive.padding(context, 16),
+              right: Responsive.padding(context, 16),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: Responsive.padding(context, 12),
+                  vertical: Responsive.padding(context, 6),
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(9999),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Background Image
-                    Image.network(
-                      'https://lh3.googleusercontent.com/aida-public/AB6AXuBeITGKq5j-sHdMyN_GgekxyBnlmU569R5bfEprvrxNNw07O619OqY94CgAgjxKtNr-MYRLCOE1dPyZtgLgBm8iTZuX2UP_W5YuOsdUSQO1ZAjJdFFcGiSdIyr589uVyFovgwu9gZ1u8jiXhSq_EemJYz3JpPr-ds47SnS_TCd4MqZvxe0EKz7BR4b9JP74cLf5X-hicyWmitfN0aIlllPPBNY43e8xXCVhVUTdvP3P3EGoz6-EzE0EA4YjuZZCNZ3xKWy20RwE5lk',
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[300],
-                          child: const Center(
-                            child: Icon(Icons.image, size: 64, color: Colors.grey),
-                          ),
-                        );
-                      },
+                    Icon(
+                      Icons.timelapse,
+                      size: Responsive.iconSize(context, 16),
+                      color: const Color(0xFF37EC13),
                     ),
-                    
-                    // Floating Label
-                    Positioned(
-                      top: Responsive.padding(context, 16),
-                      left: Responsive.padding(context, 16),
-                      right: Responsive.padding(context, 16),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: Responsive.padding(context, 12),
-                          vertical: Responsive.padding(context, 6),
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(9999),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.timelapse,
-                              size: Responsive.iconSize(context, 16),
-                              color: const Color(0xFF37EC13),
-                            ),
-                            SizedBox(width: Responsive.padding(context, 6)),
-                            Text(
-                              '+10 Years',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: Responsive.fontSize(context, 12),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    // Scan Effect Overlay
-                    Positioned(
-                      top: 0,
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: CustomPaint(
-                        painter: _ScanLinePainter(),
+                    SizedBox(width: Responsive.padding(context, 6)),
+                    Text(
+                      '+10 Years',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: Responsive.fontSize(context, 12),
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-          
-          SizedBox(height: Responsive.padding(context, 24)),
-          
-          // Text Content
-          Column(
-            children: [
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: Responsive.fontSize(context, 28),
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                  children: const [
-                    TextSpan(text: 'AI로 미리 보는\n'),
-                    TextSpan(
-                      text: '10년 후',
-                      style: TextStyle(color: Color(0xFF37EC13)),
-                    ),
-                    TextSpan(text: ' 내 얼굴'),
-                  ],
-                ),
+            Positioned(
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: CustomPaint(
+                painter: _ScanLinePainter(),
               ),
-              SizedBox(height: Responsive.padding(context, 12)),
-              Text(
-                '현재 얼굴과 10년 후의 얼굴을 비교해보세요.\n최첨단 AI가 당신의 미래를 예측합니다.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: Responsive.fontSize(context, 14),
-                  height: 1.5,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxHeight < 170;
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isCompact)
+                SizedBox(
+                  height: (constraints.maxHeight * 0.28).clamp(38.0, 56.0),
+                  child: imageCard,
+                )
+              else
+                Expanded(
+                  flex: 3,
+                  child: imageCard,
                 ),
+              SizedBox(height: isCompact ? 8 : Responsive.padding(context, 24)),
+              // Text Content
+              Column(
+                children: [
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: isCompact
+                            ? Responsive.fontSize(context, 24)
+                            : Responsive.fontSize(context, 28),
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      children: const [
+                        TextSpan(text: 'AI로 미리 보는\n'),
+                        TextSpan(
+                          text: '10년 후',
+                          style: TextStyle(color: Color(0xFF37EC13)),
+                        ),
+                        TextSpan(text: ' 내 얼굴'),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: isCompact ? 6 : Responsive.padding(context, 12)),
+                  Text(
+                    '현재 얼굴과 10년 후의 얼굴을 비교해보세요.\n최첨단 AI가 당신의 미래를 예측합니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: isCompact
+                          ? Responsive.fontSize(context, 12)
+                          : Responsive.fontSize(context, 14),
+                      height: 1.4,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -502,128 +512,154 @@ class _Slide3 extends StatelessWidget {
                             width: 1,
                           ),
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Header
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: LayoutBuilder(
+                          builder: (context, cardConstraints) {
+                            final isCompact =
+                                cardConstraints.maxHeight < 220 ||
+                                cardConstraints.maxWidth < 260;
+                            final gap = isCompact
+                                ? Responsive.padding(context, 10)
+                                : Responsive.padding(context, 24);
+                            final double chartHeight = isCompact
+                                ? math.max(56.0, cardConstraints.maxHeight * 0.42).toDouble()
+                                : Responsive.fontSize(context, 110).toDouble();
+
+                            return Column(
+                              mainAxisSize: MainAxisSize.max,
                               children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                // Header
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      'SKIN AGE',
-                                      style: TextStyle(
-                                        fontSize: Responsive.fontSize(context, 10),
-                                        color: Colors.grey[300],
-                                        letterSpacing: 1.2,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    SizedBox(height: Responsive.padding(context, 4)),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '24.5',
+                                          'SKIN AGE',
                                           style: TextStyle(
-                                            fontSize: Responsive.fontSize(context, 24),
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
+                                            fontSize: isCompact
+                                                ? Responsive.fontSize(context, 8)
+                                                : Responsive.fontSize(context, 10),
+                                            color: Colors.grey[300],
+                                            letterSpacing: 1.2,
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                        SizedBox(width: Responsive.padding(context, 4)),
-                                        Text(
-                                          '세',
-                                          style: TextStyle(
-                                            fontSize: Responsive.fontSize(context, 14),
-                                            color: Colors.grey[400],
-                                          ),
+                                        SizedBox(height: Responsive.padding(context, 4)),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              '24.5',
+                                              style: TextStyle(
+                                                fontSize: isCompact
+                                                    ? Responsive.fontSize(context, 18)
+                                                    : Responsive.fontSize(context, 24),
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            SizedBox(width: Responsive.padding(context, 4)),
+                                            Text(
+                                              '세',
+                                              style: TextStyle(
+                                                fontSize: isCompact
+                                                    ? Responsive.fontSize(context, 11)
+                                                    : Responsive.fontSize(context, 14),
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isCompact
+                                            ? Responsive.padding(context, 6)
+                                            : Responsive.padding(context, 8),
+                                        vertical: isCompact
+                                            ? Responsive.padding(context, 3)
+                                            : Responsive.padding(context, 4),
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF37EC13)
+                                            .withOpacity(0.2),
+                                        border: Border.all(
+                                          color: const Color(0xFF37EC13)
+                                              .withOpacity(0.5),
+                                          width: 1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.trending_down,
+                                            size: isCompact
+                                                ? Responsive.iconSize(context, 11)
+                                                : Responsive.iconSize(context, 14),
+                                            color: const Color(0xFF37EC13),
+                                          ),
+                                          SizedBox(width: Responsive.padding(context, 4)),
+                                          Text(
+                                            '-2.4',
+                                            style: TextStyle(
+                                              fontSize: isCompact
+                                                  ? Responsive.fontSize(context, 8)
+                                                  : Responsive.fontSize(context, 10),
+                                              fontWeight: FontWeight.bold,
+                                              color: const Color(0xFF37EC13),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: Responsive.padding(context, 8),
-                                    vertical: Responsive.padding(context, 4),
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF37EC13)
-                                        .withOpacity(0.2),
-                                    border: Border.all(
-                                      color: const Color(0xFF37EC13)
-                                          .withOpacity(0.5),
-                                      width: 1,
+                                SizedBox(height: gap),
+                                // Bar Chart
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.bottomCenter,
+                                    child: SizedBox(
+                                      height: chartHeight,
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          _BarItem(
+                                            height: 0.4,
+                                            label: 'Apr',
+                                            isActive: false,
+                                            chartHeight: chartHeight,
+                                          ),
+                                          _BarItem(
+                                            height: 0.55,
+                                            label: 'May',
+                                            isActive: false,
+                                            chartHeight: chartHeight,
+                                          ),
+                                          _BarItem(
+                                            height: 0.45,
+                                            label: 'Jun',
+                                            isActive: false,
+                                            chartHeight: chartHeight,
+                                          ),
+                                          _BarItem(
+                                            height: 0.8,
+                                            label: 'Today',
+                                            isActive: true,
+                                            chartHeight: chartHeight,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.trending_down,
-                                        size: Responsive.iconSize(context, 14),
-                                        color: const Color(0xFF37EC13),
-                                      ),
-                                      SizedBox(width: Responsive.padding(context, 4)),
-                                      Text(
-                                        '-2.4',
-                                        style: TextStyle(
-                                          fontSize: Responsive.fontSize(context, 10),
-                                          fontWeight: FontWeight.bold,
-                                          color: const Color(0xFF37EC13),
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ],
-                            ),
-                            
-                            SizedBox(height: Responsive.padding(context, 24)),
-                            
-                            // Bar Chart
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final chartHeight = Responsive.fontSize(context, 110);
-                                return SizedBox(
-                                  height: chartHeight,
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      _BarItem(
-                                        height: 0.4,
-                                        label: 'Apr',
-                                        isActive: false,
-                                        chartHeight: chartHeight,
-                                      ),
-                                      _BarItem(
-                                        height: 0.55,
-                                        label: 'May',
-                                        isActive: false,
-                                        chartHeight: chartHeight,
-                                      ),
-                                      _BarItem(
-                                        height: 0.45,
-                                        label: 'Jun',
-                                        isActive: false,
-                                        chartHeight: chartHeight,
-                                      ),
-                                      _BarItem(
-                                        height: 0.8,
-                                        label: 'Today',
-                                        isActive: true,
-                                        chartHeight: chartHeight,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),

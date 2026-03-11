@@ -410,7 +410,7 @@ async def stream_llm_response(
         from langchain_google_genai import ChatGoogleGenerativeAI
         from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
-        model_name = os.getenv("COACH_LLM_MODEL", "gemini-2.0-flash")
+        model_name = os.getenv("COACH_LLM_MODEL", "gemini-2.5-flash")
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
         if not api_key:
