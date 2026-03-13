@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'facescan_screen.dart';
+import '../services/lifestyle_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
 class TodayMeScreen extends StatefulWidget {
@@ -21,6 +22,9 @@ class _TodayMeScreenState extends State<TodayMeScreen>
   bool _didInitVisibility = false;
   bool _showBlankCanvas = false;
   int _visibilityEpoch = 0;
+  final LifestyleService _lifestyleService = LifestyleService();
+  late List<_MetricItem> _metrics;
+  String? _metricsNotice;
 
   late final AnimationController _introCtrl;
   late final AnimationController _visibilityCtrl;
@@ -49,13 +53,13 @@ class _TodayMeScreenState extends State<TodayMeScreen>
     ),
   ];
 
-  static const List<_MetricItem> _metrics = [
+  static const List<_MetricItem> _defaultMetrics = [
     _MetricItem(icon: Icons.directions_walk, label: '거리', value: '5.2', unit: 'km'),
     _MetricItem(icon: Icons.fitness_center, label: '운동', value: '45', unit: 'min'),
     _MetricItem(icon: Icons.monitor_weight, label: '체중', value: '68.4', unit: 'kg'),
+    _MetricItem(icon: Icons.height, label: '키', value: '173.0', unit: 'cm'),
     _MetricItem(icon: Icons.opacity, label: '체지방', value: '18.2', unit: '%'),
-    _MetricItem(icon: Icons.bedtime, label: '수면', value: '7.5', unit: 'hr'),
-    _MetricItem(icon: Icons.restaurant, label: '영양', value: '2,100', unit: 'kcal'),
+    _MetricItem(icon: Icons.restaurant, label: '영양', value: '2100', unit: 'kcal'),
     _MetricItem(icon: Icons.air, label: '산소포화도', value: '98', unit: '%'),
     _MetricItem(icon: Icons.bloodtype, label: '혈당', value: '92', unit: 'mg/dL'),
     _MetricItem(
@@ -65,11 +69,13 @@ class _TodayMeScreenState extends State<TodayMeScreen>
       unit: 'ml/kg/min',
       wide: true,
     ),
+    _MetricItem(icon: Icons.bedtime, label: '수면', value: '7.5', unit: 'hr'),
   ];
 
   @override
   void initState() {
     super.initState();
+    _metrics = List<_MetricItem>.from(_defaultMetrics);
     _introCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 880),
@@ -126,6 +132,172 @@ class _TodayMeScreenState extends State<TodayMeScreen>
       parent: _introCtrl,
       curve: const Interval(0.56, 1.0, curve: Curves.easeOut),
     );
+    _loadYesterdayMetrics();
+  }
+
+  Future<void> _loadYesterdayMetrics() async {
+    final profileBody = await _loadProfileBodyMetrics();
+    final result = await _lifestyleService.getYesterdayHealthData();
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] != true) {
+      final message = (result['message'] ?? '').toString();
+      if (message.contains('어제 동기화된 건강 데이터가 없습니다')) {
+        setState(() {
+          _metricsNotice = '어제 동기화 데이터가 없어 기본 표시값을 보여주고 있어요.';
+        });
+      } else if (message.isNotEmpty) {
+        setState(() {
+          _metricsNotice = '어제 건강 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+        });
+      }
+      return;
+    }
+
+    final data = result['data'];
+    if (data is! Map<String, dynamic>) {
+      setState(() {
+        _metricsNotice = '어제 건강 데이터 형식을 확인할 수 없어요.';
+      });
+      return;
+    }
+
+    final distanceMeters = _toDouble(data['distanceMeters']);
+    final exerciseMinutes = _toInt(data['exerciseMinutes']);
+    final healthWeightKg = _toDouble(data['weightKg']);
+    final healthHeightCm = _toDouble(data['heightCm']);
+    final fallbackWeightKg = profileBody['weightKg'] ?? 0.0;
+    final fallbackHeightCm = profileBody['heightCm'] ?? 0.0;
+    final weightKg = healthWeightKg > 0 ? healthWeightKg : fallbackWeightKg;
+    final heightCm = healthHeightCm > 0 ? healthHeightCm : fallbackHeightCm;
+    final bodyFatPercentage = _toDouble(data['bodyFatPercentage']);
+    final sleepMinutes = _toInt(data['sleepMinutes']);
+    final nutritionCaloriesKcal = _toDouble(data['nutritionCaloriesKcal']);
+    final oxygenSaturation = _toDouble(data['oxygenSaturation']);
+    final bloodGlucoseMgDl = _toDouble(data['bloodGlucoseMgDl']);
+    final vo2Max = _toDouble(data['vo2Max']);
+
+    setState(() {
+      _metricsNotice = (healthWeightKg <= 0 && fallbackWeightKg > 0) ||
+              (healthHeightCm <= 0 && fallbackHeightCm > 0)
+          ? '체중/키는 회원가입 정보(프로필) 값을 표시하고 있어요.'
+          : null;
+      _metrics = [
+        _MetricItem(
+          icon: Icons.directions_walk,
+          label: '거리',
+          value: _fmtFixed(distanceMeters / 1000.0, 1),
+          unit: 'km',
+        ),
+        _MetricItem(
+          icon: Icons.fitness_center,
+          label: '운동',
+          value: exerciseMinutes.toString(),
+          unit: 'min',
+        ),
+        _MetricItem(
+          icon: Icons.monitor_weight,
+          label: '체중',
+          value: _fmtFixed(weightKg, 1),
+          unit: 'kg',
+        ),
+        _MetricItem(
+          icon: Icons.height,
+          label: '키',
+          value: _fmtFixed(heightCm, 1),
+          unit: 'cm',
+        ),
+        _MetricItem(
+          icon: Icons.opacity,
+          label: '체지방',
+          value: _fmtFixed(bodyFatPercentage, 1),
+          unit: '%',
+        ),
+        _MetricItem(
+          icon: Icons.restaurant,
+          label: '영양',
+          value: _fmtFixed(nutritionCaloriesKcal, 0),
+          unit: 'kcal',
+        ),
+        _MetricItem(
+          icon: Icons.air,
+          label: '산소포화도',
+          value: _fmtFixed(oxygenSaturation, 1),
+          unit: '%',
+        ),
+        _MetricItem(
+          icon: Icons.bloodtype,
+          label: '혈당',
+          value: _fmtFixed(bloodGlucoseMgDl, 0),
+          unit: 'mg/dL',
+        ),
+        _MetricItem(
+          icon: Icons.monitor_heart,
+          label: '최대 산소 소비량 (VO2 Max)',
+          value: _fmtFixed(vo2Max, 1),
+          unit: 'ml/kg/min',
+          wide: true,
+        ),
+        _MetricItem(
+          icon: Icons.bedtime,
+          label: '수면',
+          value: _fmtFixed(sleepMinutes / 60.0, 1),
+          unit: 'hr',
+        ),
+      ];
+    });
+  }
+
+  Future<Map<String, double>> _loadProfileBodyMetrics() async {
+    final result = await _lifestyleService.getLifestyleData();
+    if (result['success'] != true) {
+      return {'weightKg': 0.0, 'heightCm': 0.0};
+    }
+
+    final data = result['data'];
+    if (data is! Map<String, dynamic>) {
+      return {'weightKg': 0.0, 'heightCm': 0.0};
+    }
+
+    final bodystate = data['bodystate'];
+    if (bodystate is! Map<String, dynamic>) {
+      return {'weightKg': 0.0, 'heightCm': 0.0};
+    }
+
+    return {
+      'weightKg': _extractNumber(bodystate['weight_kg']),
+      'heightCm': _extractNumber(bodystate['height_cm']),
+    };
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  double _extractNumber(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final match = RegExp(r'[-+]?\d*\.?\d+').firstMatch(value);
+      if (match != null) {
+        return double.tryParse(match.group(0) ?? '') ?? 0.0;
+      }
+    }
+    return 0.0;
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  String _fmtFixed(double value, int fractionDigits) {
+    return value.toStringAsFixed(fractionDigits);
   }
 
   @override
@@ -480,6 +652,26 @@ class _TodayMeScreenState extends State<TodayMeScreen>
               ],
             ),
             const SizedBox(height: 14),
+            if (_metricsNotice != null) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6FAF7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE3ECE7)),
+                ),
+                child: Text(
+                  _metricsNotice!,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7E75),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -593,67 +785,72 @@ class _TodayMeScreenState extends State<TodayMeScreen>
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.metric});
+  const _MetricCard({required this.metric, this.onTap});
 
   final _MetricItem metric;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7FAF8),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8F0EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(metric.icon, color: const Color(0xFF2BEE75), size: 18),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  metric.label,
-                  style: const TextStyle(
-                    color: Color(0xFF7A8380),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7FAF8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE8F0EB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(metric.icon, color: const Color(0xFF2BEE75), size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    metric.label,
+                    style: const TextStyle(
+                      color: Color(0xFF7A8380),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                metric.value,
-                style: const TextStyle(
-                  color: Color(0xFF102217),
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Text(
-                  metric.unit,
+              ],
+            ),
+            const Spacer(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  metric.value,
                   style: const TextStyle(
-                    color: Color(0xFF96A09B),
-                    fontSize: 10,
+                    color: Color(0xFF102217),
+                    fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 5),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(
+                    metric.unit,
+                    style: const TextStyle(
+                      color: Color(0xFF96A09B),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

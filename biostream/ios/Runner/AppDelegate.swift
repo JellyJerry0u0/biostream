@@ -42,17 +42,93 @@ import UIKit
 
       switch call.method {
       case "enqueueOneTimeHealthSync":
-        self.runOneTimeHealthSync(result: result)
+        self.runYesterdayHealthSync(result: result)
+      case "runImmediateHealthSync":
+        self.runYesterdayHealthSync(result: result)
+      case "runImmediateHealthSyncToday":
+        self.runTodayHealthSync(result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
     }
   }
 
-  private func runOneTimeHealthSync(result: @escaping FlutterResult) {
+  private func runYesterdayHealthSync(result: @escaping FlutterResult) {
     Task {
       do {
         try await syncService.syncYesterdayHealthData()
+        await MainActor.run {
+          result("synced")
+        }
+      } catch IOSHealthSyncError.healthDataNotAvailable {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "healthkit_unavailable",
+              message: "HealthKit is not available on this device.",
+              details: nil
+            )
+          )
+        }
+      } catch IOSHealthSyncError.userIdMissing {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "user_id_missing",
+              message: "profile_user_id is missing. Please login first.",
+              details: nil
+            )
+          )
+        }
+      } catch IOSHealthSyncError.healthAuthorizationDenied {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "permission_denied",
+              message: "HealthKit permission is required.",
+              details: nil
+            )
+          )
+        }
+      } catch IOSHealthSyncError.invalidApiBaseUrl {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "invalid_api_base_url",
+              message: "Invalid API base origin.",
+              details: nil
+            )
+          )
+        }
+      } catch IOSHealthSyncError.httpError(let statusCode, let body) {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "http_error",
+              message: "Sync API failed with status \(statusCode)",
+              details: body
+            )
+          )
+        }
+      } catch {
+        NSLog("[IOSHealthSync] unexpected error: %@", String(describing: error))
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "sync_failed",
+              message: "Failed to sync iOS health data: \(String(describing: error))",
+              details: String(describing: error)
+            )
+          )
+        }
+      }
+    }
+  }
+
+  private func runTodayHealthSync(result: @escaping FlutterResult) {
+    Task {
+      do {
+        try await syncService.syncTodayHealthData()
         await MainActor.run {
           result("synced")
         }
@@ -142,6 +218,7 @@ private struct IOSHealthPayload {
   let exerciseMinutes: Int
   let fitnessScore: Double
   let weightKg: Double
+  let heightCm: Double
   let bodyFatPercentage: Double
   let vo2Max: Double
   let bloodGlucoseMgDl: Double
@@ -159,6 +236,7 @@ private struct IOSHealthPayload {
       "exerciseMinutes": exerciseMinutes,
       "fitnessScore": fitnessScore,
       "weightKg": weightKg,
+      "heightCm": heightCm,
       "bodyFatPercentage": bodyFatPercentage,
       "vo2Max": vo2Max,
       "bloodGlucoseMgDl": bloodGlucoseMgDl
@@ -177,6 +255,14 @@ private final class IOSHealthSyncService {
   private let noDataErrorCode = 11
 
   func syncYesterdayHealthData() async throws {
+    try await syncHealthData(daysAgo: 1)
+  }
+
+  func syncTodayHealthData() async throws {
+    try await syncHealthData(daysAgo: 0)
+  }
+
+  private func syncHealthData(daysAgo: Int) async throws {
     guard HKHealthStore.isHealthDataAvailable() else {
       throw IOSHealthSyncError.healthDataNotAvailable
     }
@@ -185,7 +271,7 @@ private final class IOSHealthSyncService {
     let apiURL = try resolveSyncEndpointURL()
     try await requestReadAuthorization()
 
-    let (start, end, yesterdayDateString) = yesterdayRange()
+    let (start, end, targetDateString) = dayRange(daysAgo: daysAgo)
 
     let steps = Int(try await noDataAsZero {
       try await sumQuantity(
@@ -231,12 +317,18 @@ private final class IOSHealthSyncService {
         endDate: end
       )
     })
+    // 체중은 대상 날짜에 기록이 없을 수 있어 "전체 기록 중 최신값"을 사용
     let weightKg = try await noDataAsZero {
-      try await latestQuantity(
+      try await latestQuantityAnyTime(
         identifier: .bodyMass,
-        unit: HKUnit.gramUnit(with: .kilo),
-        startDate: start,
-        endDate: end
+        unit: HKUnit.gramUnit(with: .kilo)
+      )
+    }
+    // 신장도 대상 날짜와 무관하게 최신값을 사용 (cm)
+    let heightCm = try await noDataAsZero {
+      try await latestQuantityAnyTime(
+        identifier: .height,
+        unit: HKUnit.meterUnit(with: .centi)
       )
     }
     let bodyFatPercentageRaw = try await noDataAsZero {
@@ -273,7 +365,7 @@ private final class IOSHealthSyncService {
       : min(max(Double(exerciseMinutes) / 6.0, 0.0), 100.0)
 
     let payload = IOSHealthPayload(
-      date: yesterdayDateString,
+      date: targetDateString,
       userId: userId,
       steps: steps,
       sleepMinutes: sleepMinutes,
@@ -284,6 +376,7 @@ private final class IOSHealthSyncService {
       exerciseMinutes: exerciseMinutes,
       fitnessScore: fitnessScore,
       weightKg: weightKg,
+      heightCm: heightCm,
       bodyFatPercentage: bodyFatPercentage,
       vo2Max: vo2Max,
       bloodGlucoseMgDl: bloodGlucoseMgDl
@@ -320,6 +413,7 @@ private final class IOSHealthSyncService {
       .dietaryEnergyConsumed,
       .appleExerciseTime,
       .bodyMass,
+      .height,
       .bodyFatPercentage,
       .vo2Max,
       .bloodGlucose
@@ -439,6 +533,36 @@ private final class IOSHealthSyncService {
     }
   }
 
+  private func latestQuantityAnyTime(
+    identifier: HKQuantityTypeIdentifier,
+    unit: HKUnit
+  ) async throws -> Double {
+    guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else { return 0.0 }
+    let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+
+    return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Double, Error>) in
+      let query = HKSampleQuery(
+        sampleType: quantityType,
+        predicate: nil,
+        limit: 1,
+        sortDescriptors: [sort]
+      ) { _, samples, error in
+        if let error {
+          if self.isHealthKitNoDataError(error) {
+            continuation.resume(returning: 0.0)
+            return
+          }
+          continuation.resume(throwing: error)
+          return
+        }
+        let quantitySample = samples?.first as? HKQuantitySample
+        let value = quantitySample?.quantity.doubleValue(for: unit) ?? 0.0
+        continuation.resume(returning: value)
+      }
+      healthStore.execute(query)
+    }
+  }
+
   private func totalSleepMinutes(startDate: Date, endDate: Date) async throws -> Double {
     guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return 0.0 }
     let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
@@ -504,15 +628,16 @@ private final class IOSHealthSyncService {
     }
   }
 
-  private func yesterdayRange() -> (Date, Date, String) {
+  private func dayRange(daysAgo: Int) -> (Date, Date, String) {
     let calendar = Calendar.current
     let now = Date()
     let startOfToday = calendar.startOfDay(for: now)
-    let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
+    let startOfTarget = calendar.date(byAdding: .day, value: -daysAgo, to: startOfToday) ?? startOfToday
+    let endOfTarget = calendar.date(byAdding: .day, value: 1, to: startOfTarget) ?? startOfToday
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.dateFormat = "yyyy-MM-dd"
-    return (startOfYesterday, startOfToday, formatter.string(from: startOfYesterday))
+    return (startOfTarget, endOfTarget, formatter.string(from: startOfTarget))
   }
 
   private func postSyncPayload(payload: IOSHealthPayload, url: URL) async throws {

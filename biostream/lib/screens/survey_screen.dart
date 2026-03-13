@@ -124,7 +124,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
       final situationForReport = situationText.isNotEmpty ? situationText : null;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => ResultScreen(situationText: situationForReport),
+          builder: (context) => ResultScreen(
+            situationText: situationForReport,
+            originalImageUrl: widget.originalImageUrl,
+          ),
         ),
       );
     } else if (mounted) {

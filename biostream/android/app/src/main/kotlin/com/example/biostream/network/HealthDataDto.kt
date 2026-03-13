@@ -12,6 +12,7 @@ data class HealthDataDto(
     val exerciseMinutes: Long = 0L,
     val fitnessScore: Double = 0.0,
     val weightKg: Double = 0.0,
+    val heightCm: Double = 0.0,
     val bodyFatPercentage: Double = 0.0,
     val vo2Max: Double = 0.0,
     val bloodGlucoseMgDl: Double = 0.0,

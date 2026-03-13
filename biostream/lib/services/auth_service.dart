@@ -56,8 +56,9 @@ class AuthService {
 
   // 로그인 요청 및 토큰 저장
   Future<Map<String, dynamic>> login(String email, String password) async {
+    String origin = '';
     try {
-      final origin = await ApiConfig.getBaseOrigin();
+      origin = await ApiConfig.getBaseOrigin();
       final response = await http.post(
         Uri.parse('$origin/auth/login'),
         headers: {"Content-Type": "application/json"},
@@ -77,10 +78,18 @@ class AuthService {
           "user_id": data['user_id'],
         };
       } else {
-        return {"success": false, "message": "이메일 또는 비밀번호가 틀렸습니다."};
+        String message = "이메일 또는 비밀번호가 틀렸습니다.";
+        try {
+          final body = jsonDecode(response.body);
+          final detail = body['detail'];
+          if (detail != null) {
+            message = detail.toString();
+          }
+        } catch (_) {}
+        return {"success": false, "message": message};
       }
     } catch (e) {
-      return {"success": false, "message": "서버 연결 실패"};
+      return {"success": false, "message": "서버 연결 실패 ($origin): $e"};
     }
   }
 

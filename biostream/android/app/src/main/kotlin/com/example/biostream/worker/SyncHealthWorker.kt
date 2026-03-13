@@ -8,6 +8,7 @@ import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeightRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -22,6 +23,7 @@ import androidx.work.WorkerParameters
 import com.example.biostream.network.HealthDataDto
 import com.example.biostream.network.RetrofitClient
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -49,6 +51,7 @@ class SyncHealthWorker(
                 HealthPermission.getReadPermission(NutritionRecord::class),
                 HealthPermission.getReadPermission(ExerciseSessionRecord::class),
                 HealthPermission.getReadPermission(WeightRecord::class),
+                HealthPermission.getReadPermission(HeightRecord::class),
                 HealthPermission.getReadPermission(BodyFatRecord::class),
                 HealthPermission.getReadPermission(Vo2MaxRecord::class),
                 HealthPermission.getReadPermission(BloodGlucoseRecord::class)
@@ -60,7 +63,7 @@ class SyncHealthWorker(
             }
 
             val healthData = fetchYesterdayHealthData(healthConnectClient)
-            Log.i(TAG, "Sync payload => date=${healthData.date}, userId=${healthData.userId}, steps=${healthData.steps}, sleepMinutes=${healthData.sleepMinutes}, distanceMeters=${healthData.distanceMeters}, oxygenSaturation=${healthData.oxygenSaturation}, averageSpeedMps=${healthData.averageSpeedMps}, nutritionCaloriesKcal=${healthData.nutritionCaloriesKcal}, exerciseMinutes=${healthData.exerciseMinutes}, fitnessScore=${healthData.fitnessScore}, weightKg=${healthData.weightKg}, bodyFatPercentage=${healthData.bodyFatPercentage}, vo2Max=${healthData.vo2Max}, bloodGlucoseMgDl=${healthData.bloodGlucoseMgDl}")
+            Log.i(TAG, "Sync payload => date=${healthData.date}, userId=${healthData.userId}, steps=${healthData.steps}, sleepMinutes=${healthData.sleepMinutes}, distanceMeters=${healthData.distanceMeters}, oxygenSaturation=${healthData.oxygenSaturation}, averageSpeedMps=${healthData.averageSpeedMps}, nutritionCaloriesKcal=${healthData.nutritionCaloriesKcal}, exerciseMinutes=${healthData.exerciseMinutes}, fitnessScore=${healthData.fitnessScore}, weightKg=${healthData.weightKg}, heightCm=${healthData.heightCm}, bodyFatPercentage=${healthData.bodyFatPercentage}, vo2Max=${healthData.vo2Max}, bloodGlucoseMgDl=${healthData.bloodGlucoseMgDl}")
             val response = RetrofitClient
                 .getChronoLensService(applicationContext)
                 .syncHealthData(healthData)
@@ -155,13 +158,23 @@ class SyncHealthWorker(
             0.0
         }
 
+        // 체중은 해당 날짜 기록이 없을 수 있어 전체 기록 중 최신값을 우선 사용
         val weightRecords = client.readRecords(
             ReadRecordsRequest(
                 recordType = WeightRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfYesterday, startOfToday)
+                timeRangeFilter = TimeRangeFilter.before(Instant.now())
             )
         ).records
         val weightKg = weightRecords.maxByOrNull { it.time }?.weight?.inKilograms ?: 0.0
+
+        // 신장도 최신값 1건을 사용 (cm)
+        val heightRecords = client.readRecords(
+            ReadRecordsRequest(
+                recordType = HeightRecord::class,
+                timeRangeFilter = TimeRangeFilter.before(Instant.now())
+            )
+        ).records
+        val heightCm = (heightRecords.maxByOrNull { it.time }?.height?.inMeters ?: 0.0) * 100.0
 
         val bodyFatRecords = client.readRecords(
             ReadRecordsRequest(
@@ -204,6 +217,7 @@ class SyncHealthWorker(
             exerciseMinutes = exerciseMinutes,
             fitnessScore = fitnessScore,
             weightKg = weightKg,
+            heightCm = heightCm,
             bodyFatPercentage = bodyFatPercentage,
             vo2Max = vo2Max,
             bloodGlucoseMgDl = bloodGlucoseMgDl,

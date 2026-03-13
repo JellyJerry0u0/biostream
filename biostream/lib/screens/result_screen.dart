@@ -1,6 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/responsive.dart';
+import '../services/api_config.dart';
 import '../services/lifestyle_service.dart';
 import 'coach_chat_screen.dart';
 import 'home_screen.dart';
@@ -13,8 +18,9 @@ import '../widgets/evidence_modal.dart';
 
 class ResultScreen extends StatefulWidget {
   final String? situationText;
+  final String? originalImageUrl;
 
-  const ResultScreen({super.key, this.situationText});
+  const ResultScreen({super.key, this.situationText, this.originalImageUrl});
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -24,11 +30,14 @@ class _ResultScreenState extends State<ResultScreen> {
   final LifestyleService _lifestyleService = LifestyleService();
   Map<String, dynamic>? _lifestyleData;
   Map<String, dynamic>? _reportData; // 새로운 스키마: {tabs, sections}
+  String? _originalImageUrl;
+  String? _generatedImageUrl;
   bool _isLoading = true;
   bool _isGeneratingReport = false;
   String? _errorMessage;
   String? _selectedTab; // 선택된 탭
   String? _selectedLifestyleSubTab; // lifestyle 서브탭 (smoking, drinking, stress)
+  bool _isSavingComparison = false;
 
   void _goHome() {
     Navigator.of(context).pushAndRemoveUntil(
@@ -40,6 +49,14 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.originalImageUrl != null && widget.originalImageUrl!.isNotEmpty) {
+      _resolveImageUrl(widget.originalImageUrl).then((resolved) {
+        if (!mounted || resolved == null || resolved.isEmpty) return;
+        setState(() {
+          _originalImageUrl = resolved;
+        });
+      });
+    }
     _loadDataAndGenerateReport();
   }
 
@@ -58,8 +75,15 @@ class _ResultScreenState extends State<ResultScreen> {
       if (lifestyleResult['success'] == true &&
           lifestyleResult['data'] != null) {
         debugPrint('✅ 데이터 로드 성공: ${lifestyleResult['data']}');
+        final lifestyleData = lifestyleResult['data'] as Map<String, dynamic>;
+        final resolvedOriginal =
+            await _resolveImageUrl(_extractOriginalImageUrl(lifestyleData, null));
+        final resolvedGenerated =
+            await _resolveImageUrl(_extractGeneratedImageUrl(lifestyleData, null));
         setState(() {
-          _lifestyleData = lifestyleResult['data'];
+          _lifestyleData = lifestyleData;
+          _originalImageUrl = resolvedOriginal ?? _originalImageUrl;
+          _generatedImageUrl = resolvedGenerated ?? _generatedImageUrl;
           _isLoading = false;
           _isGeneratingReport = true; // 리포트 생성 시작
         });
@@ -147,8 +171,29 @@ class _ResultScreenState extends State<ResultScreen> {
             reportDataNew = _convertOldSchemaToNew(reportData, result['cards']);
           }
 
+          // 리포트 생성 후 lifestyle 데이터를 다시 로드해 generated_image_url 반영
+          final refreshedLifestyleResult = await _lifestyleService.getLifestyleData();
+          Map<String, dynamic>? refreshedLifestyleData;
+          if (refreshedLifestyleResult['success'] == true &&
+              refreshedLifestyleResult['data'] != null) {
+            refreshedLifestyleData =
+                refreshedLifestyleResult['data'] as Map<String, dynamic>;
+          }
+
+          final resolvedOriginal = await _resolveImageUrl(
+            _extractOriginalImageUrl(refreshedLifestyleData ?? _lifestyleData, reportDataNew),
+          );
+          final resolvedGenerated = await _resolveImageUrl(
+            _extractGeneratedImageUrl(refreshedLifestyleData ?? _lifestyleData, reportDataNew),
+          );
+
           setState(() {
+            if (refreshedLifestyleData != null) {
+              _lifestyleData = refreshedLifestyleData;
+            }
             _reportData = reportDataNew;
+            _originalImageUrl = resolvedOriginal ?? _originalImageUrl;
+            _generatedImageUrl = resolvedGenerated ?? _generatedImageUrl;
             // 첫 번째 탭 선택
             if (reportDataNew != null && reportDataNew['tabs'] != null) {
               final tabs = reportDataNew['tabs'] as List<dynamic>;
@@ -190,6 +235,87 @@ class _ResultScreenState extends State<ResultScreen> {
         _isGeneratingReport = false;
       });
     }
+  }
+
+  String? _extractOriginalImageUrl(
+    Map<String, dynamic>? lifestyleData,
+    Map<String, dynamic>? reportData,
+  ) {
+    final lifestyleImages = lifestyleData?['images'];
+    if (lifestyleImages is Map<String, dynamic>) {
+      final original = lifestyleImages['original_image_url']?.toString().trim();
+      if (original != null && original.isNotEmpty) return original;
+    }
+
+    final direct = lifestyleData?['original_image_url']?.toString().trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final reportDirect = reportData?['original_image_url']?.toString().trim();
+    if (reportDirect != null && reportDirect.isNotEmpty) return reportDirect;
+
+    final params = reportData?['image_gen_params'];
+    if (params is Map<String, dynamic>) {
+      final source = params['image_url']?.toString().trim();
+      if (source != null && source.isNotEmpty) return source;
+    }
+    return null;
+  }
+
+  String? _extractGeneratedImageUrl(
+    Map<String, dynamic>? lifestyleData,
+    Map<String, dynamic>? reportData,
+  ) {
+    final lifestyleImages = lifestyleData?['images'];
+    if (lifestyleImages is Map<String, dynamic>) {
+      final generated = lifestyleImages['generated_image_url']?.toString().trim();
+      if (generated != null && generated.isNotEmpty) return generated;
+    }
+
+    final direct = lifestyleData?['generated_image_url']?.toString().trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final reportDirect = reportData?['generated_image_url']?.toString().trim();
+    if (reportDirect != null && reportDirect.isNotEmpty) return reportDirect;
+
+    return null;
+  }
+
+  Future<String?> _resolveImageUrl(String? rawUrl) async {
+    final value = rawUrl?.trim() ?? '';
+    if (value.isEmpty) return null;
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      // iOS/Android 디바이스에서 localhost는 디바이스 자신을 가리키므로
+      // 서버가 localhost URL을 반환하면 앱의 실제 API origin으로 치환한다.
+      try {
+        final parsed = Uri.parse(value);
+        final host = parsed.host.toLowerCase();
+        if (host == 'localhost' || host == '127.0.0.1' || host == '0.0.0.0') {
+          final origin = await ApiConfig.getBaseOrigin();
+          final originUri = Uri.parse(origin);
+          final replaced = parsed.replace(
+            scheme: originUri.scheme,
+            host: originUri.host,
+            port: originUri.hasPort ? originUri.port : null,
+          );
+          return replaced.toString();
+        }
+      } catch (_) {
+        // 파싱 실패 시 원본 유지
+      }
+      return value;
+    }
+
+    // 서버 로컬 경로(/.../uploads/xxx.jpg)라면 API 이미지 엔드포인트로 변환
+    final marker = '/uploads/';
+    final index = value.replaceAll('\\', '/').indexOf(marker);
+    if (index >= 0) {
+      final relativePath =
+          value.replaceAll('\\', '/').substring(index + marker.length);
+      final origin = await ApiConfig.getBaseOrigin();
+      return '$origin/data/image/$relativePath';
+    }
+
+    return value;
   }
 
   Future<bool?> _showRegenerateDialog() async {
@@ -1111,8 +1237,7 @@ class _ResultScreenState extends State<ResultScreen> {
                                                 // Background Image - Original Image
                                                 Positioned.fill(
                                                   child: _buildImageWidget(
-                                                    _lifestyleData?['images']
-                                                        ?['original_image_url'],
+                                                    _originalImageUrl,
                                                   ),
                                                 ),
                                                 // Gradient Overlay
@@ -1272,9 +1397,7 @@ class _ResultScreenState extends State<ResultScreen> {
                                                       BlendMode.overlay,
                                                     ),
                                                     child: _buildImageWidget(
-                                                      _lifestyleData?['images']
-                                                          ?[
-                                                          'generated_image_url'],
+                                                      _generatedImageUrl,
                                                     ),
                                                   ),
                                                 ),
@@ -2096,10 +2219,9 @@ class _ResultScreenState extends State<ResultScreen> {
                                     width: double.infinity,
                                     height: Responsive.fontSize(context, 56),
                                     child: OutlinedButton(
-                                      onPressed: () {
-                                        // TODO: Save comparison
-                                        debugPrint('Save Comparison tapped');
-                                      },
+                                      onPressed: _isSavingComparison
+                                          ? null
+                                          : _saveComparisonToGallery,
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: isDark
                                             ? Colors.white
@@ -2120,7 +2242,9 @@ class _ResultScreenState extends State<ResultScreen> {
                                             MainAxisAlignment.center,
                                         children: [
                                           Icon(
-                                            Icons.download,
+                                            _isSavingComparison
+                                                ? Icons.downloading
+                                                : Icons.download,
                                             size: Responsive.iconSize(
                                                 context, 20),
                                           ),
@@ -2128,7 +2252,9 @@ class _ResultScreenState extends State<ResultScreen> {
                                               width: Responsive.padding(
                                                   context, 8)),
                                           Text(
-                                            'Save Comparison',
+                                            _isSavingComparison
+                                                ? 'Saving...'
+                                                : 'Save Comparison',
                                             style: TextStyle(
                                               fontSize: Responsive.fontSize(
                                                   context, 16),
@@ -2150,6 +2276,92 @@ class _ResultScreenState extends State<ResultScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _saveComparisonToGallery() async {
+    if (_isSavingComparison) return;
+    final lifestyleId = _lifestyleData?['lifestyle_id'] as int?;
+    if (lifestyleId == null || _reportData == null) {
+      _showSnack('저장할 리포트 데이터가 없습니다.');
+      return;
+    }
+    if (_generatedImageUrl == null || _generatedImageUrl!.isEmpty) {
+      _showSnack('저장할 GPU 결과 이미지가 없습니다.');
+      return;
+    }
+
+    setState(() => _isSavingComparison = true);
+    try {
+      final saveReportResult = await _lifestyleService.saveGeneratedReport(
+        lifestyleId: lifestyleId,
+        report: _reportData!,
+      );
+      if (saveReportResult['success'] != true) {
+        _showSnack(saveReportResult['message']?.toString() ?? '리포트 저장에 실패했습니다.');
+        return;
+      }
+
+      final gpuBytes = await _downloadImageBytes(_generatedImageUrl!);
+      if (gpuBytes == null || gpuBytes.isEmpty) {
+        _showSnack('이미지 저장에 실패했습니다.');
+        return;
+      }
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final saveResult = await ImageGallerySaverPlus.saveImage(
+        gpuBytes,
+        quality: 100,
+        name: 'biostream_gpu_result_$timestamp',
+      );
+
+      final isSuccess = _isGallerySaveSuccess(saveResult);
+      if (!isSuccess) {
+        debugPrint('갤러리 저장 실패 응답: $saveResult');
+        _showSnack('갤러리 저장에 실패했습니다.');
+        return;
+      }
+
+      _showSnack('리포트와 GPU 이미지가 저장되었습니다.');
+    } catch (e) {
+      debugPrint('Save Comparison 실패: $e');
+      _showSnack('저장 중 오류가 발생했습니다.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingComparison = false);
+      }
+    }
+  }
+
+  bool _isGallerySaveSuccess(dynamic result) {
+    if (result == null) return false;
+    if (result is bool) return result;
+    if (result is Map) {
+      final dynamic ok = result['isSuccess'];
+      if (ok is bool) return ok;
+      final dynamic flag = result['success'];
+      if (flag is bool) return flag;
+      final dynamic filePath = result['filePath'];
+      if (filePath is String && filePath.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  Future<Uint8List?> _downloadImageBytes(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) return null;
+      return response.bodyBytes;
+    } catch (e) {
+      debugPrint('이미지 다운로드 실패 ($url): $e');
+      return null;
+    }
+  }
+
+  void _showSnack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
     );
   }
 

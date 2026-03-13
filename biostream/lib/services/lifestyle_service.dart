@@ -191,6 +191,85 @@ class LifestyleService {
     }
   }
 
+  Future<Map<String, dynamic>> saveGeneratedReport({
+    required int lifestyleId,
+    required Map<String, dynamic> report,
+  }) async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) {
+        return {"success": false, "message": "로그인이 필요합니다."};
+      }
+
+      final origin = await ApiConfig.getBaseOrigin();
+      final response = await http.post(
+        Uri.parse('$origin/api/report/$lifestyleId/save'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"report": report}),
+      );
+
+      if (response.statusCode == 200) {
+        return {"success": true, "data": jsonDecode(response.body)};
+      } else if (response.statusCode == 401) {
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          "success": false,
+          "message": errorData['detail'] ?? "리포트 저장에 실패했습니다."
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "서버 연결 실패: $e"};
+    }
+  }
+
+  Future<Map<String, dynamic>> getYesterdayHealthData() async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) {
+        return {"success": false, "message": "로그인이 필요합니다."};
+      }
+
+      final origin = await ApiConfig.getBaseOrigin();
+      final response = await http.get(
+        Uri.parse('$origin/api/v1/yesterday-health'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {"success": true, "data": data};
+      } else if (response.statusCode == 401) {
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          "success": false,
+          "message": errorData['detail'] ?? "어제 건강 데이터 조회에 실패했습니다.",
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "서버 연결 실패: $e"};
+    }
+  }
+
   Future<Map<String, dynamic>> getReportArchives() async {
     try {
       final token = await storage.read(key: 'jwt_token');
@@ -268,6 +347,43 @@ class LifestyleService {
         return {
           "success": false,
           "message": errorData['detail'] ?? "리포트 이력 조회에 실패했습니다."
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "서버 연결 실패: $e"};
+    }
+  }
+
+  Future<Map<String, dynamic>> getLatestFutureFace() async {
+    try {
+      final token = await storage.read(key: 'jwt_token');
+      if (token == null) {
+        return {"success": false, "message": "로그인이 필요합니다."};
+      }
+
+      final origin = await ApiConfig.getBaseOrigin();
+      final response = await http.get(
+        Uri.parse('$origin/api/report-latest-future-face'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return {"success": true, "data": jsonDecode(response.body)};
+      } else if (response.statusCode == 401) {
+        await storage.delete(key: 'jwt_token');
+        return {
+          "success": false,
+          "message": "로그인이 만료되었습니다. 다시 로그인해주세요.",
+          "token_expired": true,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          "success": false,
+          "message": errorData['detail'] ?? "최근 리포트 이미지 조회에 실패했습니다."
         };
       }
     } catch (e) {

@@ -13,6 +13,7 @@ import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeightRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -51,6 +52,7 @@ class MainActivity : FlutterFragmentActivity() {
 		HealthPermission.getReadPermission(NutritionRecord::class),
 		HealthPermission.getReadPermission(ExerciseSessionRecord::class),
 		HealthPermission.getReadPermission(WeightRecord::class),
+		HealthPermission.getReadPermission(HeightRecord::class),
 		HealthPermission.getReadPermission(BodyFatRecord::class),
 		HealthPermission.getReadPermission(Vo2MaxRecord::class),
 		HealthPermission.getReadPermission(BloodGlucoseRecord::class)
@@ -94,7 +96,7 @@ class MainActivity : FlutterFragmentActivity() {
 									return@launch
 								}
 
-								val payload = fetchYesterdayHealthData(healthConnectClient)
+								val payload = fetchHealthData(healthConnectClient, daysAgo = 1)
 								Log.i(TAG, "Immediate sync payload => $payload")
 
 								val response = RetrofitClient
@@ -122,6 +124,40 @@ class MainActivity : FlutterFragmentActivity() {
 							}
 						}
 					}
+					"runImmediateHealthSyncToday" -> {
+						Log.i(TAG, "MethodChannel runImmediateHealthSyncToday invoked")
+						lifecycleScope.launch {
+							try {
+								val granted = healthConnectClient.permissionController.getGrantedPermissions()
+								if (!granted.containsAll(permissions)) {
+									result.error("PERMISSION_DENIED", "Health Connect 권한이 모두 허용되지 않았습니다.", null)
+									return@launch
+								}
+
+								val payload = fetchHealthData(healthConnectClient, daysAgo = 0)
+								Log.i(TAG, "Immediate TODAY sync payload => $payload")
+
+								val response = RetrofitClient
+									.getChronoLensService(applicationContext)
+									.syncHealthData(payload)
+
+								if (response.isSuccessful) {
+									result.success(
+										hashMapOf(
+											"ok" to true,
+											"date" to payload.date,
+											"statusCode" to response.code(),
+										)
+									)
+								} else {
+									result.error("HTTP_ERROR", "서버 응답 실패: ${response.code()}", null)
+								}
+							} catch (e: Exception) {
+								Log.e(TAG, "Immediate TODAY sync error", e)
+								result.error("SYNC_ERROR", e.message ?: "오늘 데이터 즉시 동기화 실패", null)
+							}
+						}
+					}
 					else -> result.notImplemented()
 				}
 			}
@@ -139,7 +175,7 @@ class MainActivity : FlutterFragmentActivity() {
 	private fun onHealthPermissionsGranted() {
 		ChronoWorkScheduler.scheduleDailySync(this)
 		lifecycleScope.launch {
-			val healthData = fetchYesterdayHealthData(healthConnectClient)
+			val healthData = fetchHealthData(healthConnectClient, daysAgo = 1)
 			Log.d(TAG, "Yesterday health data: $healthData")
 		}
 	}
@@ -153,18 +189,19 @@ class MainActivity : FlutterFragmentActivity() {
 		).show()
 	}
 
-	private suspend fun fetchYesterdayHealthData(
-		healthConnectClient: HealthConnectClient
+	private suspend fun fetchHealthData(
+		healthConnectClient: HealthConnectClient,
+		daysAgo: Long
 	): HealthDataDto {
 		val zoneId = ZoneId.systemDefault()
-		val yesterdayDate = LocalDate.now(zoneId).minusDays(1)
-		val startOfYesterday = yesterdayDate.atStartOfDay(zoneId).toInstant()
-		val startOfToday = yesterdayDate.plusDays(1).atStartOfDay(zoneId).toInstant()
+		val targetDate = LocalDate.now(zoneId).minusDays(daysAgo)
+		val start = targetDate.atStartOfDay(zoneId).toInstant()
+		val end = targetDate.plusDays(1).atStartOfDay(zoneId).toInstant()
 
 		val stepResponse = healthConnectClient.aggregate(
 			AggregateRequest(
 				metrics = setOf(StepsRecord.COUNT_TOTAL),
-				timeRangeFilter = TimeRangeFilter.between(startOfYesterday, startOfToday)
+				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
 		)
 		val stepCount = stepResponse[StepsRecord.COUNT_TOTAL] ?: 0L
@@ -172,7 +209,7 @@ class MainActivity : FlutterFragmentActivity() {
 		val sleepSessions = healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = SleepSessionRecord::class,
-				timeRangeFilter = TimeRangeFilter.between(startOfYesterday, startOfToday)
+				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
 		).records
 
@@ -181,7 +218,7 @@ class MainActivity : FlutterFragmentActivity() {
 		}
 
 		return HealthDataDto(
-			date = yesterdayDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+			date = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
 			steps = stepCount,
 			sleepMinutes = totalSleepMinutes,
 			userId = getStoredUserId()

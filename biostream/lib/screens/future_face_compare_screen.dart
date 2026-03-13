@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/api_config.dart';
+import '../services/lifestyle_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 
 class FutureFaceCompareScreen extends StatefulWidget {
@@ -12,6 +14,7 @@ class FutureFaceCompareScreen extends StatefulWidget {
 class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
     with TickerProviderStateMixin {
   static const Color _primary = Color(0xFF2BEE75);
+  final LifestyleService _lifestyleService = LifestyleService();
 
   double _sliderRatio = 0.5;
   bool _wellManaged = true;
@@ -30,11 +33,11 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
   late final Animation<double> _sliderOpacity;
   late final Animation<double> _cardsOpacity;
   late final Animation<double> _fabOpacity;
-
-  static const String _futureImageUrl =
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBZV-jDDioxTCoeHPdxBORf9Cqaeq3knCDN8yF2F2MqIwQocXv9IaY3ImcI7pjMa2irdLPRDoDDdjAvyDQAeUlWJCquXL4pXkW5NqkPtVRhlMZLnLSJCjHGa18mlQNecxsq8L56c61sI-Jk931BbBIuUgfE2cUuL637l-O6_1mEtDxXQOFehDStgd39FB1s6ephU8okbYq2XUC_hqgVdHFGypbmjqDLEY5vGd594kB7-eLuuDefiMZ20dejz2B_9gdlF9ArrZW4AY0';
-  static const String _currentImageUrl =
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDxIxJH9oWFTxoU35FE3EcoqKP31UypIBGEyY2F8gKH2Ve3lJCkDJfhzL4P14vr233LsdCKzEfc47JFKo_fLBzrso6z_G9TitQ5JlmTwgPGCBgQvTnH9Huj9cIFctm8iTv1wkGX-YoTyuSPUaTOXl4G6sPrakvLvvcUXH-QmnQKN-mdhfTCgIKdLTY303_Q5qABRj4QhBwBTNlRBGFksz2mGPmdtzXQJIrFTWI2V0Jmfq4VsQPv6ESZy8N4GMDh3aeO5XPmf9Ix1Z0';
+  String? _futureImageUrl;
+  String? _currentImageUrl;
+  String _simulationPromptText = '';
+  bool _isLoadingImages = true;
+  String? _imageError;
 
   @override
   void initState() {
@@ -95,6 +98,74 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
       parent: _introCtrl,
       curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
     );
+    _loadLatestFutureFaceImages();
+  }
+
+  Future<void> _loadLatestFutureFaceImages() async {
+    setState(() {
+      _isLoadingImages = true;
+      _imageError = null;
+    });
+
+    final result = await _lifestyleService.getLatestFutureFace();
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      final data = result['data'] as Map<String, dynamic>? ?? {};
+      final generatedImage =
+          await _resolveImageUrl(data['generated_image_url']?.toString());
+      final originalImage =
+          await _resolveImageUrl(data['original_image_url']?.toString());
+      setState(() {
+        // 배경(큰 이미지): Gemini 기반 생성 미래 얼굴
+        _futureImageUrl = generatedImage;
+        // 비교 이미지: 원본 현재 얼굴
+        _currentImageUrl = originalImage;
+        _simulationPromptText =
+            (data['simulation_prompt_text']?.toString().trim() ?? '');
+        _isLoadingImages = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _imageError = result['message']?.toString() ?? '이미지를 불러오지 못했습니다.';
+      _isLoadingImages = false;
+    });
+  }
+
+  Future<String?> _resolveImageUrl(String? rawUrl) async {
+    final value = rawUrl?.trim() ?? '';
+    if (value.isEmpty) return null;
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      try {
+        final parsed = Uri.parse(value);
+        final host = parsed.host.toLowerCase();
+        if (host == 'localhost' || host == '127.0.0.1' || host == '0.0.0.0') {
+          final origin = await ApiConfig.getBaseOrigin();
+          final originUri = Uri.parse(origin);
+          final replaced = parsed.replace(
+            scheme: originUri.scheme,
+            host: originUri.host,
+            port: originUri.hasPort ? originUri.port : null,
+          );
+          return replaced.toString();
+        }
+      } catch (_) {
+        return value;
+      }
+      return value;
+    }
+
+    final marker = '/uploads/';
+    final index = value.replaceAll('\\', '/').indexOf(marker);
+    if (index >= 0) {
+      final relativePath =
+          value.replaceAll('\\', '/').substring(index + marker.length);
+      final origin = await ApiConfig.getBaseOrigin();
+      return '$origin/data/image/$relativePath';
+    }
+    return value;
   }
 
   @override
@@ -291,6 +362,35 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
   }
 
   Widget _buildComparisonSlider(bool isDark) {
+    if (_isLoadingImages) {
+      return const AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_currentImageUrl == null || _futureImageUrl == null) {
+      return AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFEAEAEA),
+          ),
+          child: Center(
+            child: Text(
+              _imageError ?? '최근 리포트의 비교 이미지를 찾을 수 없습니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black54,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -316,7 +416,7 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Image.network(_futureImageUrl, fit: BoxFit.cover),
+                    child: Image.network(_futureImageUrl!, fit: BoxFit.cover),
                   ),
                   Positioned(
                     left: 0,
@@ -329,7 +429,7 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                         widthFactor: _sliderRatio,
                         child: SizedBox(
                           width: width,
-                          child: Image.network(_currentImageUrl, fit: BoxFit.cover),
+                          child: Image.network(_currentImageUrl!, fit: BoxFit.cover),
                         ),
                       ),
                     ),
@@ -372,12 +472,12 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                   Positioned(
                     left: 12,
                     bottom: 12,
-                    child: _labelChip('현재 (2024)', Colors.white),
+                    child: _labelChip('현재', Colors.white),
                   ),
                   Positioned(
                     right: 12,
                     bottom: 12,
-                    child: _labelChip('미래 (2044)', _primary),
+                    child: _labelChip('미래 예측', _primary),
                   ),
                 ],
               ),
@@ -464,6 +564,25 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
           ],
         ),
         const SizedBox(height: 20),
+        if (_simulationPromptText.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: panelBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _primary.withValues(alpha: 0.14)),
+            ),
+            child: Text(
+              _simulationPromptText,
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black87,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ),
+        if (_simulationPromptText.isNotEmpty) const SizedBox(height: 20),
       ],
     );
   }

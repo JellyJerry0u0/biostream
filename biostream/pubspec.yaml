@@ -23,6 +23,7 @@ dependencies:
   web_socket_channel: ^3.0.1  # 코치 챗봇 WebSocket
   url_launcher: ^6.2.5  # URL 열기용 (Notion 링크)
   share_plus: ^10.0.2  # 외부 앱 공유용
+  image_gallery_saver_plus: ^4.0.1  # 갤러리 저장용
   firebase_core: ^3.13.0
   firebase_messaging: ^15.2.5
   flutter_local_notifications: ^17.2.2
