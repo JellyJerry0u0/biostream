@@ -129,6 +129,7 @@ class HealthData(Base):
     exercise_minutes = Column(Integer, default=0, nullable=False)
     fitness_score = Column(Float, default=0.0, nullable=False)
     weight_kg = Column(Float, default=0.0, nullable=False)
+    height_cm = Column(Float, default=0.0, nullable=False)
     body_fat_percentage = Column(Float, default=0.0, nullable=False)
     vo2_max = Column(Float, default=0.0, nullable=False)
     blood_glucose_mg_dl = Column(Float, default=0.0, nullable=False)

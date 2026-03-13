@@ -1,8 +1,10 @@
 import os
-import httpx
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse
+
+import httpx
 from sqlalchemy.orm import Session
+
 from app.models import Lifestyle
 from app.database import SessionLocal
 
@@ -65,24 +67,7 @@ class ImageGenerationService:
                 "target_years": effective_target_years,
                 "habits": effective_habits,
             }
-
-            headers = {}
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
-
-            async with httpx.AsyncClient(timeout=120) as client:
-                response = await client.post(
-                    self.gpu_server_url,
-                    json=payload,
-                    headers=headers
-                )
-
-            response.raise_for_status()
-            result = response.json()
-
-            output_url = result.get("output_url") or result.get("image_url")
-            if not output_url:
-                raise Exception("GPU server did not return output_url")
+            output_url = await self._request_legacy_gpu_image(payload)
 
             lifestyle.generated_image_url = output_url
             db.commit()
@@ -111,6 +96,27 @@ class ImageGenerationService:
         finally:
             if owns_session and db is not None:
                 db.close()
+
+    async def _request_legacy_gpu_image(self, payload: Dict[str, Any]) -> str:
+        if not self.gpu_server_url:
+            raise Exception("Legacy 이미지 서버 URL이 비어 있습니다.")
+
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                self.gpu_server_url,
+                json=payload,
+                headers=headers,
+            )
+        response.raise_for_status()
+        result = response.json()
+        output_url = result.get("output_url") or result.get("image_url")
+        if not output_url:
+            raise Exception("GPU 서버 응답에 output_url/image_url이 없습니다.")
+        return output_url
 
     def _calculate_score(self, habits: Dict[str, Any]) -> float:
         score = 0.2

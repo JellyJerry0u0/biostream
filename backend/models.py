@@ -113,5 +113,6 @@ class HealthData(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     steps = Column(Integer, default=0)
     sleep_minutes = Column(Integer, default=0)
+    height_cm = Column(Float, default=0.0)
     sync_date = Column(Date, index=True) # 데이터를 생성한 날짜 (어제 날짜)
     is_processed = Column(Boolean, default=False) # 분석 완료 여부 플래그

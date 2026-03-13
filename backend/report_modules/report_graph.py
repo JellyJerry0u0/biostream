@@ -415,6 +415,7 @@ class ReportState(TypedDict, total=False):
     retry_sections: List[str]  # 재시도가 필요한 섹션 목록
     retry_count: Dict[str, Any]  # 재시도 횟수 추적 (예: {"validate_cards": {"sleep": 1}, "write_section_cards": {"sleep": 2}})
     situation_text: Optional[str]  # 사용자 참고 상황 (DB 저장 안 함, 프롬프트에만 반영)
+    persist_report: bool  # True면 DB/외부 저장, False면 화면 표시용 임시 생성
 
 
 # 목표 한글 매핑
@@ -3055,7 +3056,7 @@ def assemble_report(state: ReportState) -> ReportState:
     # 섹션별 리포트 구조 생성
     sections_dict = {}
     for section in sections:
-        cards = section_cards.get(section, [])
+        cards = _normalize_cards_for_storage(section_cards.get(section, []))
         if not cards:
             continue
         
@@ -3106,7 +3107,9 @@ def assemble_report(state: ReportState) -> ReportState:
             
             for subsection_key in lifestyle_subsection_keys:
                 subsection_cards_key = f"{section}.{subsection_key}"
-                subsection_cards = section_cards.get(subsection_cards_key, [])
+                subsection_cards = _normalize_cards_for_storage(
+                    section_cards.get(subsection_cards_key, [])
+                )
                 
                 if subsection_cards:
                     subsection_titles = {
@@ -3174,6 +3177,70 @@ def assemble_report(state: ReportState) -> ReportState:
     return {**state, "final_report": final_report}
 
 
+def _normalize_cards_for_storage(raw_cards: Any) -> List[Dict[str, Any]]:
+    """
+    리포트 저장 직전 카드 스키마 정규화.
+    - 카드 스키마(type/text/items/meta) 외 필드는 제거
+    - 원문 청크 dict(예: chunk_id/source_snippet) 형태가 섞여 들어오면 저장에서 제외
+    """
+    if not isinstance(raw_cards, list):
+        return []
+
+    normalized: List[Dict[str, Any]] = []
+    for card in raw_cards:
+        if not isinstance(card, dict):
+            continue
+
+        card_type = str(card.get("type", "")).strip()
+        if card_type not in {"problem", "cause", "action", "simulation"}:
+            continue
+
+        title = str(card.get("title", "")).strip()
+        text = str(card.get("text", "")).strip()
+        meta = card.get("meta") if isinstance(card.get("meta"), dict) else {}
+
+        if card_type in {"problem", "cause", "simulation"}:
+            if not text:
+                continue
+            out: Dict[str, Any] = {
+                "type": card_type,
+                "title": title,
+                "text": text,
+            }
+            if meta:
+                out["meta"] = meta
+            normalized.append(out)
+            continue
+
+        # action
+        items = card.get("items")
+        if not isinstance(items, list):
+            continue
+        normalized_items: List[Dict[str, str]] = []
+        for item in items[:3]:
+            if not isinstance(item, dict):
+                continue
+            item_title = str(item.get("title", "")).strip()
+            item_detail = str(item.get("detail", "")).strip()
+            if not item_title and not item_detail:
+                continue
+            normalized_items.append({"title": item_title, "detail": item_detail})
+
+        if not normalized_items:
+            continue
+
+        out = {
+            "type": "action",
+            "title": title,
+            "items": normalized_items,
+        }
+        if meta:
+            out["meta"] = meta
+        normalized.append(out)
+
+    return normalized
+
+
 def _collect_narrative_refs(section_evidence) -> List[Dict[str, Any]]:
     """narrative evidence에서 참조 목록 수집"""
     refs = []
@@ -3229,7 +3296,6 @@ def generate_aging_image_node(state: ReportState) -> ReportState:
         "sleep_hours_weekday": survey.get("sleep_hours_weekday"),
         "stress_score": survey.get("stress_score"),
     }
-    
     # 2. 이미지 생성 서비스 호출 (async 함수를 sync 환경에서 실행)
     import asyncio
     try:
@@ -3280,6 +3346,10 @@ def generate_aging_image_node(state: ReportState) -> ReportState:
 def save_report_node(state: ReportState) -> ReportState:
     """리포트 저장"""
     print("[SaveReport] 리포트 저장 시작")
+    if state.get("persist_report") is False:
+        print("[SaveReport] persist_report=False 이므로 DB 저장을 건너뜁니다.")
+        return state
+
     user_id = state["user_id"]
     final_report = state.get("final_report")
     survey = state.get("survey", {})
@@ -3290,10 +3360,15 @@ def save_report_node(state: ReportState) -> ReportState:
     
     try:
         # State에서 이미지 관련 데이터를 꺼내서 save_report에 전달
+        target_lifestyle_id = state.get("lifestyle_id") or survey.get("lifestyle_id")
+        if not target_lifestyle_id:
+            print("⚠️ [SaveReport] lifestyle_id가 없어 저장을 중단합니다.")
+            return state
+
         result = save_report(
             user_id, 
             final_report, 
-            lifestyle_id=survey.get("lifestyle_id"),
+            lifestyle_id=target_lifestyle_id,
             generated_image_url=state.get("generated_image_url"),
             generation_status=state.get("generation_status"),
             image_gen_params=state.get("image_gen_params")
@@ -3323,6 +3398,9 @@ def export_to_notion_node(state: ReportState) -> ReportState:
     - 신뢰도 점수와 근거 링크 삽입
     """
     print("[ExportToNotion] Notion 전송 시작")
+    if state.get("persist_report") is False:
+        print("[ExportToNotion] persist_report=False 이므로 Notion 전송을 건너뜁니다.")
+        return state
     
     # Notion 전송 활성화 여부 확인 (환경변수)
     enable_notion_export = os.getenv("ENABLE_NOTION_EXPORT", "false").lower() == "true"
@@ -3686,6 +3764,7 @@ def generate_report(
     user_id: int,
     lifestyle_id: Optional[int] = None,
     situation_text: Optional[str] = None,
+    persist_report: bool = True,
 ) -> Dict[str, Any]:
     """리포트 생성 메인 함수 (LangGraph 워크플로우)"""
     try:
@@ -3704,6 +3783,7 @@ def generate_report(
             "quality_flags": {},
             "final_report": None,
             "situation_text": situation_text,
+            "persist_report": persist_report,
         }
         if situation_text:
             print(f"[ReportGraph] initial_state에 situation_text 반영: {situation_text[:50]}...")

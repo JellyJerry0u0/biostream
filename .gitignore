@@ -63,6 +63,7 @@ test.db
 
 # Upload / local data
 backend/uploads/
+backend/keys/
 
 # Environment variables (보안)
 .env

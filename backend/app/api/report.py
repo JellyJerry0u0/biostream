@@ -8,7 +8,7 @@ import sys
 import os
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Body
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Any, Dict
 from datetime import datetime
 from pydantic import BaseModel
 from app.database import get_db
@@ -33,6 +33,94 @@ class GenerateReportBody(BaseModel):
 class QuestProgressBody(BaseModel):
     """홈 퀘스트(맞춤 솔루션) 실천 체크 상태"""
     completed_action_ids: list[str] = []
+
+
+class SaveReportBody(BaseModel):
+    """화면에서 확인한 리포트를 확정 저장할 때 사용"""
+    report: Dict[str, Any]
+
+
+def _sanitize_cards_for_storage(raw_cards: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_cards, list):
+        return []
+
+    sanitized: list[dict[str, Any]] = []
+    for card in raw_cards:
+        if not isinstance(card, dict):
+            continue
+
+        card_type = str(card.get("type", "")).strip()
+        if card_type not in {"problem", "cause", "action", "simulation"}:
+            continue
+
+        title = str(card.get("title", "")).strip()
+        meta = card.get("meta") if isinstance(card.get("meta"), dict) else {}
+
+        if card_type in {"problem", "cause", "simulation"}:
+            text = str(card.get("text", "")).strip()
+            if not text:
+                continue
+            item: dict[str, Any] = {"type": card_type, "title": title, "text": text}
+            if meta:
+                item["meta"] = meta
+            sanitized.append(item)
+            continue
+
+        items = card.get("items")
+        if not isinstance(items, list):
+            continue
+        normalized_items: list[dict[str, str]] = []
+        for raw_item in items[:3]:
+            if not isinstance(raw_item, dict):
+                continue
+            item_title = str(raw_item.get("title", "")).strip()
+            item_detail = str(raw_item.get("detail", "")).strip()
+            if not item_title and not item_detail:
+                continue
+            normalized_items.append({"title": item_title, "detail": item_detail})
+        if not normalized_items:
+            continue
+        out: dict[str, Any] = {"type": "action", "title": title, "items": normalized_items}
+        if meta:
+            out["meta"] = meta
+        sanitized.append(out)
+
+    return sanitized
+
+
+def _sanitize_report_for_storage(report_data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(report_data, dict):
+        return {}
+
+    report = dict(report_data)
+    sections = report.get("sections")
+    if not isinstance(sections, dict):
+        return report
+
+    sanitized_sections: dict[str, Any] = {}
+    for section_key, section_value in sections.items():
+        if not isinstance(section_value, dict):
+            continue
+
+        sanitized_section = dict(section_value)
+        if isinstance(section_value.get("cards"), list):
+            sanitized_section["cards"] = _sanitize_cards_for_storage(section_value.get("cards"))
+
+        subsections = section_value.get("subsections")
+        if isinstance(subsections, list):
+            normalized_subsections: list[dict[str, Any]] = []
+            for subsection in subsections:
+                if not isinstance(subsection, dict):
+                    continue
+                sub_out = dict(subsection)
+                sub_out["cards"] = _sanitize_cards_for_storage(subsection.get("cards"))
+                normalized_subsections.append(sub_out)
+            sanitized_section["subsections"] = normalized_subsections
+
+        sanitized_sections[section_key] = sanitized_section
+
+    report["sections"] = sanitized_sections
+    return report
 
 
 def get_current_user(authorization: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
@@ -102,19 +190,11 @@ def generate_report(
     ).first()
     
     if not lifestyle:
-        # 해당 lifestyle_id가 없으면 최신 레코드 조회
-        print(f"⚠️ [리포트 생성] lifestyle_id={lifestyle_id}를 찾을 수 없습니다. 최신 레코드를 조회합니다.")
-        lifestyle = db.query(Lifestyle).filter(
-            Lifestyle.user_id == current_user.id
-        ).order_by(Lifestyle.created_at.desc()).first()
-        
-        if not lifestyle:
-            raise HTTPException(
-                status_code=404,
-                detail="설문조사 데이터를 찾을 수 없습니다."
-            )
-        print(f"✅ [리포트 생성] 최신 레코드 사용 - lifestyle_id={lifestyle.id}")
-        lifestyle_id = lifestyle.id  # 실제 사용할 lifestyle_id 업데이트
+        # 안전성: 요청된 lifestyle_id가 유효하지 않으면 다른 레코드로 대체하지 않는다.
+        raise HTTPException(
+            status_code=404,
+            detail=f"요청한 설문조사(lifestyle_id={lifestyle_id})를 찾을 수 없습니다."
+        )
     
     # situation_text가 있으면 캐시 사용 안 함 (사용자가 새 참고 상황을 입력했으므로 반영 필요)
     situation_text = body.situation_text if body and body.situation_text else None
@@ -159,6 +239,7 @@ def generate_report(
             user_id=current_user.id,
             lifestyle_id=lifestyle_id,
             situation_text=situation_text,
+            persist_report=False,
         )
         
         if not report_result.get("success"):
@@ -170,34 +251,8 @@ def generate_report(
         # 신규 리포트 구조에서 final_report 추출
         new_report = report_result.get("report", {})
         
-        # 리포트 저장 (신규 구조 그대로 저장)
-        lifestyle.health_report = new_report
-        lifestyle.health_report_generated_at = datetime.utcnow()
-        
-        # Notion 정보 별도 저장 (있는 경우)
-        if new_report.get("notion_page_id"):
-            lifestyle.notion_page_id = new_report.get("notion_page_id")
-            print(f"[Notion] 페이지 ID 저장: {lifestyle.notion_page_id}")
-        if new_report.get("notion_url"):
-            lifestyle.notion_url = new_report.get("notion_url")
-            print(f"[Notion] 페이지 URL 저장: {lifestyle.notion_url}")
-        
-        db.commit()
-        db.refresh(lifestyle)
-        
-        print(f"[리포트 생성] 리포트 생성 및 저장 완료 - lifestyle_id: {lifestyle_id}")
-
-        try:
-            push_ok = send_push_to_user(
-                db=db,
-                user_id=current_user.id,
-                title="리포트 도착",
-                body="방금 생성된 건강 리포트를 확인해 보세요.",
-                data={"type": "report_ready", "lifestyle_id": str(lifestyle_id)},
-            )
-            print(f"[리포트 생성] 즉시 푸시 발송 결과: {push_ok}")
-        except Exception as push_error:
-            print(f"[리포트 생성] 즉시 푸시 발송 실패(무시): {push_error}")
+        # 여기서는 DB에 저장하지 않고 화면 표시용 결과만 반환한다.
+        print(f"[리포트 생성] 임시 리포트 생성 완료(미저장) - lifestyle_id: {lifestyle_id}")
         
         # 새로운 스키마 (tabs + sections.cards)를 기존 형식으로 변환 (프론트엔드 호환성)
         cards = []
@@ -279,7 +334,7 @@ def generate_report(
             "cards": cards,
             "lifestyle_id": lifestyle_id,
             "user_id": current_user.id,
-            "generated_at": lifestyle.health_report_generated_at.isoformat()
+            "generated_at": datetime.utcnow().isoformat(),
         }
         
     except Exception as e:
@@ -289,6 +344,69 @@ def generate_report(
             status_code=500,
             detail=f"리포트 생성 중 오류가 발생했습니다: {str(e)}"
         )
+
+
+@router.post("/report/{lifestyle_id}/save")
+def save_report_explicit(
+    lifestyle_id: int,
+    body: SaveReportBody,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """Save Comparison 버튼을 눌렀을 때만 리포트를 DB에 저장"""
+    current_user = get_current_user(authorization, db)
+
+    lifestyle = db.query(Lifestyle).filter(
+        Lifestyle.id == lifestyle_id,
+        Lifestyle.user_id == current_user.id,
+    ).first()
+    if not lifestyle:
+        raise HTTPException(status_code=404, detail="해당 설문조사 데이터를 찾을 수 없습니다.")
+
+    report_data = body.report
+    if not isinstance(report_data, dict) or not report_data:
+        raise HTTPException(status_code=400, detail="저장할 리포트 데이터가 비어 있습니다.")
+    report_data = _sanitize_report_for_storage(report_data)
+
+    lifestyle.health_report = report_data
+    lifestyle.health_report_generated_at = datetime.utcnow()
+
+    generated_image_url = (
+        report_data.get("generated_image_url")
+        or report_data.get("image_url")
+        or report_data.get("future_image_url")
+    )
+    if isinstance(generated_image_url, str) and generated_image_url.strip():
+        lifestyle.generated_image_url = generated_image_url.strip()
+
+    if report_data.get("notion_page_id"):
+        lifestyle.notion_page_id = report_data.get("notion_page_id")
+    if report_data.get("notion_url"):
+        lifestyle.notion_url = report_data.get("notion_url")
+
+    db.commit()
+    db.refresh(lifestyle)
+
+    try:
+        push_ok = send_push_to_user(
+            db=db,
+            user_id=current_user.id,
+            title="리포트 저장 완료",
+            body="저장한 건강 리포트를 언제든 다시 확인할 수 있어요.",
+            data={"type": "report_saved", "lifestyle_id": str(lifestyle_id)},
+        )
+        print(f"[리포트 저장] 즉시 푸시 발송 결과: {push_ok}")
+    except Exception as push_error:
+        print(f"[리포트 저장] 즉시 푸시 발송 실패(무시): {push_error}")
+
+    return {
+        "success": True,
+        "message": "리포트가 저장되었습니다.",
+        "lifestyle_id": lifestyle.id,
+        "generated_at": lifestyle.health_report_generated_at.isoformat()
+        if lifestyle.health_report_generated_at
+        else None,
+    }
 
 
 @router.get("/report/{lifestyle_id}")
@@ -462,6 +580,97 @@ def _extract_report_summary_text(report: object) -> str:
                                     return joined
 
     return ""
+
+
+def _extract_simulation_text(report: object) -> str:
+    if not isinstance(report, dict):
+        return ""
+
+    sections = report.get("sections")
+    if not isinstance(sections, dict):
+        return ""
+
+    snippets: list[str] = []
+    for section in sections.values():
+        if not isinstance(section, dict):
+            continue
+        cards = section.get("cards")
+        if not isinstance(cards, list):
+            continue
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            if str(card.get("type", "")).strip() != "simulation":
+                continue
+            text = str(card.get("text", "")).strip()
+            if text:
+                snippets.append(text)
+
+    if not snippets:
+        return ""
+    return " ".join(snippets)[:700]
+
+
+def _normalize_image_url(path_or_url: Optional[str], origin: str) -> Optional[str]:
+    value = (path_or_url or "").strip()
+    if not value:
+        return None
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    if os.path.exists(value) and "uploads" in value:
+        uploads_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../uploads")
+        )
+        relative_path = os.path.relpath(value, uploads_dir).replace("\\", "/")
+        return f"{origin}/data/image/{relative_path}"
+    return value
+
+
+@router.get("/report-latest-future-face")
+def get_latest_future_face(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """최근 생성 리포트의 원본/생성 이미지와 12주 변화 텍스트를 반환"""
+    current_user = get_current_user(authorization, db)
+    origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+
+    lifestyle = (
+        db.query(Lifestyle)
+        .filter(
+            Lifestyle.user_id == current_user.id,
+            Lifestyle.health_report_generated_at.isnot(None),
+            Lifestyle.health_report.isnot(None),
+        )
+        .order_by(Lifestyle.health_report_generated_at.desc())
+        .first()
+    )
+    if not lifestyle:
+        raise HTTPException(status_code=404, detail="생성된 최근 리포트를 찾을 수 없습니다.")
+
+    report = lifestyle.health_report if isinstance(lifestyle.health_report, dict) else {}
+    generated_raw = (
+        lifestyle.generated_image_url
+        or report.get("generated_image_url")
+        or report.get("image_url")
+        or report.get("future_image_url")
+    )
+    original_raw = (
+        lifestyle.original_image_url
+        or report.get("original_image_url")
+        or (report.get("image_gen_params") or {}).get("image_url")
+    )
+
+    return {
+        "success": True,
+        "lifestyle_id": lifestyle.id,
+        "generated_at": lifestyle.health_report_generated_at.isoformat()
+        if lifestyle.health_report_generated_at
+        else None,
+        "original_image_url": _normalize_image_url(original_raw, origin),
+        "generated_image_url": _normalize_image_url(generated_raw, origin),
+        "simulation_prompt_text": _extract_simulation_text(report),
+    }
 
 
 @router.get("/report-history")

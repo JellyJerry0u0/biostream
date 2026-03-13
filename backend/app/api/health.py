@@ -1,12 +1,13 @@
-from datetime import date
+from datetime import date, timedelta
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.database import get_db
-from app.models import HealthData
+from app.models import HealthData, User
+from app.auth.security import verify_token
 
 router = APIRouter(prefix="/api/v1", tags=["Health Sync"])
 logger = logging.getLogger(__name__)
@@ -25,10 +26,30 @@ class HealthSyncRequest(BaseModel):
     exercise_minutes: int = Field(default=0, alias="exerciseMinutes", ge=0)
     fitness_score: float = Field(default=0.0, alias="fitnessScore", ge=0)
     weight_kg: float = Field(default=0.0, alias="weightKg", ge=0)
+    height_cm: float = Field(default=0.0, alias="heightCm", ge=0)
     body_fat_percentage: float = Field(default=0.0, alias="bodyFatPercentage", ge=0)
     vo2_max: float = Field(default=0.0, alias="vo2Max", ge=0)
     blood_glucose_mg_dl: float = Field(default=0.0, alias="bloodGlucoseMgDl", ge=0)
     user_id: Optional[int] = Field(default=None, alias="userId")
+
+
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> User:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
+
+    token = authorization.replace("Bearer ", "")
+    email = verify_token(token)
+    if not email:
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+
+    return user
 
 
 @router.post("/sync-health")
@@ -69,6 +90,7 @@ async def sync_health_data(
         existing_data.exercise_minutes = req.exercise_minutes
         existing_data.fitness_score = req.fitness_score
         existing_data.weight_kg = req.weight_kg
+        existing_data.height_cm = req.height_cm
         existing_data.body_fat_percentage = req.body_fat_percentage
         existing_data.vo2_max = req.vo2_max
         existing_data.blood_glucose_mg_dl = req.blood_glucose_mg_dl
@@ -86,6 +108,7 @@ async def sync_health_data(
             exercise_minutes=req.exercise_minutes,
             fitness_score=req.fitness_score,
             weight_kg=req.weight_kg,
+            height_cm=req.height_cm,
             body_fat_percentage=req.body_fat_percentage,
             vo2_max=req.vo2_max,
             blood_glucose_mg_dl=req.blood_glucose_mg_dl,
@@ -97,3 +120,39 @@ async def sync_health_data(
 
     db.commit()
     return {"status": "success", "message": f"{req.date} 데이터 동기화 완료"}
+
+
+@router.get("/yesterday-health")
+async def get_yesterday_health_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    yesterday = date.today() - timedelta(days=1)
+    record = (
+        db.query(HealthData)
+        .filter(
+            HealthData.user_id == current_user.id,
+            HealthData.sync_date == yesterday,
+        )
+        .first()
+    )
+
+    if not record:
+        raise HTTPException(status_code=404, detail="어제 동기화된 건강 데이터가 없습니다.")
+
+    return {
+        "date": record.sync_date.isoformat(),
+        "steps": record.steps,
+        "sleepMinutes": record.sleep_minutes,
+        "distanceMeters": record.distance_meters,
+        "oxygenSaturation": record.oxygen_saturation,
+        "averageSpeedMps": record.average_speed_mps,
+        "nutritionCaloriesKcal": record.nutrition_calories_kcal,
+        "exerciseMinutes": record.exercise_minutes,
+        "fitnessScore": record.fitness_score,
+        "weightKg": record.weight_kg,
+        "heightCm": record.height_cm,
+        "bodyFatPercentage": record.body_fat_percentage,
+        "vo2Max": record.vo2_max,
+        "bloodGlucoseMgDl": record.blood_glucose_mg_dl,
+    }

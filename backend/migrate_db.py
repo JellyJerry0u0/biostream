@@ -65,6 +65,7 @@ def migrate():
                     exercise_minutes INTEGER NOT NULL DEFAULT 0,
                     fitness_score DOUBLE PRECISION NOT NULL DEFAULT 0,
                     weight_kg DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    height_cm DOUBLE PRECISION NOT NULL DEFAULT 0,
                     body_fat_percentage DOUBLE PRECISION NOT NULL DEFAULT 0,
                     vo2_max DOUBLE PRECISION NOT NULL DEFAULT 0,
                     blood_glucose_mg_dl DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -86,6 +87,7 @@ def migrate():
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS exercise_minutes INTEGER NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS fitness_score DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS weight_kg DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS height_cm DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS body_fat_percentage DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS vo2_max DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS blood_glucose_mg_dl DOUBLE PRECISION NOT NULL DEFAULT 0;

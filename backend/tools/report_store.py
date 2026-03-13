@@ -48,16 +48,16 @@ def save_report(
     
     try:
         # Lifestyle 레코드 조회
-        if lifestyle_id:
-            lifestyle = db.query(Lifestyle).filter(
-                Lifestyle.id == lifestyle_id,
-                Lifestyle.user_id == user_id
-            ).first()
-        else:
-            # 최신 레코드 조회
-            lifestyle = db.query(Lifestyle).filter(
-                Lifestyle.user_id == user_id
-            ).order_by(Lifestyle.created_at.desc()).first()
+        if not lifestyle_id:
+            return {
+                "error": "lifestyle_id가 없어 리포트 저장을 중단합니다.",
+                "user_id": user_id,
+            }
+
+        lifestyle = db.query(Lifestyle).filter(
+            Lifestyle.id == lifestyle_id,
+            Lifestyle.user_id == user_id
+        ).first()
         
         if not lifestyle:
             return {
