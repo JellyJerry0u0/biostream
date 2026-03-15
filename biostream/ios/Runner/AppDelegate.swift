@@ -214,7 +214,7 @@ private struct IOSHealthPayload {
   let distanceMeters: Double
   let oxygenSaturation: Double
   let averageSpeedMps: Double
-  let nutritionCaloriesKcal: Double
+  let activeCaloriesKcal: Double
   let exerciseMinutes: Int
   let fitnessScore: Double
   let weightKg: Double
@@ -232,7 +232,7 @@ private struct IOSHealthPayload {
       "distanceMeters": distanceMeters,
       "oxygenSaturation": oxygenSaturation,
       "averageSpeedMps": averageSpeedMps,
-      "nutritionCaloriesKcal": nutritionCaloriesKcal,
+      "activeCaloriesKcal": activeCaloriesKcal,
       "exerciseMinutes": exerciseMinutes,
       "fitnessScore": fitnessScore,
       "weightKg": weightKg,
@@ -301,9 +301,9 @@ private final class IOSHealthSyncService {
       )
     }
     let oxygenSaturation = normalizePercentValue(oxygenAverageRaw)
-    let nutritionCaloriesKcal = try await noDataAsZero {
+    let activeCaloriesKcal = try await noDataAsZero {
       try await sumQuantity(
-        identifier: .dietaryEnergyConsumed,
+        identifier: .activeEnergyBurned,
         unit: HKUnit.kilocalorie(),
         startDate: start,
         endDate: end
@@ -372,7 +372,7 @@ private final class IOSHealthSyncService {
       distanceMeters: distanceMeters,
       oxygenSaturation: oxygenSaturation,
       averageSpeedMps: averageSpeedMps,
-      nutritionCaloriesKcal: nutritionCaloriesKcal,
+      activeCaloriesKcal: activeCaloriesKcal,
       exerciseMinutes: exerciseMinutes,
       fitnessScore: fitnessScore,
       weightKg: weightKg,
@@ -410,7 +410,7 @@ private final class IOSHealthSyncService {
       .stepCount,
       .distanceWalkingRunning,
       .oxygenSaturation,
-      .dietaryEnergyConsumed,
+      .activeEnergyBurned,
       .appleExerciseTime,
       .bodyMass,
       .height,

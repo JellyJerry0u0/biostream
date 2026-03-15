@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'facescan_screen.dart';
 import '../services/lifestyle_service.dart';
@@ -13,6 +14,7 @@ class TodayMeScreen extends StatefulWidget {
 
 class _TodayMeScreenState extends State<TodayMeScreen>
     with TickerProviderStateMixin {
+  static const MethodChannel _devChannel = MethodChannel('com.example.biostream/dev');
   static const Color _primary = Color(0xFF2BEE75);
   static const Color _backgroundLight = Color(0xFFF6F8F6);
 
@@ -25,6 +27,7 @@ class _TodayMeScreenState extends State<TodayMeScreen>
   final LifestyleService _lifestyleService = LifestyleService();
   late List<_MetricItem> _metrics;
   String? _metricsNotice;
+  bool _didSyncRetry = false;
 
   late final AnimationController _introCtrl;
   late final AnimationController _visibilityCtrl;
@@ -53,29 +56,22 @@ class _TodayMeScreenState extends State<TodayMeScreen>
     ),
   ];
 
-  static const List<_MetricItem> _defaultMetrics = [
-    _MetricItem(icon: Icons.directions_walk, label: '거리', value: '5.2', unit: 'km'),
-    _MetricItem(icon: Icons.fitness_center, label: '운동', value: '45', unit: 'min'),
-    _MetricItem(icon: Icons.monitor_weight, label: '체중', value: '68.4', unit: 'kg'),
-    _MetricItem(icon: Icons.height, label: '키', value: '173.0', unit: 'cm'),
-    _MetricItem(icon: Icons.opacity, label: '체지방', value: '18.2', unit: '%'),
-    _MetricItem(icon: Icons.restaurant, label: '영양', value: '2100', unit: 'kcal'),
-    _MetricItem(icon: Icons.air, label: '산소포화도', value: '98', unit: '%'),
-    _MetricItem(icon: Icons.bloodtype, label: '혈당', value: '92', unit: 'mg/dL'),
-    _MetricItem(
-      icon: Icons.monitor_heart,
-      label: '최대 산소 소비량 (VO2 Max)',
-      value: '42.5',
-      unit: 'ml/kg/min',
-      wide: true,
-    ),
-    _MetricItem(icon: Icons.bedtime, label: '수면', value: '7.5', unit: 'hr'),
+  static const List<_MetricItem> _emptyMetrics = [
+    _MetricItem(icon: Icons.directions_walk, label: '거리', value: '-', unit: 'km'),
+    _MetricItem(icon: Icons.directions_run, label: '걸음 수', value: '-', unit: 'step'),
+    _MetricItem(icon: Icons.fitness_center, label: '운동', value: '-', unit: 'min'),
+    _MetricItem(icon: Icons.local_fire_department, label: '활동 칼로리', value: '-', unit: 'kcal'),
+    _MetricItem(icon: Icons.monitor_weight, label: '체중', value: '-', unit: 'kg'),
+    _MetricItem(icon: Icons.height, label: '키', value: '-', unit: 'cm'),
+    _MetricItem(icon: Icons.air, label: '산소포화도', value: '-', unit: '%'),
+    _MetricItem(icon: Icons.bloodtype, label: '혈당', value: '-', unit: 'mg/dL'),
+    _MetricItem(icon: Icons.bedtime, label: '수면', value: '-', unit: 'hr'),
   ];
 
   @override
   void initState() {
     super.initState();
-    _metrics = List<_MetricItem>.from(_defaultMetrics);
+    _metrics = List<_MetricItem>.from(_emptyMetrics);
     _introCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 880),
@@ -145,12 +141,22 @@ class _TodayMeScreenState extends State<TodayMeScreen>
     if (result['success'] != true) {
       final message = (result['message'] ?? '').toString();
       if (message.contains('어제 동기화된 건강 데이터가 없습니다')) {
+        if (!_didSyncRetry) {
+          _didSyncRetry = true;
+          final synced = await _syncHealthAndRetry();
+          if (synced && mounted) {
+            await _loadYesterdayMetrics();
+            return;
+          }
+        }
         setState(() {
-          _metricsNotice = '어제 동기화 데이터가 없어 기본 표시값을 보여주고 있어요.';
+          _metricsNotice = '어제 동기화 데이터가 없어 표시할 값이 없습니다.';
+          _metrics = List<_MetricItem>.from(_emptyMetrics);
         });
       } else if (message.isNotEmpty) {
         setState(() {
           _metricsNotice = '어제 건강 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+          _metrics = List<_MetricItem>.from(_emptyMetrics);
         });
       }
       return;
@@ -160,10 +166,12 @@ class _TodayMeScreenState extends State<TodayMeScreen>
     if (data is! Map<String, dynamic>) {
       setState(() {
         _metricsNotice = '어제 건강 데이터 형식을 확인할 수 없어요.';
+        _metrics = List<_MetricItem>.from(_emptyMetrics);
       });
       return;
     }
 
+    final steps = _toInt(data['steps']);
     final distanceMeters = _toDouble(data['distanceMeters']);
     final exerciseMinutes = _toInt(data['exerciseMinutes']);
     final healthWeightKg = _toDouble(data['weightKg']);
@@ -172,12 +180,12 @@ class _TodayMeScreenState extends State<TodayMeScreen>
     final fallbackHeightCm = profileBody['heightCm'] ?? 0.0;
     final weightKg = healthWeightKg > 0 ? healthWeightKg : fallbackWeightKg;
     final heightCm = healthHeightCm > 0 ? healthHeightCm : fallbackHeightCm;
-    final bodyFatPercentage = _toDouble(data['bodyFatPercentage']);
     final sleepMinutes = _toInt(data['sleepMinutes']);
-    final nutritionCaloriesKcal = _toDouble(data['nutritionCaloriesKcal']);
+    final activityCaloriesKcal = _toDouble(
+      data['activeCaloriesKcal'] ?? data['nutritionCaloriesKcal'],
+    );
     final oxygenSaturation = _toDouble(data['oxygenSaturation']);
     final bloodGlucoseMgDl = _toDouble(data['bloodGlucoseMgDl']);
-    final vo2Max = _toDouble(data['vo2Max']);
 
     setState(() {
       _metricsNotice = (healthWeightKg <= 0 && fallbackWeightKg > 0) ||
@@ -192,10 +200,22 @@ class _TodayMeScreenState extends State<TodayMeScreen>
           unit: 'km',
         ),
         _MetricItem(
+          icon: Icons.directions_run,
+          label: '걸음 수',
+          value: steps.toString(),
+          unit: 'step',
+        ),
+        _MetricItem(
           icon: Icons.fitness_center,
           label: '운동',
           value: exerciseMinutes.toString(),
           unit: 'min',
+        ),
+        _MetricItem(
+          icon: Icons.local_fire_department,
+          label: '활동 칼로리',
+          value: _fmtFixed(activityCaloriesKcal, 0),
+          unit: 'kcal',
         ),
         _MetricItem(
           icon: Icons.monitor_weight,
@@ -210,18 +230,6 @@ class _TodayMeScreenState extends State<TodayMeScreen>
           unit: 'cm',
         ),
         _MetricItem(
-          icon: Icons.opacity,
-          label: '체지방',
-          value: _fmtFixed(bodyFatPercentage, 1),
-          unit: '%',
-        ),
-        _MetricItem(
-          icon: Icons.restaurant,
-          label: '영양',
-          value: _fmtFixed(nutritionCaloriesKcal, 0),
-          unit: 'kcal',
-        ),
-        _MetricItem(
           icon: Icons.air,
           label: '산소포화도',
           value: _fmtFixed(oxygenSaturation, 1),
@@ -234,13 +242,6 @@ class _TodayMeScreenState extends State<TodayMeScreen>
           unit: 'mg/dL',
         ),
         _MetricItem(
-          icon: Icons.monitor_heart,
-          label: '최대 산소 소비량 (VO2 Max)',
-          value: _fmtFixed(vo2Max, 1),
-          unit: 'ml/kg/min',
-          wide: true,
-        ),
-        _MetricItem(
           icon: Icons.bedtime,
           label: '수면',
           value: _fmtFixed(sleepMinutes / 60.0, 1),
@@ -248,6 +249,19 @@ class _TodayMeScreenState extends State<TodayMeScreen>
         ),
       ];
     });
+  }
+
+  Future<bool> _syncHealthAndRetry() async {
+    try {
+      await _devChannel.invokeMethod<dynamic>('runImmediateHealthSync');
+    } on PlatformException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+
+    final retryResult = await _lifestyleService.getYesterdayHealthData();
+    return retryResult['success'] == true;
   }
 
   Future<Map<String, double>> _loadProfileBodyMetrics() async {
@@ -736,7 +750,7 @@ class _TodayMeScreenState extends State<TodayMeScreen>
                     ),
                     SizedBox(height: 4),
                     Text(
-                      '오후 세션 기록이 아직 없습니다',
+                      '설문에 참여하세요',
                       style: TextStyle(
                         color: Color(0xFFA7B5AE),
                         fontSize: 11,

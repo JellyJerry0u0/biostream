@@ -218,5 +218,62 @@ curl -X GET "${API_URL}/api/report/${LIFESTYLE_ID}" \
 
 - Android 앱은 HTTP로 리포트를 요청하고 JSON을 받습니다.
 - 모든 파이썬 코드는 서버 백엔드에 존재합니다.
+
+## Health Sync Key Refactor (activeCaloriesKcal)
+
+`nutritionCaloriesKcal`는 의미가 모호해 Health Connect의 활동 칼로리와 일치하는
+`activeCaloriesKcal`로 표준화했습니다.
+
+- API 표준 입력/출력 키: `activeCaloriesKcal`
+- 하위 호환 입력 키: `nutritionCaloriesKcal` (서버에서 계속 수용)
+- DB 표준 컬럼: `active_calories_kcal`
+
+### DB 마이그레이션
+
+```bash
+cd backend
+python migrate_db.py
+```
+
+마이그레이션 동작:
+- `health_data.active_calories_kcal` 컬럼을 없으면 생성
+- 기존 `nutrition_calories_kcal` 값이 있으면 `active_calories_kcal`로 이관
+
+### Docker 환경에서 실행
+
+```bash
+docker exec biostream_api python /app/migrate_db.py
+```
+
+주의:
+- 현재 compose는 `./backend/app:/app/app`만 마운트합니다.
+- 루트의 `backend/migrate_db.py`를 수정한 경우, 컨테이너 이미지가 오래되었으면
+  컨테이너 내부 스크립트와 달라질 수 있습니다.
+- 이 경우 `docker compose build backend ; docker compose up -d backend`로
+  이미지 재빌드 후 마이그레이션을 실행하세요.
+
+### 팀원 전달 체크리스트
+
+1. 백엔드
+- `python migrate_db.py` 실행 후 `health_data.active_calories_kcal` 존재 확인
+
+2. 모바일
+- Android: `ActiveCaloriesBurnedRecord` 권한 허용
+- iOS: HealthKit `activeEnergyBurned` 권한 허용
+
+3. API 검증
+- `GET /api/v1/yesterday-health` 응답에 `activeCaloriesKcal` 필드가 오는지 확인
+
+4. UI 검증
+- "오늘의 나" 탭에서 `활동 칼로리` 카드가 `activeCaloriesKcal` 값으로 표시되는지 확인
+
+### 빠른 검증 SQL
+
+```sql
+SELECT user_id, sync_date, active_calories_kcal
+FROM health_data
+ORDER BY sync_date DESC
+LIMIT 20;
+```
 - 토픽은 `list[str]`로 저장/필터합니다.
 - `section_norm`은 payload에 필수로 저장됩니다.

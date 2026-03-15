@@ -9,6 +9,7 @@ import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
@@ -22,6 +23,7 @@ import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.lifecycle.lifecycleScope
 import com.example.biostream.network.HealthDataDto
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import com.example.biostream.network.RetrofitClient
 import com.example.biostream.worker.ChronoWorkScheduler
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,6 +31,7 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.launch
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -47,6 +50,8 @@ class MainActivity : FlutterFragmentActivity() {
 	private val permissions = setOf(
 		HealthPermission.getReadPermission(StepsRecord::class),
 		HealthPermission.getReadPermission(SleepSessionRecord::class),
+		HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+		HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
 		HealthPermission.getReadPermission(DistanceRecord::class),
 		HealthPermission.getReadPermission(OxygenSaturationRecord::class),
 		HealthPermission.getReadPermission(NutritionRecord::class),
@@ -198,13 +203,12 @@ class MainActivity : FlutterFragmentActivity() {
 		val start = targetDate.atStartOfDay(zoneId).toInstant()
 		val end = targetDate.plusDays(1).atStartOfDay(zoneId).toInstant()
 
-		val stepResponse = healthConnectClient.aggregate(
+		val stepCount = healthConnectClient.aggregate(
 			AggregateRequest(
 				metrics = setOf(StepsRecord.COUNT_TOTAL),
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		)
-		val stepCount = stepResponse[StepsRecord.COUNT_TOTAL] ?: 0L
+		)[StepsRecord.COUNT_TOTAL] ?: 0L
 
 		val sleepSessions = healthConnectClient.readRecords(
 			ReadRecordsRequest(
@@ -212,16 +216,130 @@ class MainActivity : FlutterFragmentActivity() {
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
 		).records
-
 		val totalSleepMinutes = sleepSessions.sumOf {
 			Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0)
 		}
+
+		val distanceMeters = healthConnectClient.aggregate(
+			AggregateRequest(
+				metrics = setOf(DistanceRecord.DISTANCE_TOTAL),
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		)[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+
+		val oxygenRecords = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = OxygenSaturationRecord::class,
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		).records
+		val oxygenSaturation = if (oxygenRecords.isNotEmpty())
+			oxygenRecords.map { it.percentage.value }.average() else 0.0
+
+		val activeCaloriesKcal = healthConnectClient.aggregate(
+			AggregateRequest(
+				metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		)[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+
+		val nutritionRecords = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = NutritionRecord::class,
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		).records
+
+		val totalCaloriesKcal = healthConnectClient.aggregate(
+			AggregateRequest(
+				metrics = setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL),
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		)[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+		val resolvedActiveCaloriesKcal = if (activeCaloriesKcal > 0.0) {
+			activeCaloriesKcal
+		} else if (totalCaloriesKcal > 0.0) {
+			totalCaloriesKcal
+		} else {
+			nutritionRecords.sumOf { it.energy?.inKilocalories ?: 0.0 }
+		}
+
+		val exerciseRecords = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = ExerciseSessionRecord::class,
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		).records
+		val exerciseMinutes = exerciseRecords.sumOf {
+			Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0)
+		}
+
+		// 체중·신장은 해당 날짜 기록이 없을 수 있으므로 전체 기록 중 최신값 사용
+		val weightKg = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = WeightRecord::class,
+				timeRangeFilter = TimeRangeFilter.before(Instant.now())
+			)
+		).records.maxByOrNull { it.time }?.weight?.inKilograms ?: 0.0
+
+		val heightCm = (healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = HeightRecord::class,
+				timeRangeFilter = TimeRangeFilter.before(Instant.now())
+			)
+		).records.maxByOrNull { it.time }?.height?.inMeters ?: 0.0) * 100.0
+
+		// 일부 기기/소스는 DistanceRecord를 저장하지 않으므로 걸음수 기반 추정 거리 fallback 적용
+		val estimatedStepLengthMeters = if (heightCm > 0.0) heightCm * 0.00415 else 0.78
+		val resolvedDistanceMeters = if (distanceMeters > 0.0) {
+			distanceMeters
+		} else {
+			stepCount * estimatedStepLengthMeters
+		}
+
+		val averageSpeedMps = if (exerciseMinutes > 0L)
+			resolvedDistanceMeters / (exerciseMinutes * 60.0) else 0.0
+
+		val bodyFatPercentage = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = BodyFatRecord::class,
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		).records.maxByOrNull { it.time }?.percentage?.value ?: 0.0
+
+		val vo2Max = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = Vo2MaxRecord::class,
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		).records.maxByOrNull { it.time }?.vo2MillilitersPerMinuteKilogram ?: 0.0
+
+		val bloodGlucoseMgDl = healthConnectClient.readRecords(
+			ReadRecordsRequest(
+				recordType = BloodGlucoseRecord::class,
+				timeRangeFilter = TimeRangeFilter.between(start, end)
+			)
+		).records.maxByOrNull { it.time }?.level?.inMilligramsPerDeciliter ?: 0.0
+
+		val fitnessScore = if (vo2Max > 0.0) vo2Max
+			else (exerciseMinutes / 6.0).coerceIn(0.0, 100.0)
 
 		return HealthDataDto(
 			date = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
 			steps = stepCount,
 			sleepMinutes = totalSleepMinutes,
-			userId = getStoredUserId()
+			userId = getStoredUserId(),
+			distanceMeters = resolvedDistanceMeters,
+			oxygenSaturation = oxygenSaturation,
+			averageSpeedMps = averageSpeedMps,
+			activeCaloriesKcal = resolvedActiveCaloriesKcal,
+			exerciseMinutes = exerciseMinutes,
+			fitnessScore = fitnessScore,
+			weightKg = weightKg,
+			heightCm = heightCm,
+			bodyFatPercentage = bodyFatPercentage,
+			vo2Max = vo2Max,
+			bloodGlucoseMgDl = bloodGlucoseMgDl,
 		)
 	}
 

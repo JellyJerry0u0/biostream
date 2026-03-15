@@ -9,6 +9,44 @@ import 'api_config.dart';
 class AuthService {
   final storage = const FlutterSecureStorage();
 
+  /// 앱 시작 시 저장된 토큰으로 세션 복원 가능 여부를 확인합니다.
+  ///
+  /// - 토큰 없음: false
+  /// - 200 응답: true
+  /// - 401/403: 토큰 삭제 후 false
+  /// - 네트워크/일시 오류: 토큰이 있으면 true (불필요한 재로그인 방지)
+  Future<bool> hasValidSession() async {
+    final token = await storage.read(key: 'jwt_token');
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+
+    try {
+      final origin = await ApiConfig.getBaseOrigin();
+      final response = await http
+          .get(
+            Uri.parse('$origin/auth/me'),
+            headers: {
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return true;
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        await storage.delete(key: 'jwt_token');
+        return false;
+      }
+
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   // 회원가입 요청
   Future<Map<String, dynamic>> signUp(
     String email,

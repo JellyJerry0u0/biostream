@@ -61,7 +61,7 @@ def migrate():
                     distance_meters DOUBLE PRECISION NOT NULL DEFAULT 0,
                     oxygen_saturation DOUBLE PRECISION NOT NULL DEFAULT 0,
                     average_speed_mps DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    nutrition_calories_kcal DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    active_calories_kcal DOUBLE PRECISION NOT NULL DEFAULT 0,
                     exercise_minutes INTEGER NOT NULL DEFAULT 0,
                     fitness_score DOUBLE PRECISION NOT NULL DEFAULT 0,
                     weight_kg DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -83,7 +83,7 @@ def migrate():
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS oxygen_saturation DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS average_speed_mps DOUBLE PRECISION NOT NULL DEFAULT 0;
-                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS nutrition_calories_kcal DOUBLE PRECISION NOT NULL DEFAULT 0;
+                ALTER TABLE health_data ADD COLUMN IF NOT EXISTS active_calories_kcal DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS exercise_minutes INTEGER NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS fitness_score DOUBLE PRECISION NOT NULL DEFAULT 0;
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS weight_kg DOUBLE PRECISION NOT NULL DEFAULT 0;
@@ -94,6 +94,24 @@ def migrate():
                 ALTER TABLE health_data ADD COLUMN IF NOT EXISTS notification_sent BOOLEAN NOT NULL DEFAULT FALSE;
             """))
             print("✅ health_data 확장 컬럼 보강 완료")
+
+            # 기존 nutrition_calories_kcal -> active_calories_kcal 데이터 이관
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name='health_data' AND column_name='nutrition_calories_kcal'
+                    ) THEN
+                        UPDATE health_data
+                        SET active_calories_kcal = nutrition_calories_kcal
+                        WHERE COALESCE(active_calories_kcal, 0) = 0
+                          AND COALESCE(nutrition_calories_kcal, 0) > 0;
+                    END IF;
+                END $$;
+            """))
+            print("✅ 칼로리 컬럼 데이터 이관 완료 (nutrition -> active)")
 
             # 유니크 인덱스 생성 전 중복 데이터 정리 (가장 최신 1건만 유지)
             conn.execute(text("""

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
@@ -13,6 +14,7 @@ import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.AggregateRequest
@@ -46,6 +48,8 @@ class SyncHealthWorker(
             val permissions = setOf(
                 HealthPermission.getReadPermission(StepsRecord::class),
                 HealthPermission.getReadPermission(SleepSessionRecord::class),
+                HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+                HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
                 HealthPermission.getReadPermission(DistanceRecord::class),
                 HealthPermission.getReadPermission(OxygenSaturationRecord::class),
                 HealthPermission.getReadPermission(NutritionRecord::class),
@@ -63,7 +67,7 @@ class SyncHealthWorker(
             }
 
             val healthData = fetchYesterdayHealthData(healthConnectClient)
-            Log.i(TAG, "Sync payload => date=${healthData.date}, userId=${healthData.userId}, steps=${healthData.steps}, sleepMinutes=${healthData.sleepMinutes}, distanceMeters=${healthData.distanceMeters}, oxygenSaturation=${healthData.oxygenSaturation}, averageSpeedMps=${healthData.averageSpeedMps}, nutritionCaloriesKcal=${healthData.nutritionCaloriesKcal}, exerciseMinutes=${healthData.exerciseMinutes}, fitnessScore=${healthData.fitnessScore}, weightKg=${healthData.weightKg}, heightCm=${healthData.heightCm}, bodyFatPercentage=${healthData.bodyFatPercentage}, vo2Max=${healthData.vo2Max}, bloodGlucoseMgDl=${healthData.bloodGlucoseMgDl}")
+            Log.i(TAG, "Sync payload => date=${healthData.date}, userId=${healthData.userId}, steps=${healthData.steps}, sleepMinutes=${healthData.sleepMinutes}, distanceMeters=${healthData.distanceMeters}, oxygenSaturation=${healthData.oxygenSaturation}, averageSpeedMps=${healthData.averageSpeedMps}, activeCaloriesKcal=${healthData.activeCaloriesKcal}, exerciseMinutes=${healthData.exerciseMinutes}, fitnessScore=${healthData.fitnessScore}, weightKg=${healthData.weightKg}, heightCm=${healthData.heightCm}, bodyFatPercentage=${healthData.bodyFatPercentage}, vo2Max=${healthData.vo2Max}, bloodGlucoseMgDl=${healthData.bloodGlucoseMgDl}")
             val response = RetrofitClient
                 .getChronoLensService(applicationContext)
                 .syncHealthData(healthData)
@@ -132,14 +136,32 @@ class SyncHealthWorker(
             0.0
         }
 
+        val activeCaloriesKcal = client.aggregate(
+            AggregateRequest(
+                metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(startOfYesterday, startOfToday)
+            )
+        )[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+
+        val totalCaloriesKcal = client.aggregate(
+            AggregateRequest(
+                metrics = setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(startOfYesterday, startOfToday)
+            )
+        )[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+
         val nutritionRecords = client.readRecords(
             ReadRecordsRequest(
                 recordType = NutritionRecord::class,
                 timeRangeFilter = TimeRangeFilter.between(startOfYesterday, startOfToday)
             )
         ).records
-        val nutritionCaloriesKcal = nutritionRecords.sumOf {
-            it.energy?.inKilocalories ?: 0.0
+        val resolvedActiveCaloriesKcal = if (activeCaloriesKcal > 0.0) {
+            activeCaloriesKcal
+        } else if (totalCaloriesKcal > 0.0) {
+            totalCaloriesKcal
+        } else {
+            nutritionRecords.sumOf { it.energy?.inKilocalories ?: 0.0 }
         }
 
         val exerciseRecords = client.readRecords(
@@ -150,12 +172,6 @@ class SyncHealthWorker(
         ).records
         val exerciseMinutes = exerciseRecords.sumOf {
             Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0)
-        }
-
-        val averageSpeedMps = if (exerciseMinutes > 0L) {
-            distanceMeters / (exerciseMinutes * 60.0)
-        } else {
-            0.0
         }
 
         // 체중은 해당 날짜 기록이 없을 수 있어 전체 기록 중 최신값을 우선 사용
@@ -175,6 +191,20 @@ class SyncHealthWorker(
             )
         ).records
         val heightCm = (heightRecords.maxByOrNull { it.time }?.height?.inMeters ?: 0.0) * 100.0
+
+        // 일부 소스는 DistanceRecord를 저장하지 않아 steps 기반 거리 추정을 fallback으로 사용
+        val estimatedStepLengthMeters = if (heightCm > 0.0) heightCm * 0.00415 else 0.78
+        val resolvedDistanceMeters = if (distanceMeters > 0.0) {
+            distanceMeters
+        } else {
+            steps * estimatedStepLengthMeters
+        }
+
+        val averageSpeedMps = if (exerciseMinutes > 0L) {
+            resolvedDistanceMeters / (exerciseMinutes * 60.0)
+        } else {
+            0.0
+        }
 
         val bodyFatRecords = client.readRecords(
             ReadRecordsRequest(
@@ -210,10 +240,10 @@ class SyncHealthWorker(
             steps = steps,
             sleepMinutes = sleepMinutes,
             userId = userId,
-            distanceMeters = distanceMeters,
+            distanceMeters = resolvedDistanceMeters,
             oxygenSaturation = oxygenSaturation,
             averageSpeedMps = averageSpeedMps,
-            nutritionCaloriesKcal = nutritionCaloriesKcal,
+            activeCaloriesKcal = resolvedActiveCaloriesKcal,
             exerciseMinutes = exerciseMinutes,
             fitnessScore = fitnessScore,
             weightKg = weightKg,
