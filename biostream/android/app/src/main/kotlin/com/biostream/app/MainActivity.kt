@@ -15,7 +15,6 @@ import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeightRecord
-import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
@@ -47,6 +46,11 @@ class MainActivity : FlutterFragmentActivity() {
 
 	private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(this) }
 
+	private val requiredPermissions = setOf(
+		HealthPermission.getReadPermission(StepsRecord::class),
+		HealthPermission.getReadPermission(SleepSessionRecord::class),
+	)
+
 	private val permissions = setOf(
 		HealthPermission.getReadPermission(StepsRecord::class),
 		HealthPermission.getReadPermission(SleepSessionRecord::class),
@@ -54,7 +58,6 @@ class MainActivity : FlutterFragmentActivity() {
 		HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
 		HealthPermission.getReadPermission(DistanceRecord::class),
 		HealthPermission.getReadPermission(OxygenSaturationRecord::class),
-		HealthPermission.getReadPermission(NutritionRecord::class),
 		HealthPermission.getReadPermission(ExerciseSessionRecord::class),
 		HealthPermission.getReadPermission(WeightRecord::class),
 		HealthPermission.getReadPermission(HeightRecord::class),
@@ -66,7 +69,7 @@ class MainActivity : FlutterFragmentActivity() {
 	private val requestPermissions = registerForActivityResult(
 		PermissionController.createRequestPermissionResultContract()
 	) { granted ->
-		if (granted.containsAll(permissions)) {
+		if (granted.containsAll(requiredPermissions)) {
 			onHealthPermissionsGranted()
 		} else {
 			onHealthPermissionsDenied()
@@ -96,12 +99,12 @@ class MainActivity : FlutterFragmentActivity() {
 						lifecycleScope.launch {
 							try {
 								val granted = healthConnectClient.permissionController.getGrantedPermissions()
-								if (!granted.containsAll(permissions)) {
+								if (!granted.containsAll(requiredPermissions)) {
 									result.error("PERMISSION_DENIED", "Health Connect 권한이 모두 허용되지 않았습니다.", null)
 									return@launch
 								}
 
-								val payload = fetchHealthData(healthConnectClient, daysAgo = 1)
+								val payload = fetchHealthData(healthConnectClient, daysAgo = 1, grantedPermissions = granted)
 								Log.i(TAG, "Immediate sync payload => $payload")
 
 								val response = RetrofitClient
@@ -134,12 +137,12 @@ class MainActivity : FlutterFragmentActivity() {
 						lifecycleScope.launch {
 							try {
 								val granted = healthConnectClient.permissionController.getGrantedPermissions()
-								if (!granted.containsAll(permissions)) {
+								if (!granted.containsAll(requiredPermissions)) {
 									result.error("PERMISSION_DENIED", "Health Connect 권한이 모두 허용되지 않았습니다.", null)
 									return@launch
 								}
 
-								val payload = fetchHealthData(healthConnectClient, daysAgo = 0)
+								val payload = fetchHealthData(healthConnectClient, daysAgo = 0, grantedPermissions = granted)
 								Log.i(TAG, "Immediate TODAY sync payload => $payload")
 
 								val response = RetrofitClient
@@ -170,7 +173,7 @@ class MainActivity : FlutterFragmentActivity() {
 
 	private suspend fun checkAndRequestPermissions() {
 		val granted = healthConnectClient.permissionController.getGrantedPermissions()
-		if (!granted.containsAll(permissions)) {
+		if (!granted.containsAll(requiredPermissions)) {
 			requestPermissions.launch(permissions)
 			return
 		}
@@ -180,7 +183,8 @@ class MainActivity : FlutterFragmentActivity() {
 	private fun onHealthPermissionsGranted() {
 		ChronoWorkScheduler.scheduleDailySync(this)
 		lifecycleScope.launch {
-			val healthData = fetchHealthData(healthConnectClient, daysAgo = 1)
+			val granted = healthConnectClient.permissionController.getGrantedPermissions()
+			val healthData = fetchHealthData(healthConnectClient, daysAgo = 1, grantedPermissions = granted)
 			Log.d(TAG, "Yesterday health data: $healthData")
 		}
 	}
@@ -196,12 +200,14 @@ class MainActivity : FlutterFragmentActivity() {
 
 	private suspend fun fetchHealthData(
 		healthConnectClient: HealthConnectClient,
-		daysAgo: Long
+		daysAgo: Long,
+		grantedPermissions: Set<String>
 	): HealthDataDto {
 		val zoneId = ZoneId.systemDefault()
 		val targetDate = LocalDate.now(zoneId).minusDays(daysAgo)
 		val start = targetDate.atStartOfDay(zoneId).toInstant()
 		val end = targetDate.plusDays(1).atStartOfDay(zoneId).toInstant()
+		val sleepQueryStart = start.minus(Duration.ofDays(1))
 
 		val stepCount = healthConnectClient.aggregate(
 			AggregateRequest(
@@ -213,81 +219,91 @@ class MainActivity : FlutterFragmentActivity() {
 		val sleepSessions = healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = SleepSessionRecord::class,
-				timeRangeFilter = TimeRangeFilter.between(start, end)
+				timeRangeFilter = TimeRangeFilter.between(sleepQueryStart, end)
 			)
 		).records
 		val totalSleepMinutes = sleepSessions.sumOf {
-			Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0)
+			val overlapStart = if (it.startTime.isAfter(start)) it.startTime else start
+			val overlapEnd = if (it.endTime.isBefore(end)) it.endTime else end
+			if (overlapEnd.isAfter(overlapStart)) {
+				Duration.between(overlapStart, overlapEnd).toMinutes().coerceAtLeast(0)
+			} else {
+				0L
+			}
 		}
 
-		val distanceMeters = healthConnectClient.aggregate(
+		val canReadDistance = grantedPermissions.contains(HealthPermission.getReadPermission(DistanceRecord::class))
+		val canReadOxygen = grantedPermissions.contains(HealthPermission.getReadPermission(OxygenSaturationRecord::class))
+		val canReadActiveCalories = grantedPermissions.contains(HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class))
+		val canReadTotalCalories = grantedPermissions.contains(HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class))
+		val canReadExercise = grantedPermissions.contains(HealthPermission.getReadPermission(ExerciseSessionRecord::class))
+		val canReadWeight = grantedPermissions.contains(HealthPermission.getReadPermission(WeightRecord::class))
+		val canReadHeight = grantedPermissions.contains(HealthPermission.getReadPermission(HeightRecord::class))
+		val canReadBodyFat = grantedPermissions.contains(HealthPermission.getReadPermission(BodyFatRecord::class))
+		val canReadVo2 = grantedPermissions.contains(HealthPermission.getReadPermission(Vo2MaxRecord::class))
+		val canReadGlucose = grantedPermissions.contains(HealthPermission.getReadPermission(BloodGlucoseRecord::class))
+
+		val distanceMeters = if (canReadDistance) healthConnectClient.aggregate(
 			AggregateRequest(
 				metrics = setOf(DistanceRecord.DISTANCE_TOTAL),
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		)[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+		)[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0 else 0.0
 
-		val oxygenRecords = healthConnectClient.readRecords(
+		val oxygenRecords = if (canReadOxygen) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = OxygenSaturationRecord::class,
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		).records
+		).records else emptyList()
 		val oxygenSaturation = if (oxygenRecords.isNotEmpty())
 			oxygenRecords.map { it.percentage.value }.average() else 0.0
 
-		val activeCaloriesKcal = healthConnectClient.aggregate(
+		val activeCaloriesKcal = if (canReadActiveCalories) healthConnectClient.aggregate(
 			AggregateRequest(
 				metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		)[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+		)[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0 else 0.0
 
-		val nutritionRecords = healthConnectClient.readRecords(
-			ReadRecordsRequest(
-				recordType = NutritionRecord::class,
-				timeRangeFilter = TimeRangeFilter.between(start, end)
-			)
-		).records
-
-		val totalCaloriesKcal = healthConnectClient.aggregate(
+		val totalCaloriesKcal = if (canReadTotalCalories) healthConnectClient.aggregate(
 			AggregateRequest(
 				metrics = setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL),
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		)[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
-		val resolvedActiveCaloriesKcal = if (activeCaloriesKcal > 0.0) {
-			activeCaloriesKcal
-		} else if (totalCaloriesKcal > 0.0) {
+		)[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0 else 0.0
+		val resolvedActiveCaloriesKcal = if (totalCaloriesKcal > 0.0) {
 			totalCaloriesKcal
+		} else if (activeCaloriesKcal > 0.0) {
+			activeCaloriesKcal
 		} else {
-			nutritionRecords.sumOf { it.energy?.inKilocalories ?: 0.0 }
+			0.0
 		}
 
-		val exerciseRecords = healthConnectClient.readRecords(
+		val exerciseRecords = if (canReadExercise) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = ExerciseSessionRecord::class,
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		).records
+		).records else emptyList()
 		val exerciseMinutes = exerciseRecords.sumOf {
 			Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0)
 		}
 
 		// 체중·신장은 해당 날짜 기록이 없을 수 있으므로 전체 기록 중 최신값 사용
-		val weightKg = healthConnectClient.readRecords(
+		val weightKg = if (canReadWeight) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = WeightRecord::class,
 				timeRangeFilter = TimeRangeFilter.before(Instant.now())
 			)
-		).records.maxByOrNull { it.time }?.weight?.inKilograms ?: 0.0
+		).records.maxByOrNull { it.time }?.weight?.inKilograms ?: 0.0 else 0.0
 
-		val heightCm = (healthConnectClient.readRecords(
+		val heightCm = (if (canReadHeight) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = HeightRecord::class,
 				timeRangeFilter = TimeRangeFilter.before(Instant.now())
 			)
-		).records.maxByOrNull { it.time }?.height?.inMeters ?: 0.0) * 100.0
+		).records.maxByOrNull { it.time }?.height?.inMeters ?: 0.0 else 0.0) * 100.0
 
 		// 일부 기기/소스는 DistanceRecord를 저장하지 않으므로 걸음수 기반 추정 거리 fallback 적용
 		val estimatedStepLengthMeters = if (heightCm > 0.0) heightCm * 0.00415 else 0.78
@@ -300,26 +316,26 @@ class MainActivity : FlutterFragmentActivity() {
 		val averageSpeedMps = if (exerciseMinutes > 0L)
 			resolvedDistanceMeters / (exerciseMinutes * 60.0) else 0.0
 
-		val bodyFatPercentage = healthConnectClient.readRecords(
+		val bodyFatPercentage = if (canReadBodyFat) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = BodyFatRecord::class,
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		).records.maxByOrNull { it.time }?.percentage?.value ?: 0.0
+		).records.maxByOrNull { it.time }?.percentage?.value ?: 0.0 else 0.0
 
-		val vo2Max = healthConnectClient.readRecords(
+		val vo2Max = if (canReadVo2) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = Vo2MaxRecord::class,
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		).records.maxByOrNull { it.time }?.vo2MillilitersPerMinuteKilogram ?: 0.0
+		).records.maxByOrNull { it.time }?.vo2MillilitersPerMinuteKilogram ?: 0.0 else 0.0
 
-		val bloodGlucoseMgDl = healthConnectClient.readRecords(
+		val bloodGlucoseMgDl = if (canReadGlucose) healthConnectClient.readRecords(
 			ReadRecordsRequest(
 				recordType = BloodGlucoseRecord::class,
 				timeRangeFilter = TimeRangeFilter.between(start, end)
 			)
-		).records.maxByOrNull { it.time }?.level?.inMilligramsPerDeciliter ?: 0.0
+		).records.maxByOrNull { it.time }?.level?.inMilligramsPerDeciliter ?: 0.0 else 0.0
 
 		val fitnessScore = if (vo2Max > 0.0) vo2Max
 			else (exerciseMinutes / 6.0).coerceIn(0.0, 100.0)
