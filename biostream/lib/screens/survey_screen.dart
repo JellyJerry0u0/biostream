@@ -24,6 +24,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
   final LifestyleService _lifestyleService = LifestyleService();
   int _currentPage = 0;
   bool _showSwipeHint = true;
+  bool _heightEditedByUser = false;
+  bool _weightEditedByUser = false;
 
   // A. 주요 목표
   List<String> _outcomes = [];
@@ -73,11 +75,92 @@ class _SurveyScreenState extends State<SurveyScreen> {
   final int _totalPages = 9; // 8개 섹션 + 1개 요약
 
   @override
+  void initState() {
+    super.initState();
+    _prefillBodyMetrics();
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     _smokingAmountController.dispose();
     _situationTextController.dispose();
     super.dispose();
+  }
+
+  Future<void> _prefillBodyMetrics() async {
+    // 1) Health Connect/iOS 동기화값(어제 기준) 우선
+    // 2) 없으면 기존 lifestyle bodystate 값 사용
+    double? savedHeight;
+    double? savedWeight;
+
+    final syncedHealth = await _lifestyleService.getYesterdayHealthData();
+    if (syncedHealth['success'] == true && syncedHealth['data'] is Map<String, dynamic>) {
+      final healthData = syncedHealth['data'] as Map<String, dynamic>;
+      savedHeight = _extractMetricNumber(healthData['heightCm']);
+      savedWeight = _extractMetricNumber(healthData['weightKg']);
+    }
+
+    if ((savedHeight == null || savedHeight <= 0) ||
+        (savedWeight == null || savedWeight <= 0)) {
+      final result = await _lifestyleService.getLifestyleData();
+      if (!mounted || result['success'] != true) {
+        return;
+      }
+
+      final data = result['data'];
+      if (data is! Map<String, dynamic>) {
+        return;
+      }
+
+      final bodystate = data['bodystate'];
+      if (bodystate is! Map<String, dynamic>) {
+        return;
+      }
+
+      savedHeight ??= _extractMetricNumber(bodystate['height_cm']);
+      savedWeight ??= _extractMetricNumber(bodystate['weight_kg']);
+    }
+
+    if ((savedHeight == null || savedHeight <= 0) &&
+        (savedWeight == null || savedWeight <= 0)) {
+      return;
+    }
+
+    setState(() {
+      if (!_heightEditedByUser && savedHeight != null && savedHeight > 0) {
+        _height = savedHeight;
+      }
+      if (!_weightEditedByUser && savedWeight != null && savedWeight > 0) {
+        _weight = savedWeight;
+      }
+    });
+  }
+
+  double? _extractMetricNumber(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final match = RegExp(r'[-+]?\d*\.?\d+').firstMatch(value);
+      if (match != null) {
+        return double.tryParse(match.group(0) ?? '');
+      }
+    }
+    return null;
+  }
+
+  void _onHeightChanged(int? value) {
+    setState(() {
+      _heightEditedByUser = true;
+      _height = value != null ? value.toDouble() : null;
+    });
+  }
+
+  void _onWeightChanged(int? value) {
+    setState(() {
+      _weightEditedByUser = true;
+      _weight = value != null ? value.toDouble() : null;
+    });
   }
 
   Map<String, dynamic> _buildLifestyleData() {
@@ -1002,8 +1085,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                       label: '키 (cm)',
                       value: _height?.toInt(),
                       placeholder: '170',
-                      onChanged: (value) => setState(() =>
-                          _height = value != null ? value.toDouble() : null),
+                      onChanged: _onHeightChanged,
                       isDark: isDark,
                     ),
                   ),
@@ -1013,8 +1095,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                       label: '몸무게 (kg)',
                       value: _weight?.toInt(),
                       placeholder: '60',
-                      onChanged: (value) => setState(() =>
-                          _weight = value != null ? value.toDouble() : null),
+                      onChanged: _onWeightChanged,
                       isDark: isDark,
                     ),
                   ),

@@ -39,6 +39,18 @@ class _ResultScreenState extends State<ResultScreen> {
   String? _selectedLifestyleSubTab; // lifestyle 서브탭 (smoking, drinking, stress)
   bool _isSavingComparison = false;
 
+  String? get _notionUrl {
+    final fromReport = _reportData?['notion_url']?.toString();
+    if (fromReport != null && fromReport.isNotEmpty) {
+      return fromReport;
+    }
+    final fromLifestyle = _lifestyleData?['notion_url']?.toString();
+    if (fromLifestyle != null && fromLifestyle.isNotEmpty) {
+      return fromLifestyle;
+    }
+    return null;
+  }
+
   void _goHome() {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -829,13 +841,13 @@ class _ResultScreenState extends State<ResultScreen> {
                     ),
                   ),
                   // Notion 버튼 (notion_url이 있을 때만 표시)
-                  if (_reportData?['notion_url'] != null) ...[
+                  if (_notionUrl != null) ...[
                     SizedBox(width: Responsive.padding(context, 8)),
                     Material(
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: () async {
-                          final notionUrl = _reportData!['notion_url'];
+                          final notionUrl = _notionUrl;
                           if (notionUrl != null) {
                             try {
                               final uri = Uri.parse(notionUrl);
@@ -2147,13 +2159,13 @@ class _ResultScreenState extends State<ResultScreen> {
                                   SizedBox(
                                       height: Responsive.padding(context, 12)),
                                   // Notion 버튼 (notion_url이 있을 때만 표시)
-                                  if (_reportData?['notion_url'] != null)
+                                  if (_notionUrl != null)
                                     SizedBox(
                                       width: double.infinity,
                                       height: Responsive.fontSize(context, 56),
                                       child: ElevatedButton.icon(
                                         onPressed: () async {
-                                          final notionUrl = _reportData!['notion_url'];
+                                          final notionUrl = _notionUrl;
                                           if (notionUrl != null) {
                                             try {
                                               final uri = Uri.parse(notionUrl);
