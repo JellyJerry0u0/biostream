@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'facescan_screen.dart';
 import '../services/lifestyle_service.dart';
@@ -16,6 +17,8 @@ class TodayMeScreen extends StatefulWidget {
 
 class _TodayMeScreenState extends State<TodayMeScreen>
     with TickerProviderStateMixin {
+  static const MethodChannel _devChannel =
+      MethodChannel('com.example.biostream/dev');
   static const Color _primary = Color(0xFF2BEE75);
   static const Color _backgroundLight = Color(0xFFF6F8F6);
 
@@ -29,6 +32,7 @@ class _TodayMeScreenState extends State<TodayMeScreen>
   late final TodayMeController _controller;
   late List<MetricItem> _metrics;
   String? _metricsNotice;
+  bool _didSyncRetry = false;
 
   late final AnimationController _introCtrl;
   late final AnimationController _visibilityCtrl;
@@ -149,12 +153,45 @@ class _TodayMeScreenState extends State<TodayMeScreen>
     if (!mounted) {
       return;
     }
+
+    final isMissingYesterdayData =
+        result.metrics == null &&
+        (result.notice?.contains('기본 표시값') ?? false);
+    if (isMissingYesterdayData && !_didSyncRetry) {
+      _didSyncRetry = true;
+      final synced = await _syncHealthAndRetry();
+      if (synced && mounted) {
+        final retry = await _controller.loadYesterdayMetrics();
+        if (!mounted) return;
+        setState(() {
+          _metricsNotice = retry.notice;
+          if (retry.metrics != null) {
+            _metrics = retry.metrics!;
+          }
+        });
+        return;
+      }
+    }
+
     setState(() {
       _metricsNotice = result.notice;
       if (result.metrics != null) {
         _metrics = result.metrics!;
       }
     });
+  }
+
+  Future<bool> _syncHealthAndRetry() async {
+    try {
+      await _devChannel.invokeMethod<dynamic>('runImmediateHealthSync');
+    } on PlatformException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+
+    final retryResult = await _lifestyleService.getYesterdayHealthData();
+    return retryResult['success'] == true;
   }
 
   @override

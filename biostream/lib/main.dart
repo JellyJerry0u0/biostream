@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_config.dart';
+import 'services/auth_service.dart';
+import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/notification_service.dart';
 
@@ -36,10 +38,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   static const String _todaySyncDateKey = 'today_health_sync_date';
   bool _isSyncingYesterday = false;
   bool _isSyncingToday = false;
+  final AuthService _authService = AuthService();
+  late final Future<bool> _sessionFuture;
 
   @override
   void initState() {
     super.initState();
+    _sessionFuture = _authService.hasValidSession();
     WidgetsBinding.instance.addObserver(this);
     _syncYesterdayHealthAfterOneAmOnForeground();
     _syncTodayHealthOnForeground();
@@ -126,7 +131,24 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         fontFamily: GoogleFonts.spaceGrotesk().fontFamily,
       ),
       themeMode: ThemeMode.light,
-      home: const OnboardingScreen(),
+      home: FutureBuilder<bool>(
+        future: _sessionFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          if (snapshot.data == true) {
+            return const HomeScreen();
+          }
+
+          return const OnboardingScreen();
+        },
+      ),
     );
   }
 }

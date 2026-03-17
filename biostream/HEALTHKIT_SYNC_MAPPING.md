@@ -20,7 +20,7 @@ Optional keys (send with `0` when no data):
 - `distanceMeters` (double)
 - `oxygenSaturation` (double)
 - `averageSpeedMps` (double)
-- `nutritionCaloriesKcal` (double)
+- `activeCaloriesKcal` (double)
 - `exerciseMinutes` (int)
 - `fitnessScore` (double)
 - `weightKg` (double)
@@ -43,8 +43,8 @@ Optional keys (send with `0` when no data):
   - `HKQuantityTypeIdentifier.oxygenSaturation`
   - Daily average.
   - Convert fraction to percent when value is in `0.0..1.0`.
-- `nutritionCaloriesKcal`:
-  - `HKQuantityTypeIdentifier.dietaryEnergyConsumed`
+- `activeCaloriesKcal`:
+  - `HKQuantityTypeIdentifier.activeEnergyBurned`
   - Sum in kilocalories.
 - `exerciseMinutes`:
   - `HKQuantityTypeIdentifier.appleExerciseTime`

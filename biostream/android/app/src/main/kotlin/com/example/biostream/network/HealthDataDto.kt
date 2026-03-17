@@ -8,7 +8,7 @@ data class HealthDataDto(
     val distanceMeters: Double = 0.0,
     val oxygenSaturation: Double = 0.0,
     val averageSpeedMps: Double = 0.0,
-    val nutritionCaloriesKcal: Double = 0.0,
+    val activeCaloriesKcal: Double = 0.0,
     val exerciseMinutes: Long = 0L,
     val fitnessScore: Double = 0.0,
     val weightKg: Double = 0.0,

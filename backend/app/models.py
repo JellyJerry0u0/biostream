@@ -125,7 +125,7 @@ class HealthData(Base):
     distance_meters = Column(Float, default=0.0, nullable=False)
     oxygen_saturation = Column(Float, default=0.0, nullable=False)
     average_speed_mps = Column(Float, default=0.0, nullable=False)
-    nutrition_calories_kcal = Column(Float, default=0.0, nullable=False)
+    active_calories_kcal = Column(Float, default=0.0, nullable=False)
     exercise_minutes = Column(Integer, default=0, nullable=False)
     fitness_score = Column(Float, default=0.0, nullable=False)
     weight_kg = Column(Float, default=0.0, nullable=False)

@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Header
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -22,7 +22,12 @@ class HealthSyncRequest(BaseModel):
     distance_meters: float = Field(default=0.0, alias="distanceMeters", ge=0)
     oxygen_saturation: float = Field(default=0.0, alias="oxygenSaturation", ge=0)
     average_speed_mps: float = Field(default=0.0, alias="averageSpeedMps", ge=0)
-    nutrition_calories_kcal: float = Field(default=0.0, alias="nutritionCaloriesKcal", ge=0)
+    active_calories_kcal: float = Field(
+        default=0.0,
+        alias="activeCaloriesKcal",
+        validation_alias=AliasChoices("activeCaloriesKcal", "nutritionCaloriesKcal"),
+        ge=0,
+    )
     exercise_minutes: int = Field(default=0, alias="exerciseMinutes", ge=0)
     fitness_score: float = Field(default=0.0, alias="fitnessScore", ge=0)
     weight_kg: float = Field(default=0.0, alias="weightKg", ge=0)
@@ -84,7 +89,7 @@ async def sync_health_data(
         existing_data.distance_meters = req.distance_meters
         existing_data.oxygen_saturation = req.oxygen_saturation
         existing_data.average_speed_mps = req.average_speed_mps
-        existing_data.nutrition_calories_kcal = req.nutrition_calories_kcal
+        existing_data.active_calories_kcal = req.active_calories_kcal
         existing_data.exercise_minutes = req.exercise_minutes
         existing_data.fitness_score = req.fitness_score
         existing_data.weight_kg = req.weight_kg
@@ -102,7 +107,7 @@ async def sync_health_data(
             distance_meters=req.distance_meters,
             oxygen_saturation=req.oxygen_saturation,
             average_speed_mps=req.average_speed_mps,
-            nutrition_calories_kcal=req.nutrition_calories_kcal,
+            active_calories_kcal=req.active_calories_kcal,
             exercise_minutes=req.exercise_minutes,
             fitness_score=req.fitness_score,
             weight_kg=req.weight_kg,
@@ -145,7 +150,8 @@ async def get_yesterday_health_data(
         "distanceMeters": record.distance_meters,
         "oxygenSaturation": record.oxygen_saturation,
         "averageSpeedMps": record.average_speed_mps,
-        "nutritionCaloriesKcal": record.nutrition_calories_kcal,
+        "activeCaloriesKcal": record.active_calories_kcal,
+        "nutritionCaloriesKcal": record.active_calories_kcal,
         "exerciseMinutes": record.exercise_minutes,
         "fitnessScore": record.fitness_score,
         "weightKg": record.weight_kg,

@@ -36,6 +36,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
   late final SurveyController _surveyController;
   int _currentPage = 0;
   bool _showSwipeHint = true;
+  bool _heightEditedByUser = false;
+  bool _weightEditedByUser = false;
 
   // A. 주요 목표
   final List<String> _outcomes = [];
@@ -89,6 +91,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
   void initState() {
     super.initState();
     _surveyController = SurveyController(lifestyleService: _lifestyleService);
+    _prefillBodyMetrics();
   }
 
   @override
@@ -97,6 +100,63 @@ class _SurveyScreenState extends State<SurveyScreen> {
     _smokingAmountController.dispose();
     _situationTextController.dispose();
     super.dispose();
+  }
+
+  Future<void> _prefillBodyMetrics() async {
+    double? savedHeight;
+    double? savedWeight;
+
+    final syncedHealth = await _lifestyleService.getYesterdayHealthData();
+    if (syncedHealth['success'] == true &&
+        syncedHealth['data'] is Map<String, dynamic>) {
+      final healthData = syncedHealth['data'] as Map<String, dynamic>;
+      savedHeight = _extractMetricNumber(healthData['heightCm']);
+      savedWeight = _extractMetricNumber(healthData['weightKg']);
+    }
+
+    if ((savedHeight == null || savedHeight <= 0) ||
+        (savedWeight == null || savedWeight <= 0)) {
+      final result = await _lifestyleService.getLifestyleData();
+      if (!mounted || result['success'] != true) {
+        return;
+      }
+
+      final data = result['data'];
+      if (data is! Map<String, dynamic>) {
+        return;
+      }
+
+      final bodystate = data['bodystate'];
+      if (bodystate is! Map<String, dynamic>) {
+        return;
+      }
+
+      savedHeight ??= _extractMetricNumber(bodystate['height_cm']);
+      savedWeight ??= _extractMetricNumber(bodystate['weight_kg']);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      if (!_heightEditedByUser && savedHeight != null && savedHeight > 0) {
+        _height = savedHeight;
+      }
+      if (!_weightEditedByUser && savedWeight != null && savedWeight > 0) {
+        _weight = savedWeight;
+      }
+    });
+  }
+
+  double? _extractMetricNumber(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final match = RegExp(r'[-+]?\d*\.?\d+').firstMatch(value);
+      if (match != null) {
+        return double.tryParse(match.group(0) ?? '');
+      }
+    }
+    return null;
   }
 
   SurveyFormState _currentFormState() {
@@ -311,10 +371,16 @@ class _SurveyScreenState extends State<SurveyScreen> {
                           setState(() => _resistanceWeekly = value);
                         },
                         onHeightChanged: (value) {
-                          setState(() => _height = value?.toDouble());
+                          setState(() {
+                            _heightEditedByUser = true;
+                            _height = value?.toDouble();
+                          });
                         },
                         onWeightChanged: (value) {
-                          setState(() => _weight = value?.toDouble());
+                          setState(() {
+                            _weightEditedByUser = true;
+                            _weight = value?.toDouble();
+                          });
                         },
                         choiceBuilder: _buildChoiceButton,
                         integerFieldBuilder: _buildIntegerTextField,
