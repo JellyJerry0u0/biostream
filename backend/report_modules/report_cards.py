@@ -25,6 +25,7 @@ from .report_formatters import (
     format_quant_data,
     format_user_profile_for_prompt,
     timeframe_days_to_label,
+    strip_markdown,
 )
 
 
@@ -42,6 +43,13 @@ def build_card_prompt_enhanced(
     profile_text = format_user_profile_for_prompt(user_profile)
     quant_text = format_quant_data(section_quant)
 
+    # 프로필 정보가 없을 때 LLM이 예시를 그대로 복사하지 않도록 명시적 지시
+    profile_guidance = (
+        '예: "30대 중반 남성에서", "BMI가 높은 편이라", "연령대 특성상..."'
+        if profile_text != "사용자 기본 정보 없음"
+        else '⚠️ 성별·연령 정보가 없습니다. "30대 남성", "여성" 등 추측하지 말고, 연령/성별을 특정하는 표현을 사용하지 마세요. 중립적 표현으로 작성하세요.'
+    )
+
     claims_texts = _format_claims_text(section_claims)
     claims_text = "\n\n".join(claims_texts) if claims_texts else "구조화된 주장 없음"
     personalization_note = get_personalization_note(section, survey)
@@ -49,24 +57,22 @@ def build_card_prompt_enhanced(
     situation_block = ""
     if situation_text and situation_text.strip():
         situation_block = f"""
-[사용자가 직접 언급한 참고 상황 - action 카드 작성 시 반드시 반영하세요]
-{situation_text.strip()[:300]}
+🔥 [필수] 사용자가 직접 입력한 참고 상황 (action 카드에 반드시 반영):
+"{situation_text.strip()[:300]}"
+→ action 3개 중 최소 1개는 위 내용(예: 모낭염이면 턱 부위 관리, 피부결이면 각질/수분 조언)을 구체적으로 언급해야 합니다. 무시하면 안 됩니다.
 
 """
-
     return f"""섹션: {section}
-
+{situation_block}
 ⚠️ 중요: 반드시 사용자 설문 데이터와 구조화된 주장(claims)을 바탕으로 개인화된 리포트를 작성하세요.
 일반론적 표현("수면이 부족하면", "자외선에 노출되면")은 절대 사용하지 마세요.
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
-
-{personalization_note}
-{situation_block}[사용자 설문 데이터 - 반드시 이 값들을 자연스럽게 요약해 반영하세요]
+{personalization_note}[사용자 설문 데이터 - 반드시 이 값들을 자연스럽게 요약해 반영하세요]
 {survey_text}
 
 [사용자 기본 정보 - 의학적으로 자연스럽게 반영하세요]
 {profile_text}
-예: "30대 중반 남성에서", "BMI가 높은 편이라", "연령대 특성상..."
+{profile_guidance}
 
 [정량 근거]
 {quant_text}
@@ -75,8 +81,9 @@ def build_card_prompt_enhanced(
 {claims_text}
 
 ⚠️ 각 카드 작성 규칙:
+- 논리적·유기적 연결: [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·논문 근거(claims)를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
 - problem/cause: 위 claims의 "claim"과 "support_text"를 바탕으로 작성하되, 설문 수치를 자연스럽게 요약해 반영
-- action: 이 사용자 설문 + 신체정보 + [참고 상황]을 반드시 고려해 개인화된 행동 3가지를 제시. 정량적 효과(%, 기간 등)는 action에 넣지 마세요.
+- action: 반드시 앞선 [현재 상태]+[왜 이런 상태인가]와 연계. action 3개 각각이 위에서 말한 원인(cause)을 해결하는 구체적 행동이어야 함. 설문+신체정보+참고 상황 고려. 위 [참고 상황]이 있으면 그중 최소 1개는 그 상황에 직접 맞는 조언. 정량적 효과(%, 기간 등)는 action에 넣지 마세요.
 - simulation: [정량 근거]에 있는 효과량(%, 기간)을 모두 여기에 반영하세요. 여러 가지가 있으면 모두 나열해도 됩니다.
 - 각 카드에 evidence 기반 키워드(근거 support_text에서 추출한 키워드) 최소 1개 포함
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
@@ -102,19 +109,17 @@ def build_card_prompt(
     situation_block = ""
     if situation_text and situation_text.strip():
         situation_block = f"""
-[사용자가 직접 언급한 참고 상황 - action 카드 작성 시 반드시 반영하세요]
-{situation_text.strip()[:300]}
+🔥 [필수] 사용자가 직접 입력한 참고 상황 (action 카드에 반드시 반영):
+"{situation_text.strip()[:300]}"
+→ action 3개 중 최소 1개는 위 내용(예: 모낭염이면 턱 부위 관리, 피부결이면 각질/수분 조언)을 구체적으로 언급해야 합니다. 무시하면 안 됩니다.
 
 """
-
     return f"""섹션: {section}
-
+{situation_block}
 ⚠️ 중요: 반드시 사용자 설문 데이터를 직접 인용하여 개인화된 리포트를 작성하세요.
 일반론적 표현("수면이 부족하면", "자외선에 노출되면")은 절대 사용하지 마세요.
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
-
-{personalization_note}
-{situation_block}[사용자 설문 데이터 - 반드시 이 값들을 직접 인용하세요]
+{personalization_note}[사용자 설문 데이터 - 반드시 이 값들을 직접 인용하세요]
 {survey_text}
 
 [정량 근거]
@@ -122,6 +127,8 @@ def build_card_prompt(
 
 [원문 근거 (참고용)]
 {narrative_text}
+
+⚠️ [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·근거를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
 
 위 정보를 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
 각 카드는 사용자 설문 데이터를 직접 인용하여 개인화되게 작성하세요."""
@@ -264,6 +271,8 @@ def generate_section_cards(
     print(f"  [{section}] has_claims={has_claims}")
 
     situation_text = state.get("situation_text") or ""
+    if situation_text:
+        print(f"  [{section}] situation_text 프롬프트에 반영: {situation_text[:50]}...")
 
     if has_claims:
         try:
@@ -359,11 +368,11 @@ def build_lifestyle_combined_prompt(
     situation_block = ""
     if situation_text and situation_text.strip():
         situation_block = f"""
-[사용자가 직접 언급한 참고 상황 - action 카드 작성 시 반드시 반영하세요]
-{situation_text.strip()[:300]}
+🔥 [필수] 사용자가 직접 입력한 참고 상황 (action 카드에 반드시 반영):
+"{situation_text.strip()[:300]}"
+→ action 3개 중 최소 1개는 위 내용(예: 모낭염이면 턱 부위 관리, 피부결이면 각질/수분 조언)을 구체적으로 언급해야 합니다. 무시하면 안 됩니다.
 
 """
-
     # 서브섹션별 설문 데이터 정리
     survey_parts = []
     smoking_kr = normalize_survey_value(survey.get("smoking_status", "N/A"), "smoking_status")
@@ -397,13 +406,14 @@ def build_lifestyle_combined_prompt(
 
     return f"""섹션: lifestyle (생활습관)
 서브섹션: {subsection_keys_str}
-
+{situation_block}
 ⚠️ 중요: 각 서브섹션({', '.join([_SUBSECTION_LABELS.get(k, k) for k in subsection_keys])})별로 독립적인 4개 카드를 생성하세요.
 각 서브섹션의 카드는 해당 생활습관 요인에만 집중하세요. 다른 요인을 혼합하지 마세요.
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
 
 {sub_requirements_text}
-{situation_block}[사용자 설문 데이터 - 반드시 해당 서브섹션의 수치를 자연스럽게 반영하세요]
+
+[사용자 설문 데이터 - 반드시 해당 서브섹션의 수치를 자연스럽게 반영하세요]
 {survey_text}
 
 [사용자 기본 정보]
@@ -416,9 +426,10 @@ def build_lifestyle_combined_prompt(
 {claims_text}
 
 ⚠️ 각 카드 작성 규칙:
+- 논리적·유기적 연결: [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·논문 근거를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
 - problem: 이 사용자의 현재 해당 습관이 피부에 미치는 상태를 구체적으로 서술
 - cause: 해당 습관이 피부에 악영향을 미치는 생물학적 메커니즘 설명
-- action: 이 사용자에게 실천 가능한 구체적 행동 3가지. [참고 상황]이 있으면 반드시 반영. 정량적 효과는 action에 넣지 마세요.
+- action: 반드시 앞선 [현재 상태]+[왜 이런 상태인가]와 연계. action 3개 각각이 위에서 말한 원인(cause)을 해결하는 구체적 행동이어야 함. 위 [참고 상황]이 있으면 그중 최소 1개는 그 상황에 직접 맞는 조언. 정량적 효과는 action에 넣지 마세요.
 - simulation: 12주 후 개선 예상 경로. [정량 근거]의 효과량(%, 기간)을 모두 여기에 반영. 여러 가지가 있으면 모두 나열
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
 - 근거에서 말하는 메커니즘/방향성을 1번 이상 언급
@@ -454,6 +465,8 @@ def generate_lifestyle_cards(
 
     # ── 프롬프트 빌드 & LLM 호출 ──
     situation_text = state.get("situation_text") or ""
+    if situation_text:
+        print(f"  [lifestyle] situation_text 프롬프트에 반영: {situation_text[:50]}...")
     prompt = build_lifestyle_combined_prompt(
         subsection_keys, survey, section_quant, section_claims, user_profile,
         situation_text=situation_text,
@@ -1260,7 +1273,7 @@ def postprocess_cards(
         processed = {**card}
 
         if card_type in ["problem", "cause"]:
-            text = card.get("text", "")
+            text = strip_markdown(card.get("text", ""))
             text, leaked = remove_citation_leaks(text)
             if leaked:
                 quality_flags["leaked_citation"] = True
@@ -1268,12 +1281,19 @@ def postprocess_cards(
             processed["text"] = limit_sentences(text, max_sentences=3)
 
         elif card_type == "simulation":
+            # LLM 생성 텍스트 우선 사용 (placeholder/누락 시에만 템플릿 fallback)
+            llm_text = strip_markdown((card.get("text") or "").strip())
+            _placeholders = ("정확히 2-4문장만", "정량 근거가 부족해 보수적으로 추정한 값입니다.")
+            use_llm = llm_text and len(llm_text) >= 25 and not any(p in llm_text for p in _placeholders)
+
             template_text, sim_meta = format_simulation_text(section_key, survey, section_quant)
-            template_text, leaked = remove_citation_leaks(template_text)
+            text = llm_text if use_llm else template_text
+
+            text, leaked = remove_citation_leaks(text)
             if leaked:
                 quality_flags["leaked_citation"] = True
-            template_text = soften_overconfident_language(template_text)
-            processed["text"] = limit_sentences(template_text, max_sentences=4)
+            text = soften_overconfident_language(text)
+            processed["text"] = limit_sentences(text, max_sentences=4)
             if "meta" not in processed:
                 processed["meta"] = {}
             processed["meta"].update(sim_meta)
@@ -1290,8 +1310,8 @@ def postprocess_cards(
 
             processed_items = []
             for item in items:
-                title = item.get("title", "") or "행동"
-                detail = item.get("detail", "") or "설명 없음"
+                title = strip_markdown(item.get("title", "") or "행동")
+                detail = strip_markdown(item.get("detail", "") or "설명 없음")
 
                 title, leaked1 = remove_citation_leaks(title)
                 detail, leaked2 = remove_citation_leaks(detail)

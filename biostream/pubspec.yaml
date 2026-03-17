@@ -13,7 +13,8 @@ dependencies:
   google_fonts: ^6.1.0
   http: ^1.1.0 # HTTP 요청용
   flutter_secure_storage: ^9.0.0  # JWT 토큰 안전 저장용
-  kakao_flutter_sdk_user: ^1.9.0  # 카카오 로그인 SDK
+  kakao_flutter_sdk_common: ">=1.9.0 <1.10.0"  # 카카오 SDK 공통 (Flutter 3.19와 호환)
+  kakao_flutter_sdk_user: ">=1.9.0 <1.10.0"  # 카카오 로그인 SDK (1.10은 Flutter 3.35+ 필요)
   health: ^11.0.0  # 최신 버전 확인 필요
   shared_preferences: ^2.2.2
   device_info_plus: ^10.1.0

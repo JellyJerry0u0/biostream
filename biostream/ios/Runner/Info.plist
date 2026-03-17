@@ -49,5 +49,19 @@
 	<string>얼굴 스캔을 위해 갤러리에서 사진을 선택하려면 사진 라이브러리 접근 권한이 필요합니다.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>얼굴 스캔을 위해 카메라를 사용하려면 카메라 접근 권한이 필요합니다.</string>
+	<!-- 카카오 로그인 Custom URL Scheme (YOUR_NATIVE_APP_KEY를 카카오 개발자 콘솔 Native App Key로 교체) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kakao2a989319843d4d7fa3409daeb094d0ca</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>kakao.oauth</string>
+		</dict>
+	</array>
 </dict>
 </plist>

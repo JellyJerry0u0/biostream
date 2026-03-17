@@ -1,4 +1,4 @@
-#사용자의 요청을 받아 DB에 저장하고 인증 토큰을 발급하는 
+#사용자의 요청을 받아 DB에 저장하고 인증 토큰을 발급하는
 
 import os
 import time
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File,
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, UserProfile
-from app.auth.security import hash_password, verify_password, create_access_token
+from app.auth.security import hash_password, verify_password, create_access_token, verify_token
 from pydantic import BaseModel, EmailStr
 from datetime import date
 
@@ -19,22 +19,22 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def _get_user_from_auth(authorization: Optional[str], db: Session) -> User:
+def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
     if not authorization:
         raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
-
-    token = authorization.replace("Bearer ", "")
-    from app.auth.security import verify_token
-
-    email = verify_token(token)
-    if not email:
-        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
-
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
-    return user
+    try:
+        token = authorization.replace("Bearer ", "").strip()
+        email = verify_token(token)
+        if not email:
+            raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+        return user
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="인증 실패")
 
 # 입력을 위한 데이터 모델
 class UserCreate(BaseModel):
@@ -55,6 +55,11 @@ class KakaoLogin(BaseModel):
     nickname: str
     birthdate: str = None  # "YYYY-MM-DD" 형식 (선택)
     gender: str = None  # "남성", "여성", "기타" 등 (선택)
+
+
+class ProfileUpdate(BaseModel):
+    birthdate: str  # "YYYY-MM-DD" 형식 (필수)
+    gender: str  # "남성", "여성", "기타" (필수)
 
 
 # 1. 회원가입 API
@@ -175,16 +180,21 @@ def kakao_login(user_in: KakaoLogin, db: Session = Depends(get_db)):
 
     # 4. 우리 서비스 전용 JWT 토큰 발급
     token = create_access_token(data={"sub": user.email})
-    return {"access_token": token, "token_type": "bearer", "nickname": user.nickname}
+    needs_profile = user.birthdate is None or user.gender is None
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "nickname": user.nickname,
+        "needs_profile": needs_profile,
+    }
 
 
 @router.get("/me")
 def get_my_profile(
-    authorization: Optional[str] = Header(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = _get_user_from_auth(authorization, db)
-    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
 
     image_url = None
     if profile and profile.profile_image_url:
@@ -197,8 +207,8 @@ def get_my_profile(
             image_url = raw_path
 
     return {
-        "email": user.email,
-        "nickname": user.nickname,
+        "email": current_user.email,
+        "nickname": current_user.nickname,
         "profile_image_url": image_url,
     }
 
@@ -208,26 +218,24 @@ async def update_my_profile(
     nickname: str = Form(...),
     email: EmailStr = Form(...),
     profile_image: Optional[UploadFile] = File(None),
-    authorization: Optional[str] = Header(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = _get_user_from_auth(authorization, db)
-
-    existing_user = db.query(User).filter(User.email == email, User.id != user.id).first()
+    existing_user = db.query(User).filter(User.email == email, User.id != current_user.id).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
-    user.nickname = nickname
-    user.email = email
+    current_user.nickname = nickname
+    current_user.email = email
 
-    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     if not profile:
-        profile = UserProfile(user_id=user.id)
+        profile = UserProfile(user_id=current_user.id)
         db.add(profile)
 
     if profile_image is not None:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        safe_name = f"profile_{user.id}_{timestamp}_{profile_image.filename}"
+        safe_name = f"profile_{current_user.id}_{timestamp}_{profile_image.filename}"
         save_path = os.path.join(UPLOAD_DIR, safe_name)
         contents = await profile_image.read()
         with open(save_path, "wb") as f:
@@ -235,7 +243,7 @@ async def update_my_profile(
         profile.profile_image_url = save_path
 
     db.commit()
-    db.refresh(user)
+    db.refresh(current_user)
     db.refresh(profile)
 
     origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
@@ -249,7 +257,27 @@ async def update_my_profile(
 
     return {
         "message": "프로필이 업데이트되었습니다.",
-        "email": user.email,
-        "nickname": user.nickname,
+        "email": current_user.email,
+        "nickname": current_user.nickname,
         "profile_image_url": image_url,
     }
+
+
+# 프로필 보완 API (카카오 가입 후 성별/생년월일 추가 입력)
+@router.patch("/me")
+def update_profile(
+    profile_in: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        birthdate_obj = date.fromisoformat(profile_in.birthdate)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="생년월일 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+    if not profile_in.gender or profile_in.gender.strip() == "":
+        raise HTTPException(status_code=400, detail="성별을 선택해주세요.")
+    current_user.birthdate = birthdate_obj
+    current_user.gender = profile_in.gender
+    db.commit()
+    db.refresh(current_user)
+    return {"message": "프로필이 업데이트되었습니다.", "nickname": current_user.nickname}

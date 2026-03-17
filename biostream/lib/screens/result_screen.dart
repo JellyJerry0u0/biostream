@@ -85,7 +85,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Future<void> _generateHealthReport({bool force = false}) async {
     try {
-      debugPrint('🤖 건강 리포트 생성 시작... force: $force');
+      debugPrint('🤖 건강 리포트 생성 시작... force: $force, situationText: ${widget.situationText != null && widget.situationText!.isNotEmpty ? "${widget.situationText!.substring(0, widget.situationText!.length.clamp(0, 50))}..." : "null/빈값"}');
 
       // lifestyle_id 가져오기
       int? lifestyleId;
