@@ -1,17 +1,16 @@
-import time
 import os
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.exc import OperationalError
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-from .database import engine, get_db
-
-from .database import engine, get_db
-from . import models
-from .api import auth, data, health, notification  # 만약 경로 에러가 나면 from app.api import auth로 시도
+from sqlalchemy import text
 from .scheduler import start_scheduler, stop_scheduler
 
 load_dotenv()
+from .database import engine
+
+from .api import auth, data, health, notification  # 만약 경로 에러가 나면 from app.api import auth로 시도
 
 app = FastAPI(title="BioStream API")
 
@@ -34,23 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# [2] DB 초기화 로직
-def init_db():
-    retries = 5
-    while retries > 0:
-        try:
-            models.Base.metadata.create_all(bind=engine)
-            print("✅ Successfully connected to the database and created tables!")
-            return
-        except OperationalError as e:
-            retries -= 1
-            print(f"⚠️ Database not ready... {retries} retries left.")
-            time.sleep(5)
-    print("❌ Could not connect to the database. Exiting.")
-
-init_db()
-
-# [3] 라우터 등록
+# [2] 라우터 등록
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(data.router, prefix="/data", tags=["Data Collection"])
 app.include_router(health.router)
@@ -76,3 +59,36 @@ def read_root():
 def health_check():
     """헬스 체크 엔드포인트"""
     return {"status": "healthy", "message": "BioStream API is running"}
+
+
+@app.get("/ready")
+def readiness_check():
+    """DB/Qdrant 의존성 준비 상태 확인"""
+    db_ok = False
+    qdrant_ok = False
+    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    try:
+        # Qdrant returns 200 on /collections, while /health may return 404 by version.
+        response = httpx.get(f"{qdrant_url}/collections", timeout=2.0)
+        qdrant_ok = response.status_code == 200
+    except Exception:
+        qdrant_ok = False
+
+    if db_ok and qdrant_ok:
+        return {"status": "ready", "db": "ok", "qdrant": "ok"}
+    return JSONResponse(
+        status_code=503,
+        content={
+            "status": "not_ready",
+            "db": "ok" if db_ok else "error",
+            "qdrant": "ok" if qdrant_ok else "error",
+        },
+    )

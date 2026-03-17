@@ -31,9 +31,8 @@ class CauseCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1A2C17) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.grey[200]!,
+          color:
+              isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[200]!,
         ),
       ),
       child: Column(

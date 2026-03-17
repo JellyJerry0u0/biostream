@@ -126,7 +126,10 @@ def load_report_context(session: SessionData, db=None) -> Dict[str, Any]:
     try:
         from app.models import Lifestyle
 
-        lifestyle = db.query(Lifestyle).filter(Lifestyle.id == report_id).first()
+        lifestyle = db.query(Lifestyle).filter(
+            Lifestyle.id == report_id,
+            Lifestyle.user_id == session.user_id,
+        ).first()
         if not lifestyle or not lifestyle.health_report:
             return ctx
 

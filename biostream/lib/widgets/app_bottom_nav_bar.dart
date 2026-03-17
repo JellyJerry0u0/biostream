@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../screens/coach_chat_screen.dart';
+import '../screens/coach/coach_chat_screen.dart';
 import '../screens/future_face_compare_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/my_info_screen.dart';
@@ -143,9 +143,9 @@ class AppBottomNavBar extends StatelessWidget {
                 : () => inShell
                     ? shellScope.onTabSelected(AppNavTab.today)
                     : _navigateTo(
-                      context,
-                      targetTab: AppNavTab.today,
-                    ),
+                        context,
+                        targetTab: AppNavTab.today,
+                      ),
           ),
           _NavItem(
             icon: Icons.face_retouching_natural,
@@ -156,9 +156,9 @@ class AppBottomNavBar extends StatelessWidget {
                 : () => inShell
                     ? shellScope.onTabSelected(AppNavTab.future)
                     : _navigateTo(
-                      context,
-                      targetTab: AppNavTab.future,
-                    ),
+                        context,
+                        targetTab: AppNavTab.future,
+                      ),
           ),
           _NavItem(
             icon: Icons.home,
@@ -169,9 +169,9 @@ class AppBottomNavBar extends StatelessWidget {
                 : () => inShell
                     ? shellScope.onTabSelected(AppNavTab.home)
                     : _navigateTo(
-                      context,
-                      targetTab: AppNavTab.home,
-                    ),
+                        context,
+                        targetTab: AppNavTab.home,
+                      ),
           ),
           _NavItem(
             icon: Icons.chat_bubble,
@@ -182,9 +182,9 @@ class AppBottomNavBar extends StatelessWidget {
                 : () => inShell
                     ? shellScope.onTabSelected(AppNavTab.chatbot)
                     : _navigateTo(
-                      context,
-                      targetTab: AppNavTab.chatbot,
-                    ),
+                        context,
+                        targetTab: AppNavTab.chatbot,
+                      ),
           ),
           _NavItem(
             icon: Icons.person,
@@ -195,9 +195,9 @@ class AppBottomNavBar extends StatelessWidget {
                 : () => inShell
                     ? shellScope.onTabSelected(AppNavTab.myInfo)
                     : _navigateTo(
-                      context,
-                      targetTab: AppNavTab.myInfo,
-                    ),
+                        context,
+                        targetTab: AppNavTab.myInfo,
+                      ),
           ),
         ],
       ),
@@ -218,6 +218,7 @@ class AppBottomNavBar extends StatelessWidget {
 
 class NavShellScope extends InheritedWidget {
   const NavShellScope({
+    super.key,
     required super.child,
     required this.activeTab,
     required this.onTabSelected,

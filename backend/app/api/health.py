@@ -55,12 +55,10 @@ def get_current_user(
 @router.post("/sync-health")
 async def sync_health_data(
     req: HealthSyncRequest,
-    user_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    effective_user_id = user_id or req.user_id
-    if effective_user_id is None:
-        raise HTTPException(status_code=422, detail="user_id is required")
+    effective_user_id = current_user.id
 
     logger.info(
         "sync-health payload received: %s",

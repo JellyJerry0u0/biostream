@@ -29,8 +29,16 @@ class ProfileService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return {'success': true, 'data': data};
       }
+      if (response.statusCode == 401) {
+        await _storage.delete(key: _tokenKey);
+        return {
+          'success': false,
+          'token_expired': true,
+          'message': '로그인이 만료되었습니다. 다시 로그인해주세요.',
+        };
+      }
 
-      final body = jsonDecode(response.body);
+      final body = response.body.isNotEmpty ? jsonDecode(response.body) : null;
       return {
         'success': false,
         'message': body is Map<String, dynamic>
@@ -72,8 +80,16 @@ class ProfileService {
         final data = jsonDecode(responseBody) as Map<String, dynamic>;
         return {'success': true, 'data': data};
       }
+      if (streamed.statusCode == 401) {
+        await _storage.delete(key: _tokenKey);
+        return {
+          'success': false,
+          'token_expired': true,
+          'message': '로그인이 만료되었습니다. 다시 로그인해주세요.',
+        };
+      }
 
-      final body = jsonDecode(responseBody);
+      final body = responseBody.isNotEmpty ? jsonDecode(responseBody) : null;
       return {
         'success': false,
         'message': body is Map<String, dynamic>

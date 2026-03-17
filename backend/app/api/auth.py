@@ -3,6 +3,7 @@
 import os
 import time
 from typing import Optional
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, Form
 from sqlalchemy.orm import Session
@@ -50,11 +51,7 @@ class UserLogin(BaseModel):
     password: str
 
 class KakaoLogin(BaseModel):
-    kakao_id: str
-    email: str
-    nickname: str
-    birthdate: str = None  # "YYYY-MM-DD" 형식 (선택)
-    gender: str = None  # "남성", "여성", "기타" 등 (선택)
+    access_token: str
 
 
 class ProfileUpdate(BaseModel):
@@ -126,7 +123,13 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(user_in: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_in.email).first()
-    if not user or not verify_password(user_in.password, user.hashed_password):
+    if not user:
+        raise HTTPException(status_code=400, detail="이메일 또는 비밀번호가 틀렸습니다.")
+
+    if not user.hashed_password:
+        raise HTTPException(status_code=400, detail="소셜 로그인 계정입니다. 카카오 로그인을 이용해주세요.")
+
+    if not verify_password(user_in.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="이메일 또는 비밀번호가 틀렸습니다.")
     
     # 로그인 성공 시 토큰 발급
@@ -139,40 +142,97 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
     }
 
 # 3. 카카오 로그인 API
+async def _fetch_kakao_user_info(access_token: str) -> dict:
+    """카카오 액세스 토큰을 서버에서 검증하고 사용자 정보를 가져옵니다."""
+    if not access_token or not access_token.strip():
+        raise HTTPException(status_code=401, detail="카카오 액세스 토큰이 필요합니다.")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://kapi.kakao.com/v2/user/me",
+                headers={"Authorization": f"Bearer {access_token.strip()}"},
+            )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=401, detail="카카오 토큰 검증에 실패했습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="유효하지 않은 카카오 토큰입니다.")
+
+    payload = response.json()
+    kakao_id = payload.get("id")
+    if kakao_id is None:
+        raise HTTPException(status_code=401, detail="카카오 사용자 식별에 실패했습니다.")
+
+    account = payload.get("kakao_account") or {}
+    profile = account.get("profile") or {}
+
+    email = account.get("email") or f"kakao_{kakao_id}@kakao.user"
+    nickname = profile.get("nickname") or "카카오사용자"
+
+    birthdate = None
+    birthyear = account.get("birthyear")
+    birthday = account.get("birthday")  # MMDD
+    if birthyear and birthday and isinstance(birthday, str) and len(birthday) == 4:
+        birthdate = f"{birthyear}-{birthday[:2]}-{birthday[2:]}"
+    elif birthyear:
+        birthdate = f"{birthyear}-01-01"
+
+    gender_raw = account.get("gender")
+    gender = None
+    if isinstance(gender_raw, str):
+        if gender_raw.lower() == "male":
+            gender = "남성"
+        elif gender_raw.lower() == "female":
+            gender = "여성"
+        else:
+            gender = "기타"
+
+    return {
+        "kakao_id": str(kakao_id),
+        "email": email,
+        "nickname": nickname,
+        "birthdate": birthdate,
+        "gender": gender,
+    }
+
+
 @router.post("/kakao-login")
-def kakao_login(user_in: KakaoLogin, db: Session = Depends(get_db)):
+async def kakao_login(user_in: KakaoLogin, db: Session = Depends(get_db)):
+    verified = await _fetch_kakao_user_info(user_in.access_token)
+
     # 1. 카카오 ID로 기존 유저 확인
-    user = db.query(User).filter(User.kakao_id == user_in.kakao_id).first()
+    user = db.query(User).filter(User.kakao_id == verified["kakao_id"]).first()
     
     if not user:
         # 2. 카카오 ID는 없지만 이메일이 같은 유저가 있는지 확인 (계정 통합 로직)
-        user = db.query(User).filter(User.email == user_in.email).first()
+        user = db.query(User).filter(User.email == verified["email"]).first()
         if user:
-            user.kakao_id = user_in.kakao_id  # 계정 연결
+            user.kakao_id = verified["kakao_id"]  # 계정 연결
             # 기존 유저인데 birthdate/gender가 없으면 업데이트
-            if user_in.birthdate and not user.birthdate:
+            if verified["birthdate"] and not user.birthdate:
                 try:
-                    user.birthdate = date.fromisoformat(user_in.birthdate)
+                    user.birthdate = date.fromisoformat(verified["birthdate"])
                 except (ValueError, TypeError):
                     pass  # 형식 오류는 무시
-            if user_in.gender and not user.gender:
-                user.gender = user_in.gender
+            if verified["gender"] and not user.gender:
+                user.gender = verified["gender"]
         else:
             # 3. 아예 새로운 유저라면 생성
             birthdate_obj = None
-            if user_in.birthdate:
+            if verified["birthdate"]:
                 try:
-                    birthdate_obj = date.fromisoformat(user_in.birthdate)
+                    birthdate_obj = date.fromisoformat(verified["birthdate"])
                 except (ValueError, TypeError):
                     pass  # 형식 오류는 무시하고 None으로 둠
             
             user = User(
-                email=user_in.email,
-                nickname=user_in.nickname,
-                kakao_id=user_in.kakao_id,
+                email=verified["email"],
+                nickname=verified["nickname"],
+                kakao_id=verified["kakao_id"],
                 hashed_password=None,  # 소셜 가입자는 비밀번호 없음
                 birthdate=birthdate_obj,
-                gender=user_in.gender
+                gender=verified["gender"],
             )
             db.add(user)
         db.commit()

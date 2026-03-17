@@ -35,7 +35,7 @@ class _Slide1 extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             spreadRadius: 2,
           ),
@@ -70,10 +70,10 @@ class _Slide1 extends StatelessWidget {
                   vertical: Responsive.padding(context, 6),
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(9999),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -155,7 +155,8 @@ class _Slide1 extends StatelessWidget {
                       ],
                     ),
                   ),
-                  SizedBox(height: isCompact ? 6 : Responsive.padding(context, 12)),
+                  SizedBox(
+                      height: isCompact ? 6 : Responsive.padding(context, 12)),
                   Text(
                     '현재 얼굴과 10년 후의 얼굴을 비교해보세요.\n최첨단 AI가 당신의 미래를 예측합니다.',
                     textAlign: TextAlign.center,
@@ -182,10 +183,10 @@ class _ScanLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF37EC13).withOpacity(0.5)
+      ..color = const Color(0xFF37EC13).withValues(alpha: 0.5)
       ..strokeWidth = 1.0
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.5);
-    
+
     final centerY = size.height / 2;
     canvas.drawLine(
       Offset(0, centerY),
@@ -225,7 +226,7 @@ class _Slide2State extends State<_Slide2> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -241,7 +242,7 @@ class _Slide2State extends State<_Slide2> with SingleTickerProviderStateMixin {
                 color: isDark ? Colors.grey[800] : Colors.grey[100],
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),
@@ -262,12 +263,13 @@ class _Slide2State extends State<_Slide2> with SingleTickerProviderStateMixin {
                         return Container(
                           color: Colors.grey[300],
                           child: const Center(
-                            child: Icon(Icons.image, size: 64, color: Colors.grey),
+                            child:
+                                Icon(Icons.image, size: 64, color: Colors.grey),
                           ),
                         );
                       },
                     ),
-                    
+
                     // Gradient Overlay
                     Positioned(
                       bottom: 0,
@@ -281,16 +283,16 @@ class _Slide2State extends State<_Slide2> with SingleTickerProviderStateMixin {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              (isDark 
-                                  ? const Color(0xFF132210) 
-                                  : const Color(0xFFF6F8F6))
-                                  .withOpacity(0.4),
+                              (isDark
+                                      ? const Color(0xFF132210)
+                                      : const Color(0xFFF6F8F6))
+                                  .withValues(alpha: 0.4),
                             ],
                           ),
                         ),
                       ),
                     ),
-                    
+
                     // Floating Habit Icons
                     Positioned(
                       bottom: Responsive.padding(context, 48),
@@ -331,9 +333,9 @@ class _Slide2State extends State<_Slide2> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
-          
+
           SizedBox(height: Responsive.padding(context, 24)),
-          
+
           // Text Content
           Column(
             children: [
@@ -346,13 +348,13 @@ class _Slide2State extends State<_Slide2> with SingleTickerProviderStateMixin {
                     height: 1.2,
                     color: isDark ? Colors.white : Colors.black87,
                   ),
-                  children: [
-                    const TextSpan(text: '오늘의 습관이\n내일의 '),
-                    const TextSpan(
+                  children: const [
+                    TextSpan(text: '오늘의 습관이\n내일의 '),
+                    TextSpan(
                       text: '얼굴',
                       style: TextStyle(color: Color(0xFF37EC13)),
                     ),
-                    const TextSpan(text: '을 만듭니다'),
+                    TextSpan(text: '을 만듭니다'),
                   ],
                 ),
               ),
@@ -397,9 +399,10 @@ class _BouncingIcon extends StatelessWidget {
       animation: controller,
       builder: (context, child) {
         final offset = math.sin(
-          (controller.value * 2 * math.pi) + (delay / 1000),
-        ) * 8;
-        
+              (controller.value * 2 * math.pi) + (delay / 1000),
+            ) *
+            8;
+
         return Transform.translate(
           offset: Offset(0, offset),
           child: Column(
@@ -414,7 +417,7 @@ class _BouncingIcon extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       spreadRadius: 1,
                     ),
@@ -422,9 +425,8 @@ class _BouncingIcon extends StatelessWidget {
                 ),
                 child: Icon(
                   icon,
-                  color: color == const Color(0xFF37EC13)
-                      ? Colors.black
-                      : color,
+                  color:
+                      color == const Color(0xFF37EC13) ? Colors.black : color,
                   size: Responsive.iconSize(context, 24),
                 ),
               ),
@@ -436,7 +438,7 @@ class _BouncingIcon extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: (isDark ? Colors.black : Colors.white)
-                      .withOpacity(0.8),
+                      .withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(9999),
                 ),
                 child: Text(
@@ -461,7 +463,7 @@ class _Slide3 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -477,7 +479,7 @@ class _Slide3 extends StatelessWidget {
                 color: Colors.grey[900],
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),
@@ -498,30 +500,32 @@ class _Slide3 extends StatelessWidget {
                         },
                       ),
                     ),
-                    
+
                     // Dashboard Card
                     Center(
                       child: Container(
                         margin: EdgeInsets.all(Responsive.padding(context, 24)),
-                        padding: EdgeInsets.all(Responsive.padding(context, 24)),
+                        padding:
+                            EdgeInsets.all(Responsive.padding(context, 24)),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             width: 1,
                           ),
                         ),
                         child: LayoutBuilder(
                           builder: (context, cardConstraints) {
-                            final isCompact =
-                                cardConstraints.maxHeight < 220 ||
+                            final isCompact = cardConstraints.maxHeight < 220 ||
                                 cardConstraints.maxWidth < 260;
                             final gap = isCompact
                                 ? Responsive.padding(context, 10)
                                 : Responsive.padding(context, 24);
                             final double chartHeight = isCompact
-                                ? math.max(56.0, cardConstraints.maxHeight * 0.42).toDouble()
+                                ? math
+                                    .max(56.0, cardConstraints.maxHeight * 0.42)
+                                    .toDouble()
                                 : Responsive.fontSize(context, 110).toDouble();
 
                             return Column(
@@ -529,43 +533,56 @@ class _Slide3 extends StatelessWidget {
                               children: [
                                 // Header
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'SKIN AGE',
                                           style: TextStyle(
                                             fontSize: isCompact
-                                                ? Responsive.fontSize(context, 8)
-                                                : Responsive.fontSize(context, 10),
+                                                ? Responsive.fontSize(
+                                                    context, 8)
+                                                : Responsive.fontSize(
+                                                    context, 10),
                                             color: Colors.grey[300],
                                             letterSpacing: 1.2,
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                        SizedBox(height: Responsive.padding(context, 4)),
+                                        SizedBox(
+                                            height:
+                                                Responsive.padding(context, 4)),
                                         Row(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
                                           children: [
                                             Text(
                                               '24.5',
                                               style: TextStyle(
                                                 fontSize: isCompact
-                                                    ? Responsive.fontSize(context, 18)
-                                                    : Responsive.fontSize(context, 24),
+                                                    ? Responsive.fontSize(
+                                                        context, 18)
+                                                    : Responsive.fontSize(
+                                                        context, 24),
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.white,
                                               ),
                                             ),
-                                            SizedBox(width: Responsive.padding(context, 4)),
+                                            SizedBox(
+                                                width: Responsive.padding(
+                                                    context, 4)),
                                             Text(
                                               '세',
                                               style: TextStyle(
                                                 fontSize: isCompact
-                                                    ? Responsive.fontSize(context, 11)
-                                                    : Responsive.fontSize(context, 14),
+                                                    ? Responsive.fontSize(
+                                                        context, 11)
+                                                    : Responsive.fontSize(
+                                                        context, 14),
                                                 color: Colors.grey[400],
                                               ),
                                             ),
@@ -584,10 +601,10 @@ class _Slide3 extends StatelessWidget {
                                       ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF37EC13)
-                                            .withOpacity(0.2),
+                                            .withValues(alpha: 0.2),
                                         border: Border.all(
                                           color: const Color(0xFF37EC13)
-                                              .withOpacity(0.5),
+                                              .withValues(alpha: 0.5),
                                           width: 1,
                                         ),
                                         borderRadius: BorderRadius.circular(8),
@@ -597,17 +614,23 @@ class _Slide3 extends StatelessWidget {
                                           Icon(
                                             Icons.trending_down,
                                             size: isCompact
-                                                ? Responsive.iconSize(context, 11)
-                                                : Responsive.iconSize(context, 14),
+                                                ? Responsive.iconSize(
+                                                    context, 11)
+                                                : Responsive.iconSize(
+                                                    context, 14),
                                             color: const Color(0xFF37EC13),
                                           ),
-                                          SizedBox(width: Responsive.padding(context, 4)),
+                                          SizedBox(
+                                              width: Responsive.padding(
+                                                  context, 4)),
                                           Text(
                                             '-2.4',
                                             style: TextStyle(
                                               fontSize: isCompact
-                                                  ? Responsive.fontSize(context, 8)
-                                                  : Responsive.fontSize(context, 10),
+                                                  ? Responsive.fontSize(
+                                                      context, 8)
+                                                  : Responsive.fontSize(
+                                                      context, 10),
                                               fontWeight: FontWeight.bold,
                                               color: const Color(0xFF37EC13),
                                             ),
@@ -625,8 +648,10 @@ class _Slide3 extends StatelessWidget {
                                     child: SizedBox(
                                       height: chartHeight,
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           _BarItem(
                                             height: 0.4,
@@ -668,9 +693,9 @@ class _Slide3 extends StatelessWidget {
               ),
             ),
           ),
-          
+
           SizedBox(height: Responsive.padding(context, 24)),
-          
+
           // Text Content
           Column(
             children: [
@@ -683,9 +708,9 @@ class _Slide3 extends StatelessWidget {
                     height: 1.2,
                     color: isDark ? Colors.white : Colors.black87,
                   ),
-                  children: [
-                    const TextSpan(text: '데이터로 관리하는\n스마트 '),
-                    const TextSpan(
+                  children: const [
+                    TextSpan(text: '데이터로 관리하는\n스마트 '),
+                    TextSpan(
                       text: '안티에이징',
                       style: TextStyle(color: Color(0xFF37EC13)),
                     ),
@@ -726,7 +751,7 @@ class _BarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final barHeight = chartHeight * height;
-    
+
     return Expanded(
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -741,14 +766,14 @@ class _BarItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isActive
                     ? const Color(0xFF37EC13)
-                    : Colors.white.withOpacity(0.1),
+                    : Colors.white.withValues(alpha: 0.1),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(4),
                 ),
                 boxShadow: isActive
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF37EC13).withOpacity(0.4),
+                          color: const Color(0xFF37EC13).withValues(alpha: 0.4),
                           blurRadius: 15,
                           spreadRadius: 0,
                         ),
@@ -792,4 +817,3 @@ class _BarItem extends StatelessWidget {
     );
   }
 }
-

@@ -9,7 +9,8 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      # qdrant base image may not include curl; use bash TCP check instead.
+      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/127.0.0.1/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -42,10 +43,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
     ports:
       - "8080:8000"
     environment:
       - DATABASE_URL=postgresql://myuser:mypassword@db:5432/biostream
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}  # Gemini API 키 (선택적, .env 파일에서 로드)
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}  # Google API 키 (LangGraph용)
       - COACH_LLM_MODEL=${COACH_LLM_MODEL:-gemini-2.5-flash}  # 코치 챗 모델명
@@ -70,6 +74,16 @@ services:
       - DB_NAME=biostream
       - DB_PORT=5432
 
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app:/app/app  # 코드 변경 시 자동 반영 (개발 환경)
@@ -86,6 +100,8 @@ services:
     restart: always
     depends_on:
       db:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     environment:
       - RUNNING_IN_DOCKER=true

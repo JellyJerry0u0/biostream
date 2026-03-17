@@ -36,9 +36,8 @@ class SimulationCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1A2C17) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.grey[200]!,
+          color:
+              isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[200]!,
         ),
       ),
       child: Column(
@@ -70,8 +69,8 @@ class SimulationCard extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: isGrounded
-                      ? Colors.green[900]!.withOpacity(0.2)
-                      : Colors.orange[900]!.withOpacity(0.2),
+                      ? Colors.green[900]!.withValues(alpha: 0.2)
+                      : Colors.orange[900]!.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -79,9 +78,7 @@ class SimulationCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: Responsive.fontSize(context, 10),
                     fontWeight: FontWeight.w600,
-                    color: isGrounded
-                        ? Colors.green[400]
-                        : Colors.orange[400],
+                    color: isGrounded ? Colors.green[400] : Colors.orange[400],
                   ),
                 ),
               ),
@@ -103,7 +100,7 @@ class SimulationCard extends StatelessWidget {
               padding: EdgeInsets.all(Responsive.padding(context, 12)),
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.grey[900]!.withOpacity(0.3)
+                    ? Colors.grey[900]!.withValues(alpha: 0.3)
                     : Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
               ),

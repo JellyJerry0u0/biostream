@@ -2,6 +2,9 @@
 데이터베이스 마이그레이션 스크립트
 
 Lifestyle 테이블에 health_report 관련 컬럼 추가
+
+주의: 이 파일은 레거시 수동 보정용입니다.
+신규 스키마 변경은 반드시 Alembic(`alembic revision/upgrade`)을 사용하세요.
 """
 
 import os
@@ -13,6 +16,7 @@ engine = create_engine(DATABASE_URL)
 
 def migrate():
     """데이터베이스 마이그레이션 실행"""
+    print("⚠️ migrate_db.py는 레거시 스크립트입니다. 신규 변경에는 Alembic을 사용하세요.")
     print("🔄 데이터베이스 마이그레이션 시작...")
     
     with engine.connect() as conn:

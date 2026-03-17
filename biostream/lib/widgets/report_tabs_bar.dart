@@ -32,7 +32,7 @@ class ReportTabsBar extends StatelessWidget {
         border: Border(
           bottom: BorderSide(
             color: isDark
-                ? Colors.white.withOpacity(0.1)
+                ? Colors.white.withValues(alpha: 0.1)
                 : Colors.grey[200]!,
             width: 1,
           ),
@@ -61,9 +61,8 @@ class ReportTabsBar extends StatelessWidget {
                   vertical: Responsive.padding(context, 12),
                 ),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF37EC13)
-                      : Colors.transparent,
+                  color:
+                      isSelected ? const Color(0xFF37EC13) : Colors.transparent,
                   borderRadius: BorderRadius.circular(9999),
                 ),
                 child: Center(
@@ -71,7 +70,8 @@ class ReportTabsBar extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: Responsive.fontSize(context, 14),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.w500,
                       color: isSelected
                           ? const Color(0xFF101B0D)
                           : (isDark ? Colors.white70 : Colors.grey[700]),

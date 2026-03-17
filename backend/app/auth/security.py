@@ -1,16 +1,20 @@
+import os
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import jwt
 
 # 비밀번호 해싱 설정
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-SECRET_KEY = "your-very-secret-key" # 실제로는 환경변수로 관리해야 함
 ALGORITHM = "HS256"
 
+def _get_secret_key() -> str:
+    secret_key = os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("JWT_SECRET_KEY(또는 SECRET_KEY) 환경변수가 필요합니다.")
+    return secret_key
+
+
 def hash_password(password: str):
-    # Bcrypt의 30자 제한을 고려하여, 너무 긴 입력은 미리 잘라주거나 예외 처리.
-    if len(password.encode('utf-8')) > 30:
-        password = password[:30]
     return pwd_context.hash(password)
 
 def verify_password(plain_password, hashed_password):
@@ -20,11 +24,11 @@ def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=60) # 1시간 유효
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, _get_secret_key(), algorithm=ALGORITHM)
 
 def verify_token(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _get_secret_key(), algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             print("[토큰 검증] payload에 'sub' 키가 없습니다.")

@@ -22,16 +22,18 @@ class ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // 항상 3개 아이템 보장
-    final displayItems = items.length >= 3 
+    final displayItems = items.length >= 3
         ? items.sublist(0, 3)
         : [
             ...items,
-            ...List.generate(3 - items.length, (index) => {
-              'title': '행동 ${items.length + index + 1}',
-              'detail': '분석 중입니다.',
-            }),
+            ...List.generate(
+                3 - items.length,
+                (index) => {
+                      'title': '행동 ${items.length + index + 1}',
+                      'detail': '분석 중입니다.',
+                    }),
           ];
 
     return Container(
@@ -41,9 +43,8 @@ class ActionCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1A2C17) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.grey[200]!,
+          color:
+              isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[200]!,
         ),
       ),
       child: Column(
@@ -85,7 +86,7 @@ class ActionCard extends StatelessWidget {
                     width: Responsive.fontSize(context, 24),
                     height: Responsive.fontSize(context, 24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF37EC13).withOpacity(0.2),
+                      color: const Color(0xFF37EC13).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Center(
@@ -127,7 +128,7 @@ class ActionCard extends StatelessWidget {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

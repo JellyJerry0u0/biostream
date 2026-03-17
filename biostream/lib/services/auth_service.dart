@@ -97,61 +97,25 @@ class AuthService {
   Future<Map<String, dynamic>> loginWithKakao() async {
     try {
       // 1. 카카오 로그인 (카카오톡 또는 카카오계정)
+      OAuthToken oauthToken;
       final talkInstalled = await isKakaoTalkInstalled();
       if (talkInstalled) {
         try {
-          await UserApi.instance.loginWithKakaoTalk();
+          oauthToken = await UserApi.instance.loginWithKakaoTalk();
         } catch (e) {
           if (e is PlatformException && e.code == 'CANCELED') {
             return {"success": false, "message": "로그인이 취소되었습니다."};
           }
-          await UserApi.instance.loginWithKakaoAccount();
+          oauthToken = await UserApi.instance.loginWithKakaoAccount();
         }
       } else {
-        await UserApi.instance.loginWithKakaoAccount();
-      }
-
-      // 2. 카카오 사용자 정보 조회
-      // 참고: 생년·생일·성별은 비즈앱에서만 동의 항목 활성화 가능.
-      // 비즈앱 아닌 경우 생활습관 설문에서 선택 입력받아 사용.
-      User user = await UserApi.instance.me();
-      final kakaoId = user.id.toString();
-      final email = user.kakaoAccount?.email ?? 'kakao_$kakaoId@kakao.user';
-      final nickname =
-          user.kakaoAccount?.profile?.nickname ?? '카카오사용자';
-
-      // birthdate: YYYY-MM-DD (birthyear + birthday)
-      String? birthdate;
-      final year = user.kakaoAccount?.birthyear;
-      final bday = user.kakaoAccount?.birthday;
-      if (year != null && bday != null && bday.length == 4) {
-        birthdate = '$year-${bday.substring(0, 2)}-${bday.substring(2)}';
-      } else if (year != null) {
-        birthdate = '$year-01-01';
-      }
-
-      // gender: male/female -> 남성/여성 (enum이면 .name, 문자열이면 그대로)
-      String? gender;
-      final g = user.kakaoAccount?.gender;
-      if (g != null) {
-        final gStr = g.toString().toLowerCase();
-        if (gStr.contains('male')) {
-          gender = '남성';
-        } else if (gStr.contains('female')) {
-          gender = '여성';
-        } else {
-          gender = '기타';
-        }
+        oauthToken = await UserApi.instance.loginWithKakaoAccount();
       }
 
       // 3. 백엔드 카카오 로그인 API 호출
       final origin = await ApiConfig.getBaseOrigin();
       final body = {
-        "kakao_id": kakaoId,
-        "email": email,
-        "nickname": nickname,
-        if (birthdate != null) "birthdate": birthdate,
-        if (gender != null) "gender": gender,
+        "access_token": oauthToken.accessToken,
       };
 
       final response = await http.post(

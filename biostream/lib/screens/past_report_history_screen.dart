@@ -48,7 +48,7 @@ class _PastReportHistoryScreenState extends State<PastReportHistoryScreen> {
               ? map['lifestyle_id'] as int
               : int.tryParse('${map['lifestyle_id']}') ?? 0,
           generatedAt: _formatDate((map['generated_at'] ?? '').toString()),
-          targetYearsText: parsedYears > 0 ? '+${parsedYears}년 뒤' : '+미래',
+          targetYearsText: parsedYears > 0 ? '+$parsedYears년 뒤' : '+미래',
           summary: (map['summary'] ?? '').toString().trim(),
         );
       }).toList();
@@ -276,12 +276,12 @@ class _PastReportHistoryScreenState extends State<PastReportHistoryScreen> {
                 .where((line) => line.isNotEmpty)
                 .join(', ');
             if (nested.isNotEmpty) {
-              lines.add('${indent}  • $nested');
+              lines.add('$indent  • $nested');
             }
           } else {
             final text = item.toString().trim();
             if (text.isNotEmpty) {
-              lines.add('${indent}  • $text');
+              lines.add('$indent  • $text');
             }
           }
         }

@@ -12,7 +12,7 @@ class EvidenceModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // 안전하게 데이터 추출
     final narrativeRefs = (evidenceRefs['narrative'] is List)
         ? evidenceRefs['narrative'] as List<dynamic>
@@ -57,7 +57,7 @@ class EvidenceModal extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // 스크롤 가능한 내용
           Flexible(
             child: SingleChildScrollView(
@@ -69,98 +69,120 @@ class EvidenceModal extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 정량 근거
-          if (quantRefs.isNotEmpty) ...[
-            Text(
-              '정량 근거',
-              style: TextStyle(
-                fontSize: Responsive.fontSize(context, 16),
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF37EC13),
-              ),
-            ),
-            SizedBox(height: Responsive.padding(context, 12)),
-            ...quantRefs.take(5).map((ref) {
-              if (ref is! Map<String, dynamic>) {
-                return SizedBox.shrink();
-              }
-              final refMap = ref;
-              final outcome = refMap['outcome_mapped']?.toString() ?? '';
-              final timeframe = refMap['timeframe_days']?.toString() ?? '';
-              final effect = refMap['effect_signed_value']?.toString() ?? '';
-              final unit = refMap['effect_unit']?.toString() ?? '%';
-              final pLabel = refMap['p_label']?.toString() ?? '';
-              final sourceSnippet = refMap['source_snippet']?.toString();
-
-              return _buildExpandableCard(
-                context,
-                isDark,
-                title: outcome.isNotEmpty ? outcome : '정량 근거',
-                subtitle: '${timeframe}일 후: $effect$unit${pLabel.isNotEmpty ? ' (근거 강도: $pLabel)' : ''}',
-                content: sourceSnippet,
-              );
-            }).where((widget) => widget is! SizedBox).toList(),
-            SizedBox(height: Responsive.padding(context, 24)),
-          ],
-
-          // 서술 근거
-          if (narrativeRefs.isNotEmpty) ...[
-            Text(
-              '서술 근거',
-              style: TextStyle(
-                fontSize: Responsive.fontSize(context, 16),
-                fontWeight: FontWeight.bold,
-                color: Colors.blue[400],
-              ),
-            ),
-            SizedBox(height: Responsive.padding(context, 12)),
-            ...narrativeRefs.take(5).map((ref) {
-              if (ref is! Map<String, dynamic>) {
-                return SizedBox.shrink();
-              }
-              final refMap = ref;
-              final title = refMap['title']?.toString() ?? '';
-              final paperId = refMap['paper_id']?.toString() ?? '';
-              final chunkId = refMap['chunk_id']?.toString() ?? '';
-
-              return Container(
-                margin: EdgeInsets.only(bottom: Responsive.padding(context, 8)),
-                padding: EdgeInsets.all(Responsive.padding(context, 12)),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.black.withOpacity(0.2)
-                      : Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (title.isNotEmpty)
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: Responsive.fontSize(context, 13),
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    SizedBox(height: Responsive.padding(context, 4)),
+                  if (quantRefs.isNotEmpty) ...[
                     Text(
-                      'Paper ID: $paperId | Chunk: $chunkId',
+                      '정량 근거',
                       style: TextStyle(
-                        fontSize: Responsive.fontSize(context, 11),
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontSize: Responsive.fontSize(context, 16),
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF37EC13),
                       ),
                     ),
+                    SizedBox(height: Responsive.padding(context, 12)),
+                    ...quantRefs
+                        .take(5)
+                        .map((ref) {
+                          if (ref is! Map<String, dynamic>) {
+                            return const SizedBox.shrink();
+                          }
+                          final refMap = ref;
+                          final outcome =
+                              refMap['outcome_mapped']?.toString() ?? '';
+                          final timeframe =
+                              refMap['timeframe_days']?.toString() ?? '';
+                          final effect =
+                              refMap['effect_signed_value']?.toString() ?? '';
+                          final unit = refMap['effect_unit']?.toString() ?? '%';
+                          final pLabel = refMap['p_label']?.toString() ?? '';
+                          final sourceSnippet =
+                              refMap['source_snippet']?.toString();
+
+                          return _buildExpandableCard(
+                            context,
+                            isDark,
+                            title: outcome.isNotEmpty ? outcome : '정량 근거',
+                            subtitle:
+                                '$timeframe일 후: $effect$unit${pLabel.isNotEmpty ? ' (근거 강도: $pLabel)' : ''}',
+                            content: sourceSnippet,
+                          );
+                        })
+                        .where((widget) => widget is! SizedBox)
+                        ,
+                    SizedBox(height: Responsive.padding(context, 24)),
                   ],
-                ),
-              );
-            }).where((widget) => widget is! SizedBox).toList(),
-          ],
+
+                  // 서술 근거
+                  if (narrativeRefs.isNotEmpty) ...[
+                    Text(
+                      '서술 근거',
+                      style: TextStyle(
+                        fontSize: Responsive.fontSize(context, 16),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[400],
+                      ),
+                    ),
+                    SizedBox(height: Responsive.padding(context, 12)),
+                    ...narrativeRefs
+                        .take(5)
+                        .map((ref) {
+                          if (ref is! Map<String, dynamic>) {
+                            return const SizedBox.shrink();
+                          }
+                          final refMap = ref;
+                          final title = refMap['title']?.toString() ?? '';
+                          final paperId = refMap['paper_id']?.toString() ?? '';
+                          final chunkId = refMap['chunk_id']?.toString() ?? '';
+
+                          return Container(
+                            margin: EdgeInsets.only(
+                                bottom: Responsive.padding(context, 8)),
+                            padding:
+                                EdgeInsets.all(Responsive.padding(context, 12)),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.black.withValues(alpha: 0.2)
+                                  : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (title.isNotEmpty)
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontSize:
+                                          Responsive.fontSize(context, 13),
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                SizedBox(
+                                    height: Responsive.padding(context, 4)),
+                                Text(
+                                  'Paper ID: $paperId | Chunk: $chunkId',
+                                  style: TextStyle(
+                                    fontSize: Responsive.fontSize(context, 11),
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        })
+                        .where((widget) => widget is! SizedBox)
+                        ,
+                  ],
 
                   if (quantRefs.isEmpty && narrativeRefs.isEmpty)
                     Center(
                       child: Padding(
-                        padding: EdgeInsets.all(Responsive.padding(context, 24)),
+                        padding:
+                            EdgeInsets.all(Responsive.padding(context, 24)),
                         child: Text(
                           '근거 정보가 없습니다.',
                           style: TextStyle(
@@ -190,13 +212,11 @@ class EvidenceModal extends StatelessWidget {
   }) {
     return StatefulBuilder(
       builder: (context, setState) {
-
         return Container(
           margin: EdgeInsets.only(bottom: Responsive.padding(context, 8)),
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.grey[50],
+            color:
+                isDark ? Colors.black.withValues(alpha: 0.2) : Colors.grey[50],
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(

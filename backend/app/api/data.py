@@ -1,11 +1,13 @@
 import os
 import sys
 import time
+from pathlib import Path
 from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import date
 import json
 
@@ -50,6 +52,24 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> models.User:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
+
+    token = authorization.replace("Bearer ", "").strip()
+    email = verify_token(token)
+    if not email:
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    return user
+
 # [1] 데이터 규격 정의 (Flutter의 HealthDataPayload와 일치해야 함)
 class HealthMetric(BaseModel):
     type: str
@@ -65,9 +85,15 @@ class HealthPayload(BaseModel):
 
 # [2] 데이터 수집 엔드포인트
 @router.post("/collect")
-async def collect_data(payload: HealthPayload):
+async def collect_data(
+    payload: HealthPayload,
+    current_user: models.User = Depends(get_current_user),
+):
     # 여기서 데이터를 확인합니다.
-    print(f"📥 수신된 데이터 - 사용자: {payload.user_id}, 지표 수: {len(payload.metrics)}")
+    print(
+        f"📥 수신된 데이터 - 사용자: {current_user.id} "
+        f"(payload user_id={payload.user_id}), 지표 수: {len(payload.metrics)}"
+    )
     
     # TODO: 여기서 kafka_producer를 통해 Kafka 토픽으로 전송하는 로직이 들어갑니다.
     # producer.send('biometrics', value=payload.dict())
@@ -86,23 +112,26 @@ async def collect_data(payload: HealthPayload):
 # [3] 이미지 업로드 엔드포인트
 @router.post("/upload")
 async def upload_image(
-    user_id: int = Form(...),
     target_years: int = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     이미지 업로드 엔드포인트
-    - user_id: 사용자 ID
     - target_years: 몇 년 후 모습을 보고 싶은지 (연수)
     - file: 업로드할 이미지 파일
     """
     try:
-        print(f"📤 이미지 업로드 요청 - user_id: {user_id}, target_years: {target_years}, filename: {file.filename}")
+        original_name = Path(file.filename or "upload.bin").name
+        print(
+            f"📤 이미지 업로드 요청 - user_id: {current_user.id}, "
+            f"target_years: {target_years}, filename: {original_name}"
+        )
         
         # 1. 파일을 디스크에 저장
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        safe_name = f"{timestamp}_{file.filename}"
+        safe_name = f"{timestamp}_{original_name}"
         save_path = os.path.join(UPLOAD_DIR, safe_name)
         
         contents = await file.read()
@@ -114,7 +143,7 @@ async def upload_image(
         # 2. DB에 Lifestyle 레코드 생성 (원본 이미지 경로 저장)
         # 새로운 모델 구조에 맞게 최소한의 필드만 설정 (나머지는 설문에서 채워짐)
         lifestyle = models.Lifestyle(
-            user_id=user_id,
+            user_id=current_user.id,
             original_image_url=save_path,  # 저장된 파일 경로
             target_years=target_years,
             # 나머지 필드들은 모두 nullable이므로 None으로 설정 (설문에서 채워짐)
@@ -127,10 +156,10 @@ async def upload_image(
         
         return {
             "message": "Image uploaded successfully",
-            "filename": file.filename,
+            "filename": original_name,
             "saved_path": save_path,
             "lifestyle_id": lifestyle.id,
-            "user_id": user_id,
+            "user_id": current_user.id,
             "target_years": target_years
         }
     except Exception as e:
@@ -202,7 +231,11 @@ async def get_lifestyle_data(
 
 # [5] 이미지 파일 제공 엔드포인트
 @router.get("/image/{file_path:path}")
-async def get_image(file_path: str):
+async def get_image(
+    file_path: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     업로드된 이미지 파일을 제공합니다.
     file_path는 업로드 디렉터리 내의 상대 경로입니다.
@@ -214,13 +247,32 @@ async def get_image(file_path: str):
         
         # 파일 경로 구성
         image_path = os.path.join(UPLOAD_DIR, file_path)
+        image_real_path = os.path.realpath(image_path)
+        upload_real_path = os.path.realpath(UPLOAD_DIR)
+        if not image_real_path.startswith(upload_real_path + os.sep):
+            raise HTTPException(status_code=400, detail="Invalid file path")
         
         # 파일 존재 확인
-        if not os.path.exists(image_path) or not os.path.isfile(image_path):
+        if not os.path.exists(image_real_path) or not os.path.isfile(image_real_path):
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        # 소유권 검증: lifestyle 이미지 또는 profile 이미지 중 본인 것만 허용
+        profile = db.query(models.UserProfile).filter(
+            models.UserProfile.user_id == current_user.id,
+            models.UserProfile.profile_image_url == image_real_path,
+        ).first()
+        lifestyle = db.query(models.Lifestyle).filter(
+            models.Lifestyle.user_id == current_user.id,
+            or_(
+                models.Lifestyle.original_image_url == image_real_path,
+                models.Lifestyle.generated_image_url == image_real_path,
+            ),
+        ).first()
+        if not profile and not lifestyle:
             raise HTTPException(status_code=404, detail="Image not found")
         
         # 파일 확장자 확인
-        ext = os.path.splitext(image_path)[1].lower()
+        ext = os.path.splitext(image_real_path)[1].lower()
         media_type = None
         if ext in ['.jpg', '.jpeg']:
             media_type = 'image/jpeg'
@@ -233,7 +285,7 @@ async def get_image(file_path: str):
         else:
             media_type = 'application/octet-stream'
         
-        return FileResponse(image_path, media_type=media_type)
+        return FileResponse(image_real_path, media_type=media_type)
     except HTTPException:
         raise
     except Exception as e:
@@ -243,14 +295,23 @@ async def get_image(file_path: str):
 @router.post("/generate-aging/{lifestyle_id}")
 async def generate_aging_image(
     lifestyle_id: int,
-    db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     노화 이미지 생성 API
     """
+    lifestyle = db.query(models.Lifestyle).filter(
+        models.Lifestyle.id == lifestyle_id,
+        models.Lifestyle.user_id == current_user.id,
+    ).first()
+    if not lifestyle:
+        raise HTTPException(status_code=404, detail="Lifestyle not found")
+
     result = await image_service.request_aging_simulation(
         db=db,
-        lifestyle_id=lifestyle_id
+        lifestyle_id=lifestyle_id,
+        user_id=current_user.id,
     )
 
     return result

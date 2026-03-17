@@ -15,7 +15,8 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const MethodChannel _devChannel = MethodChannel('com.example.biostream/dev');
+  static const MethodChannel _devChannel =
+      MethodChannel('com.example.biostream/dev');
   final PageController _pageController = PageController();
   int _currentPage = 0;
   String? _currentApiOrigin;
@@ -50,6 +51,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _openDevSettingsDialog() async {
     final initial = await ApiConfig.getBaseOrigin();
+    if (!mounted) {
+      return;
+    }
     final controller = TextEditingController(text: initial);
     setState(() {
       _currentApiOrigin = initial;
@@ -128,7 +132,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
 
                 try {
-                  final syncResult = await _devChannel.invokeMethod<String>('enqueueOneTimeHealthSync');
+                  final syncResult = await _devChannel
+                      .invokeMethod<String>('enqueueOneTimeHealthSync');
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -153,7 +158,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 } on MissingPluginException catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('동기화 테스트 경로를 찾을 수 없습니다: ${e.message ?? 'plugin missing'}')),
+                      SnackBar(
+                          content: Text(
+                              '동기화 테스트 경로를 찾을 수 없습니다: ${e.message ?? 'plugin missing'}')),
                     );
                   }
                 }
@@ -187,7 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final horizontalPadding = Responsive.padding(context, 24);
     final verticalPadding = Responsive.padding(context, 24);
-    
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -257,25 +264,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ],
                   ),
                 ),
-            
-            // Carousel Section
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                itemCount: 3,
-                itemBuilder: (context, index) {
-                  return OnboardingSlide(slideIndex: index);
-                },
-              ),
-            ),
-            
-            // Dots Indicator
-            SlideIndicator(
-              currentIndex: _currentPage,
-              itemCount: 3,
-            ),
-            
+
+                // Carousel Section
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: _onPageChanged,
+                    itemCount: 3,
+                    itemBuilder: (context, index) {
+                      return OnboardingSlide(slideIndex: index);
+                    },
+                  ),
+                ),
+
+                // Dots Indicator
+                SlideIndicator(
+                  currentIndex: _currentPage,
+                  itemCount: 3,
+                ),
+
                 // Footer / Actions
                 Padding(
                   padding: EdgeInsets.all(horizontalPadding),
@@ -294,7 +301,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               borderRadius: BorderRadius.circular(9999),
                             ),
                             elevation: 8,
-                            shadowColor: const Color(0xFF37EC13).withOpacity(0.2),
+                            shadowColor:
+                                const Color(0xFF37EC13).withValues(alpha: 0.2),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -316,14 +324,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                       ),
-                      
+
                       SizedBox(height: Responsive.padding(context, 12)),
-                      
+
                       // Secondary Action
                       TextButton(
                         onPressed: _onLogin,
                         style: TextButton.styleFrom(
-                          foregroundColor: isDark ? Colors.grey[300] : Colors.grey[600],
+                          foregroundColor:
+                              isDark ? Colors.grey[300] : Colors.grey[600],
                           padding: EdgeInsets.symmetric(
                             vertical: Responsive.padding(context, 10),
                           ),
@@ -334,16 +343,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             style: TextStyle(
                               fontSize: Responsive.fontSize(context, 14),
                               fontWeight: FontWeight.w500,
-                              color: isDark ? Colors.grey[300] : Colors.grey[600],
+                              color:
+                                  isDark ? Colors.grey[300] : Colors.grey[600],
                             ),
-                            children: [
-                              const TextSpan(text: '이미 계정이 있으신가요? '),
+                            children: const [
+                              TextSpan(text: '이미 계정이 있으신가요? '),
                               TextSpan(
                                 text: '로그인',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   decoration: TextDecoration.underline,
-                                  decorationColor: const Color(0xFF37EC13),
+                                  decorationColor: Color(0xFF37EC13),
                                   decorationThickness: 2,
                                 ),
                               ),
@@ -351,9 +361,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                       ),
-                      
+
                       SizedBox(height: Responsive.padding(context, 8)),
-                      
+
                       // Privacy Text
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -361,9 +371,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           Icon(
                             Icons.lock_open,
                             size: Responsive.iconSize(context, 12),
-                            color: isDark 
-                                ? Colors.green[500] 
-                                : Colors.green[700],
+                            color:
+                                isDark ? Colors.green[500] : Colors.green[700],
                           ),
                           SizedBox(width: Responsive.padding(context, 6)),
                           Flexible(
@@ -372,8 +381,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: Responsive.fontSize(context, 11),
-                                color: isDark 
-                                    ? Colors.grey[500] 
+                                color: isDark
+                                    ? Colors.grey[500]
                                     : Colors.grey[500],
                               ),
                             ),
@@ -391,4 +400,3 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 }
-

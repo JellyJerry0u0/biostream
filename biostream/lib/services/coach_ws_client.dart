@@ -2,6 +2,7 @@
 /// - Authorization 토큰 포함
 /// - 자동 재연결 (exponential backoff)
 /// - 메시지 타입별 콜백 분기
+library;
 
 import 'dart:async';
 import 'dart:convert';

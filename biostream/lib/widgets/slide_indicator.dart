@@ -14,7 +14,7 @@ class SlideIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       padding: EdgeInsets.symmetric(
         vertical: Responsive.padding(context, 16),
@@ -27,8 +27,8 @@ class SlideIndicator extends StatelessWidget {
             margin: EdgeInsets.symmetric(
               horizontal: Responsive.padding(context, 6),
             ),
-            width: index == currentIndex 
-                ? Responsive.fontSize(context, 24) 
+            width: index == currentIndex
+                ? Responsive.fontSize(context, 24)
                 : Responsive.fontSize(context, 8),
             height: Responsive.fontSize(context, 8),
             decoration: BoxDecoration(
@@ -39,7 +39,7 @@ class SlideIndicator extends StatelessWidget {
               boxShadow: index == currentIndex
                   ? [
                       BoxShadow(
-                        color: const Color(0xFF37EC13).withOpacity(0.3),
+                        color: const Color(0xFF37EC13).withValues(alpha: 0.3),
                         blurRadius: 4,
                         spreadRadius: 1,
                       ),
@@ -52,4 +52,3 @@ class SlideIndicator extends StatelessWidget {
     );
   }
 }
-

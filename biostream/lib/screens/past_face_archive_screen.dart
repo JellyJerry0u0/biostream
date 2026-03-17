@@ -85,7 +85,7 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
 
             return _ArchiveItem(
               date: _formatDate(generatedAt),
-              horizonLabel: parsedYears > 0 ? '+${parsedYears}년 뒤' : '+미래',
+              horizonLabel: parsedYears > 0 ? '+$parsedYears년 뒤' : '+미래',
               imageUrl: (map['image_url'] ?? '').toString(),
             );
           })
@@ -177,7 +177,7 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
                     ),
                     Expanded(
                       child: Padding(
-                        padding: EdgeInsets.only(
+                        padding: const EdgeInsets.only(
                           bottom: AppBottomNavBar.height + 10,
                         ),
                         child: _buildBodyContent(itemCount),

@@ -1,3 +1,0 @@
-"""
-backend.api package initializer
-"""

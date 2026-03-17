@@ -1,27 +1,31 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_config.dart';
 import '../services/lifestyle_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+import '../widgets/future_face/future_face_comparison_slider.dart';
+import '../widgets/future_face/future_face_scenario_cards.dart';
+import 'future_face/future_face_compare_controller.dart';
+import 'future_face/future_face_visibility_helper.dart';
 
 class FutureFaceCompareScreen extends StatefulWidget {
   const FutureFaceCompareScreen({super.key});
 
   @override
-  State<FutureFaceCompareScreen> createState() => _FutureFaceCompareScreenState();
+  State<FutureFaceCompareScreen> createState() =>
+      _FutureFaceCompareScreenState();
 }
 
 class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
     with TickerProviderStateMixin {
   static const Color _primary = Color(0xFF2BEE75);
   final LifestyleService _lifestyleService = LifestyleService();
+  late final FutureFaceCompareController _controller;
+  final FutureFaceVisibilityHelper _visibilityHelper =
+      FutureFaceVisibilityHelper();
 
   double _sliderRatio = 0.5;
   bool _wellManaged = true;
-  bool _wasVisibleInShell = false;
-  bool _didInitVisibility = false;
   bool _showBlankCanvas = false;
-  int _visibilityEpoch = 0;
 
   late final AnimationController _introCtrl;
   late final AnimationController _visibilityCtrl;
@@ -98,6 +102,8 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
       parent: _introCtrl,
       curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
     );
+    _controller =
+        FutureFaceCompareController(lifestyleService: _lifestyleService);
     _loadLatestFutureFaceImages();
   }
 
@@ -107,110 +113,55 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
       _imageError = null;
     });
 
-    final result = await _lifestyleService.getLatestFutureFace();
+    final result = await _controller.loadLatestFutureFaceImages();
     if (!mounted) return;
 
-    if (result['success'] == true) {
-      final data = result['data'] as Map<String, dynamic>? ?? {};
-      final generatedImage =
-          await _resolveImageUrl(data['generated_image_url']?.toString());
-      final originalImage =
-          await _resolveImageUrl(data['original_image_url']?.toString());
-      setState(() {
-        // 배경(큰 이미지): Gemini 기반 생성 미래 얼굴
-        _futureImageUrl = generatedImage;
-        // 비교 이미지: 원본 현재 얼굴
-        _currentImageUrl = originalImage;
-        _simulationPromptText =
-            (data['simulation_prompt_text']?.toString().trim() ?? '');
-        _isLoadingImages = false;
-      });
-      return;
-    }
-
     setState(() {
-      _imageError = result['message']?.toString() ?? '이미지를 불러오지 못했습니다.';
+      _futureImageUrl = result.futureImageUrl;
+      _currentImageUrl = result.currentImageUrl;
+      _simulationPromptText = result.simulationPromptText;
+      _imageError = result.errorMessage;
       _isLoadingImages = false;
     });
-  }
-
-  Future<String?> _resolveImageUrl(String? rawUrl) async {
-    final value = rawUrl?.trim() ?? '';
-    if (value.isEmpty) return null;
-    if (value.startsWith('http://') || value.startsWith('https://')) {
-      try {
-        final parsed = Uri.parse(value);
-        final host = parsed.host.toLowerCase();
-        if (host == 'localhost' || host == '127.0.0.1' || host == '0.0.0.0') {
-          final origin = await ApiConfig.getBaseOrigin();
-          final originUri = Uri.parse(origin);
-          final replaced = parsed.replace(
-            scheme: originUri.scheme,
-            host: originUri.host,
-            port: originUri.hasPort ? originUri.port : null,
-          );
-          return replaced.toString();
-        }
-      } catch (_) {
-        return value;
-      }
-      return value;
-    }
-
-    final marker = '/uploads/';
-    final index = value.replaceAll('\\', '/').indexOf(marker);
-    if (index >= 0) {
-      final relativePath =
-          value.replaceAll('\\', '/').substring(index + marker.length);
-      final origin = await ApiConfig.getBaseOrigin();
-      return '$origin/data/image/$relativePath';
-    }
-    return value;
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final isVisibleNow = _isFutureScreenVisible();
+    final isVisibleNow = FutureFaceVisibilityHelper.isFutureScreenVisible(
+      context,
+    );
+    final update = _visibilityHelper.handleVisibilityChange(isVisibleNow);
 
-    if (!_didInitVisibility) {
-      _didInitVisibility = true;
-      if (isVisibleNow) {
-        _showBlankCanvas = false;
-        _visibilityCtrl.value = 1;
-        _playIntroAnimation();
-      } else {
-        _showBlankCanvas = true;
-        _visibilityCtrl.value = 0;
-      }
-      _wasVisibleInShell = isVisibleNow;
-      return;
+    if (update.visibilityValue != null) {
+      _visibilityCtrl.value = update.visibilityValue!;
     }
-
-    if (isVisibleNow) {
-      _visibilityEpoch++;
-      if (_showBlankCanvas) {
-        setState(() {
-          _showBlankCanvas = false;
-        });
-      }
+    if (update.showBlankCanvas != null) {
+      _showBlankCanvas = update.showBlankCanvas!;
+    }
+    if (update.shouldForward) {
       _visibilityCtrl.forward();
-      if (!_wasVisibleInShell) {
-        _playIntroAnimation();
-      }
-    } else if (_wasVisibleInShell) {
-      final epoch = ++_visibilityEpoch;
+    }
+    if (update.shouldPlayIntro) {
+      _playIntroAnimation();
+    }
+    if (update.shouldReverse && update.reverseEpoch != null) {
+      final epoch = update.reverseEpoch!;
       _visibilityCtrl.reverse().then((_) {
-        if (!mounted || epoch != _visibilityEpoch) return;
-        if (!_isFutureScreenVisible()) {
+        if (!mounted) return;
+        final isVisibleNow = FutureFaceVisibilityHelper.isFutureScreenVisible(
+          context,
+        );
+        if (_visibilityHelper.shouldShowBlankCanvasAfterReverse(
+          epoch: epoch,
+          isVisibleNow: isVisibleNow,
+        )) {
           setState(() {
             _showBlankCanvas = true;
           });
         }
       });
     }
-
-    _wasVisibleInShell = isVisibleNow;
   }
 
   @override
@@ -218,14 +169,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
     _introCtrl.dispose();
     _visibilityCtrl.dispose();
     super.dispose();
-  }
-
-  bool _isFutureScreenVisible() {
-    final shellScope = NavShellScope.maybeOf(context);
-    if (shellScope == null) {
-      return true;
-    }
-    return shellScope.activeTab == AppNavTab.future;
   }
 
   void _playIntroAnimation() {
@@ -239,7 +182,7 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
     final bgColor = isDark ? const Color(0xFF132210) : const Color(0xFFF6F8F6);
     final textColor = isDark ? Colors.white : const Color(0xFF0F1E14);
     final subTextColor = isDark ? Colors.white70 : Colors.black54;
-    final isVisible = _isFutureScreenVisible();
+    final isVisible = FutureFaceVisibilityHelper.isFutureScreenVisible(context);
 
     if (!isVisible && _showBlankCanvas) {
       return Scaffold(
@@ -270,11 +213,13 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                           child: FadeTransition(
                             opacity: _heroOpacity,
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 16, 24, 10),
+                              padding:
+                                  const EdgeInsets.fromLTRB(24, 16, 24, 10),
                               child: Column(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: _primary.withValues(alpha: 0.18),
                                       borderRadius: BorderRadius.circular(999),
@@ -317,8 +262,20 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                           child: FadeTransition(
                             opacity: _sliderOpacity,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: _buildComparisonSlider(isDark),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: FutureFaceComparisonSlider(
+                                isDark: isDark,
+                                isLoading: _isLoadingImages,
+                                currentImageUrl: _currentImageUrl,
+                                futureImageUrl: _futureImageUrl,
+                                imageError: _imageError,
+                                sliderRatio: _sliderRatio,
+                                primaryColor: _primary,
+                                onSliderRatioChanged: (value) {
+                                  setState(() => _sliderRatio = value);
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -328,7 +285,16 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                             opacity: _cardsOpacity,
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                              child: _buildScenarioAndCards(isDark, textColor),
+                              child: FutureFaceScenarioCards(
+                                isDark: isDark,
+                                textColor: textColor,
+                                primaryColor: _primary,
+                                wellManaged: _wellManaged,
+                                simulationPromptText: _simulationPromptText,
+                                onScenarioChanged: (wellManaged) {
+                                  setState(() => _wellManaged = wellManaged);
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -357,319 +323,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
             icon: const Icon(Icons.auto_awesome),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildComparisonSlider(bool isDark) {
-    if (_isLoadingImages) {
-      return const AspectRatio(
-        aspectRatio: 3 / 4,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_currentImageUrl == null || _futureImageUrl == null) {
-      return AspectRatio(
-        aspectRatio: 3 / 4,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFEAEAEA),
-          ),
-          child: Center(
-            child: Text(
-              _imageError ?? '최근 리포트의 비교 이미지를 찾을 수 없습니다.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black54,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final dividerX = width * _sliderRatio;
-
-        return AspectRatio(
-          aspectRatio: 3 / 4,
-          child: GestureDetector(
-            onHorizontalDragUpdate: (details) {
-              final localX = details.localPosition.dx.clamp(0.0, width);
-              setState(() {
-                _sliderRatio = localX / width;
-              });
-            },
-            onTapDown: (details) {
-              final localX = details.localPosition.dx.clamp(0.0, width);
-              setState(() {
-                _sliderRatio = localX / width;
-              });
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Image.network(_futureImageUrl!, fit: BoxFit.cover),
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: dividerX,
-                    child: ClipRect(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: _sliderRatio,
-                        child: SizedBox(
-                          width: width,
-                          child: Image.network(_currentImageUrl!, fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    left: dividerX - 1,
-                    child: Container(
-                      width: 2,
-                      color: _primary,
-                    ),
-                  ),
-                  Positioned(
-                    left: dividerX - 22,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: _primary,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: _primary.withValues(alpha: 0.6),
-                              blurRadius: 14,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.unfold_more,
-                          color: Color(0xFF102217),
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 12,
-                    bottom: 12,
-                    child: _labelChip('현재', Colors.white),
-                  ),
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: _labelChip('미래 예측', _primary),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _labelChip(String text, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF102217).withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScenarioAndCards(bool isDark, Color textColor) {
-    final panelBg = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white;
-
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _scenarioButton(
-                  icon: Icons.verified_user,
-                  label: '관리 잘했을 때',
-                  active: _wellManaged,
-                  onTap: () => setState(() => _wellManaged = true),
-                ),
-              ),
-              Expanded(
-                child: _scenarioButton(
-                  icon: Icons.warning_amber,
-                  label: '관리가 부족할 때',
-                  active: !_wellManaged,
-                  onTap: () => setState(() => _wellManaged = false),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            Expanded(
-              child: _analysisCard(
-                bgColor: panelBg,
-                title: '피부 탄력 유지',
-                value: _wellManaged ? '82%' : '61%',
-                valueColor: _primary,
-                trailing: Icons.trending_up,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _analysisCard(
-                bgColor: panelBg,
-                title: '예상 주름 깊이',
-                value: _wellManaged ? '-12%' : '+18%',
-                valueColor: _wellManaged ? textColor : Colors.orangeAccent,
-                trailing: _wellManaged ? Icons.remove : Icons.trending_up,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        if (_simulationPromptText.isNotEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: panelBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _primary.withValues(alpha: 0.14)),
-            ),
-            child: Text(
-              _simulationPromptText,
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black87,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ),
-        if (_simulationPromptText.isNotEmpty) const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  Widget _scenarioButton({
-    required IconData icon,
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    final textColor = active ? const Color(0xFF102217) : Colors.white70;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        decoration: BoxDecoration(
-          color: active ? _primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: textColor),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 13,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _analysisCard({
-    required Color bgColor,
-    required String title,
-    required String value,
-    required Color valueColor,
-    required IconData trailing,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _primary.withValues(alpha: 0.14)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  color: valueColor,
-                  fontSize: 23,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(trailing, color: valueColor, size: 16),
-            ],
-          ),
-        ],
       ),
     );
   }

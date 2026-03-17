@@ -29,11 +29,11 @@ class FaceScannerWidget extends StatelessWidget {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF37EC13).withOpacity(0.2),
+                  color: const Color(0xFF37EC13).withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF37EC13).withOpacity(0.3),
+                      color: const Color(0xFF37EC13).withValues(alpha: 0.3),
                       blurRadius: 60,
                       spreadRadius: 20,
                     ),
@@ -94,11 +94,11 @@ class FaceScannerWidget extends StatelessWidget {
                             height: 2,
                             decoration: BoxDecoration(
                               color: const Color(0xFF37EC13)
-                                  .withOpacity(opacity.clamp(0.0, 1.0)),
+                                  .withValues(alpha: opacity.clamp(0.0, 1.0)),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF37EC13)
-                                      .withOpacity(0.8 * opacity.clamp(0.0, 1.0)),
+                                  color: const Color(0xFF37EC13).withValues(
+                                      alpha: 0.8 * opacity.clamp(0.0, 1.0)),
                                   blurRadius: 15,
                                   spreadRadius: 2,
                                 ),
@@ -116,18 +116,18 @@ class FaceScannerWidget extends StatelessWidget {
                       child: Container(
                         width: Responsive.fontSize(context, 32),
                         height: Responsive.fontSize(context, 32),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           border: Border(
                             top: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                             left: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                           ),
-                          borderRadius: const BorderRadius.only(
+                          borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(12),
                           ),
                         ),
@@ -139,18 +139,18 @@ class FaceScannerWidget extends StatelessWidget {
                       child: Container(
                         width: Responsive.fontSize(context, 32),
                         height: Responsive.fontSize(context, 32),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           border: Border(
                             top: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                             right: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                           ),
-                          borderRadius: const BorderRadius.only(
+                          borderRadius: BorderRadius.only(
                             topRight: Radius.circular(12),
                           ),
                         ),
@@ -162,18 +162,18 @@ class FaceScannerWidget extends StatelessWidget {
                       child: Container(
                         width: Responsive.fontSize(context, 32),
                         height: Responsive.fontSize(context, 32),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                             left: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                           ),
-                          borderRadius: const BorderRadius.only(
+                          borderRadius: BorderRadius.only(
                             bottomLeft: Radius.circular(12),
                           ),
                         ),
@@ -185,18 +185,18 @@ class FaceScannerWidget extends StatelessWidget {
                       child: Container(
                         width: Responsive.fontSize(context, 32),
                         height: Responsive.fontSize(context, 32),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                             right: BorderSide(
-                              color: const Color(0xFF37EC13),
+                              color: Color(0xFF37EC13),
                               width: 4,
                             ),
                           ),
-                          borderRadius: const BorderRadius.only(
+                          borderRadius: BorderRadius.only(
                             bottomRight: Radius.circular(12),
                           ),
                         ),
@@ -221,7 +221,7 @@ class FaceScannerWidget extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
+                      color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 12,
                       spreadRadius: 2,
                     ),
@@ -308,4 +308,3 @@ class _FacePlaceholderPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

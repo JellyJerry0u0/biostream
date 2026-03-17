@@ -9,7 +9,8 @@ class ProfileCompletionScreen extends StatefulWidget {
   const ProfileCompletionScreen({super.key});
 
   @override
-  State<ProfileCompletionScreen> createState() => _ProfileCompletionScreenState();
+  State<ProfileCompletionScreen> createState() =>
+      _ProfileCompletionScreenState();
 }
 
 class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
@@ -20,7 +21,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   final _authService = AuthService();
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _submit() async {
@@ -103,17 +105,17 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: _gender == g
-                            ? const Color(0xFF37EC13).withOpacity(0.2)
+                            ? const Color(0xFF37EC13).withValues(alpha: 0.2)
                             : (isDark
-                                ? Colors.white.withOpacity(0.08)
-                                : Colors.black.withOpacity(0.04)),
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.04)),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: _gender == g
                               ? const Color(0xFF37EC13)
                               : (isDark
-                                  ? Colors.white.withOpacity(0.2)
-                                  : Colors.black.withOpacity(0.1)),
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Colors.black.withValues(alpha: 0.1)),
                         ),
                       ),
                       child: Text(
@@ -157,13 +159,13 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.black.withOpacity(0.04),
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isDark
-                          ? Colors.white.withOpacity(0.2)
-                          : Colors.black.withOpacity(0.1),
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : Colors.black.withValues(alpha: 0.1),
                     ),
                   ),
                   child: Row(

@@ -20,14 +20,9 @@ class ImageService {
         return {"success": false, "message": "로그인이 필요합니다."};
       }
 
-      // JWT 토큰에서 user_id 추출 (임시로 1로 설정, 나중에 토큰에서 추출)
-      // TODO: JWT 토큰 디코딩하여 실제 user_id 가져오기
-      final userId = await _getUserIdFromToken(token);
-
       debugPrint('[ImageService] 이미지 업로드 시작');
       debugPrint('[ImageService] 파일 경로: ${imageFile.path}');
       debugPrint('[ImageService] 파일 이름: ${imageFile.name}');
-      debugPrint('[ImageService] User ID: $userId');
       debugPrint('[ImageService] Target Years: $targetYears');
 
       final origin = await ApiConfig.getBaseOrigin();
@@ -50,7 +45,6 @@ class ImageService {
       request.files.add(file);
       
       // 폼 데이터 추가
-      request.fields['user_id'] = userId.toString();
       request.fields['target_years'] = targetYears.toString();
 
       debugPrint('[ImageService] 업로드 요청 전송 중...');
@@ -90,23 +84,5 @@ class ImageService {
     }
   }
 
-  // JWT 토큰에서 user_id 추출 (임시 구현)
-  Future<int> _getUserIdFromToken(String token) async {
-    try {
-      // JWT 토큰은 base64로 인코딩된 payload를 포함
-      // 실제로는 jwt 패키지를 사용하여 디코딩해야 함
-      // 임시로 1 반환 (나중에 실제 구현 필요)
-      
-      // TODO: JWT 토큰 디코딩하여 user_id 추출
-      // 예: final payload = jwt.decode(token);
-      //     return payload['user_id'] as int;
-      
-      debugPrint('[ImageService] JWT 토큰에서 user_id 추출 (임시: 1)');
-      return 1; // 임시 값
-    } catch (e) {
-      debugPrint('[ImageService] user_id 추출 오류: $e');
-      return 1; // 기본값
-    }
-  }
 }
 

@@ -2,6 +2,21 @@
 
 Qdrant 중심 RAG + LangGraph 기반 리포트 오케스트레이션 백엔드
 
+## Start Here
+
+백엔드 실행 목적에 따라 아래 중 하나를 선택하세요.
+
+- **A. API 서버만 로컬에서 빠르게 실행**
+  1. `cd backend`
+  2. `pip install -r requirements.txt`
+  3. `alembic upgrade head`
+  4. `uvicorn app.main:app --reload --host 0.0.0.0 --port 8080`
+- **B. 의존 서비스까지 포함해 실행**
+  1. 루트에서 `docker compose up --build`
+  2. API 접근: `http://localhost:8080`
+
+> 기본 개발 기준 엔트리포인트는 `app.main:app` 입니다.
+
 ## 아키텍처
 
 - **Qdrant**: 로컬 도커로 실행되는 벡터 DB (기본 URL: http://localhost:6333)
@@ -12,6 +27,13 @@ Qdrant 중심 RAG + LangGraph 기반 리포트 오케스트레이션 백엔드
 ## 환경 설정
 
 `.env` 파일을 생성하고 다음 환경 변수를 설정하세요:
+
+빠르게 시작하려면:
+
+```bash
+cd backend
+cp .env.example .env
+```
 
 ```env
 # Gemini API
@@ -27,6 +49,9 @@ EMBED_DIM=768
 
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/biostream
+
+# JWT
+JWT_SECRET_KEY=replace-with-a-long-random-secret
 ```
 
 ## 설치 및 실행
@@ -44,20 +69,31 @@ pip install -r requirements.txt
 docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```
 
-또는 `docker-compose.yml`이 있다면:
+또는 `docker-compose.yml`이 있다면 (`docker compose` 권장):
 
 ```bash
-docker-compose up -d qdrant
+docker compose up -d qdrant
 ```
 
-### 3. 데이터베이스 설정
+### 3. 데이터베이스 설정 (Alembic 기준)
 
 PostgreSQL 데이터베이스를 설정하고 `DATABASE_URL` 환경 변수를 설정하세요.
 
-마이그레이션 실행 (필요한 경우):
+스키마 초기화/변경은 Alembic 마이그레이션으로만 관리합니다.
 
 ```bash
-python migrate_db.py
+cd backend
+alembic upgrade head
+```
+
+`migrate_db.py`는 과거 수동 보정용 레거시 스크립트이며, 신규 스키마 변경에는 사용하지 마세요.
+
+레거시 API 경로인 `backend/api/*` 및 `backend/app/api/lifestyle.py`는 제거되었습니다.
+
+레거시 스크립트가 꼭 필요한 경우에만:
+
+```bash
+python3 migrate_db.py
 ```
 
 ### 4. Qdrant 데이터 수집 (선택)
@@ -74,25 +110,81 @@ python tools/qdrant_ingest.py biostream_corpus_final.csv
 CORPUS_CSV=path/to/biostream_corpus_final.csv python tools/qdrant_ingest.py
 ```
 
-### 5. FastAPI 서버 실행
+### 5. FastAPI 서버 실행 (권장 엔트리포인트)
+
+프로젝트 루트(`backend`)에서 아래 명령을 사용하세요:
 
 ```bash
-cd app
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-또는 프로젝트 루트에서:
+서버 실행 전에 반드시 아래를 1회 실행하세요:
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+alembic upgrade head
 ```
+
+## 실행 위치 규칙
+
+- Python/FastAPI 명령은 `backend/`에서 실행
+- Docker 명령은 모노레포 루트에서 실행
+- API 라우터 코드는 `backend/app/api/*` 기준
+
+## DB 변경 절차 (팀 룰)
+
+1. 모델 변경
+2. `alembic revision --autogenerate -m "..."` 생성
+3. 생성된 revision 검토/보정
+4. `alembic upgrade head` 적용
+5. 앱 실행 및 API 스모크 체크
+
+Qdrant 임베딩 데이터는 Postgres 마이그레이션과 분리되어 있습니다.  
+`docker compose down -v`를 실행하지 않는 한 `qdrant_data` 볼륨 데이터는 유지됩니다.
+
+### Alembic 작업 템플릿
+
+```bash
+cd backend
+
+# 1) 모델 수정 후 revision 생성
+alembic revision --autogenerate -m "add_xxx_to_yyy"
+
+# 2) 생성된 파일 검토 (nullable/default/index/fk 의도 확인)
+# backend/alembic/versions/<revision>.py
+
+# 3) 적용
+alembic upgrade head
+
+# 4) 롤백 점검(선택)
+alembic downgrade -1
+alembic upgrade head
+```
+
+### Revision 리뷰 체크리스트
+
+- 의도하지 않은 `drop table` / `drop column`이 없는지
+- `nullable=False` 컬럼 추가 시 기존 데이터 대응(default/backfill)이 있는지
+- 인덱스/유니크/외래키 이름이 명확한지
+- `upgrade()`와 `downgrade()`가 대칭적으로 작성되었는지
+- 운영 데이터에 영향이 큰 DDL은 배포 전 백업/점검 절차가 있는지
+
+### 커밋 메시지 예시 (DB 변경)
+
+- `backend: add alembic migration for health_data indexes`
+- `backend: add lifestyle report fields migration`
 
 ## API 엔드포인트
 
 ### 헬스 체크
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8080/health
+```
+
+### Readiness 체크
+
+```bash
+curl http://localhost:8080/ready
 ```
 
 ### 리포트 생성 (공식 엔드포인트)
@@ -104,7 +196,7 @@ JWT 인증이 필요합니다:
 TOKEN="your_jwt_token_here"
 LIFESTYLE_ID=1
 
-curl -X POST "http://localhost:8000/api/generate-report/${LIFESTYLE_ID}?force=false" \
+curl -X POST "http://localhost:8080/api/generate-report/${LIFESTYLE_ID}?force=false" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json"
 ```
@@ -132,8 +224,23 @@ curl -X POST "http://localhost:8000/api/generate-report/${LIFESTYLE_ID}?force=fa
 ### 생성된 리포트 조회
 
 ```bash
-curl -X GET "http://localhost:8000/api/report/${LIFESTYLE_ID}" \
+curl -X GET "http://localhost:8080/api/report/${LIFESTYLE_ID}" \
   -H "Authorization: Bearer ${TOKEN}"
+```
+
+### 카카오 로그인 (보안 검증 방식)
+
+카카오 로그인은 클라이언트가 `kakao_id/email`을 임의 전달하지 않고,  
+`access_token`만 서버로 전달하면 서버가 카카오 API(`/v2/user/me`)로 직접 검증합니다.
+
+요청 예시:
+
+```bash
+curl -X POST "http://localhost:8080/auth/kakao-login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "access_token": "kakao_access_token_here"
+  }'
 ```
 
 ## 프로젝트 구조
@@ -146,14 +253,14 @@ backend/
 │   │   └── ...
 │   ├── main.py                 # FastAPI 앱
 │   └── ...
+├── report_modules/
+│   └── report_graph.py         # 리포트 생성 그래프/파이프라인
 ├── tools/
 │   ├── schemas.py              # Pydantic 스키마 정의
 │   ├── qdrant_search.py        # Qdrant 검색 함수 (2단계 검색 전략)
 │   ├── survey_tool.py          # 설문 데이터 조회 (user_id 또는 lifestyle_id 기반)
 │   ├── report_store.py         # 리포트 저장
 │   └── qdrant_ingest.py        # Qdrant 데이터 수집 스크립트
-├── langgraph/
-│   └── report_graph.py         # LangGraph 워크플로우 (7개 노드)
 └── requirements.txt
 ```
 
@@ -185,7 +292,7 @@ python tools/qdrant_search.py
 # 환경 변수 설정
 export TOKEN="your_jwt_token"
 export LIFESTYLE_ID=1
-export API_URL="http://localhost:8000"
+export API_URL="http://localhost:8080"
 
 # 리포트 생성
 curl -X POST "${API_URL}/api/generate-report/${LIFESTYLE_ID}" \

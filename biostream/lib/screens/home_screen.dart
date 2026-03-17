@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/lifestyle_service.dart';
 import 'facescan_screen.dart';
-import 'result_screen.dart';
+import 'result/result_screen.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+import '../widgets/home/home_quest_section.dart';
+import '../widgets/home/home_recent_prediction_section.dart';
+import '../widgets/home/home_simulation_section.dart';
+import 'home/home_models.dart';
+import 'home/home_quest_controller.dart';
+import 'home/home_visibility_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.embedded = false});
@@ -22,18 +27,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   static const Color _gameCard = Color(0xFF0D1F14);
 
   final LifestyleService _lifestyleService = LifestyleService();
+  late final HomeQuestController _questController;
+  final HomeVisibilityHelper _visibilityHelper = HomeVisibilityHelper();
 
   bool _isLoadingQuests = true;
   String? _questError;
   int? _lifestyleId;
-  List<_QuestItem> _questItems = [];
+  List<HomeQuestItem> _questItems = [];
   String? _originalImageUrl;
   String? _generatedImageUrl;
   String? _predictionPoint;
-  bool _wasVisibleInShell = false;
-  bool _didInitVisibility = false;
   bool _showBlankCanvas = false;
-  int _visibilityEpoch = 0;
 
   late final AnimationController _introCtrl;
   late final AnimationController _visibilityCtrl;
@@ -115,52 +119,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       parent: _introCtrl,
       curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
     );
+    _questController = HomeQuestController(lifestyleService: _lifestyleService);
     _loadQuestFromReport();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final isVisibleNow = _isHomeScreenVisible();
+    final isVisibleNow = HomeVisibilityHelper.isHomeScreenVisible(context);
+    final update = _visibilityHelper.handleVisibilityChange(isVisibleNow);
 
-    if (!_didInitVisibility) {
-      _didInitVisibility = true;
-      if (isVisibleNow) {
-        _showBlankCanvas = false;
-        _visibilityCtrl.value = 1;
-        _playIntroAnimation();
-      } else {
-        _showBlankCanvas = true;
-        _visibilityCtrl.value = 0;
-      }
-      _wasVisibleInShell = isVisibleNow;
-      return;
+    if (update.visibilityValue != null) {
+      _visibilityCtrl.value = update.visibilityValue!;
     }
-
-    if (isVisibleNow) {
-      _visibilityEpoch++;
-      if (_showBlankCanvas) {
-        setState(() {
-          _showBlankCanvas = false;
-        });
-      }
+    if (update.showBlankCanvas != null) {
+      _showBlankCanvas = update.showBlankCanvas!;
+    }
+    if (update.shouldForward) {
       _visibilityCtrl.forward();
-      if (!_wasVisibleInShell) {
-        _playIntroAnimation();
-      }
-    } else if (_wasVisibleInShell) {
-      final epoch = ++_visibilityEpoch;
+    }
+    if (update.shouldPlayIntro) {
+      _playIntroAnimation();
+    }
+    if (update.shouldReverse && update.reverseEpoch != null) {
+      final epoch = update.reverseEpoch!;
       _visibilityCtrl.reverse().then((_) {
-        if (!mounted || epoch != _visibilityEpoch) return;
-        if (!_isHomeScreenVisible()) {
+        if (!mounted) return;
+        final isVisibleAfterReverse = HomeVisibilityHelper.isHomeScreenVisible(
+          context,
+        );
+        if (_visibilityHelper.shouldShowBlankCanvasAfterReverse(
+          epoch: epoch,
+          isVisibleNow: isVisibleAfterReverse,
+        )) {
           setState(() {
             _showBlankCanvas = true;
           });
         }
       });
     }
-
-    _wasVisibleInShell = isVisibleNow;
   }
 
   @override
@@ -168,14 +165,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _introCtrl.dispose();
     _visibilityCtrl.dispose();
     super.dispose();
-  }
-
-  bool _isHomeScreenVisible() {
-    final shellScope = NavShellScope.maybeOf(context);
-    if (shellScope == null) {
-      return true;
-    }
-    return shellScope.activeTab == AppNavTab.home;
   }
 
   void _playIntroAnimation() {
@@ -189,281 +178,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _questError = null;
     });
 
-    final lifestyleResult = await _lifestyleService.getLifestyleData();
-    if (!mounted) return;
-
-    if (lifestyleResult['success'] != true) {
-      setState(() {
-        _isLoadingQuests = false;
-        _questError = '생활습관 데이터를 불러오지 못했습니다.';
-      });
-      return;
-    }
-
-    final lifestyleData = lifestyleResult['data'];
-    final images = lifestyleData is Map<String, dynamic>
-        ? lifestyleData['images'] as Map<String, dynamic>?
-        : null;
-
-    _originalImageUrl = images?['original_image_url']?.toString();
-    _generatedImageUrl = images?['generated_image_url']?.toString();
-
-    final lifestyleId = _toInt(
-      lifestyleData is Map<String, dynamic> ? lifestyleData['lifestyle_id'] : null,
-    );
-
-    if (lifestyleId == null) {
-      setState(() {
-        _isLoadingQuests = false;
-        _questError = '분석 리포트가 아직 없습니다.';
-      });
-      return;
-    }
-
-    final reportResult = await _lifestyleService.getHealthReport(lifestyleId);
-    if (!mounted) return;
-
-    if (reportResult['success'] != true) {
-      setState(() {
-        _isLoadingQuests = false;
-        _questError = '리포트를 불러오지 못했습니다.';
-      });
-      return;
-    }
-
-    final report = reportResult['report'];
-    _predictionPoint = _extractPredictionPoint(report);
-
-    final reportGeneratedImage = _extractGeneratedImageFromReport(report);
-    if ((_generatedImageUrl == null || _generatedImageUrl!.isEmpty) &&
-        reportGeneratedImage.isNotEmpty) {
-      _generatedImageUrl = reportGeneratedImage;
-    }
-
-    final extractedItems = _extractSolutionItems(report);
-    final completedIdsFromServer = _extractCompletedIdsFromServer(report);
-
-    if (extractedItems.isEmpty) {
-      setState(() {
-        _lifestyleId = lifestyleId;
-        _isLoadingQuests = false;
-        _questError = '맞춤 솔루션이 아직 생성되지 않았습니다.';
-        _questItems = [];
-      });
-      return;
-    }
-
-    if (completedIdsFromServer.isNotEmpty) {
-      for (final item in extractedItems) {
-        item.isDone = completedIdsFromServer.contains(item.id);
-      }
-      await _savePracticedStateToLocal(lifestyleId, extractedItems);
-    } else {
-      await _restorePracticedStateFromLocal(lifestyleId, extractedItems);
-    }
-
+    final result = await _questController.loadQuestFromReport();
     if (!mounted) return;
 
     setState(() {
-      _lifestyleId = lifestyleId;
-      _questItems = extractedItems;
+      _lifestyleId = result.lifestyleId;
+      _questItems = result.questItems;
+      _originalImageUrl = result.originalImageUrl;
+      _generatedImageUrl = result.generatedImageUrl;
+      _predictionPoint = result.predictionPoint;
       _isLoadingQuests = false;
-      _questError = null;
+      _questError = result.success ? null : result.errorMessage;
     });
   }
 
-  int? _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value);
-    return null;
-  }
-
-  List<_QuestItem> _extractSolutionItems(dynamic report) {
-    final items = <_QuestItem>[];
-    final seenTitles = <String>{};
-
-    void addItem(String title, String detail) {
-      final normalizedTitle = _cleanText(title);
-      final normalizedDetail = _cleanText(detail);
-
-      if (normalizedTitle.isEmpty) return;
-      if (seenTitles.contains(normalizedTitle)) return;
-
-      seenTitles.add(normalizedTitle);
-      items.add(
-        _QuestItem(
-          id: normalizedTitle,
-          title: normalizedTitle,
-          detail: normalizedDetail,
-        ),
-      );
-    }
-
-    void collectCards(dynamic cards) {
-      if (cards is! List) return;
-      for (final card in cards) {
-        if (card is! Map<String, dynamic>) continue;
-        if (card['type'] != 'action') continue;
-
-        final cardItems = card['items'];
-        if (cardItems is! List) continue;
-
-        for (final entry in cardItems) {
-          if (entry is! Map<String, dynamic>) continue;
-          final title = (entry['title'] ?? '').toString();
-          final detail = (entry['detail'] ?? '').toString();
-          addItem(title, detail);
-        }
-      }
-    }
-
-    void collectSection(dynamic section) {
-      if (section is! Map<String, dynamic>) return;
-      collectCards(section['cards']);
-
-      final subsections = section['subsections'];
-      if (subsections is List) {
-        for (final subsection in subsections) {
-          collectSection(subsection);
-        }
-      }
-    }
-
-    if (report is Map<String, dynamic>) {
-      final sections = report['sections'];
-      if (sections is Map<String, dynamic>) {
-        for (final section in sections.values) {
-          collectSection(section);
-        }
-      }
-
-      collectCards(report['cards']);
-
-      final actionItems = report['action_items'];
-      if (actionItems is List) {
-        for (final entry in actionItems) {
-          if (entry is! Map<String, dynamic>) continue;
-          addItem((entry['title'] ?? '').toString(), (entry['detail'] ?? '').toString());
-        }
-      }
-    }
-
-    return items.take(3).toList();
-  }
-
-  String _cleanText(String text) {
-    return text
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .replaceAll(RegExp(r'PMC\d+', caseSensitive: false), '')
-        .replaceAll(RegExp(r'PMID\s*:?\s*\d+', caseSensitive: false), '')
-        .trim();
-  }
-
-  String _extractGeneratedImageFromReport(dynamic report) {
-    if (report is! Map<String, dynamic>) return '';
-    final generatedImage = report['generated_image_url']?.toString() ?? '';
-    return generatedImage.trim();
-  }
-
-  String _extractPredictionPoint(dynamic report) {
-    if (report is! Map<String, dynamic>) return '';
-
-    String extractFromCards(List<dynamic>? cards) {
-      if (cards == null) return '';
-      for (final card in cards) {
-        if (card is! Map<String, dynamic>) continue;
-        if (card['type'] != 'simulation') continue;
-        final rawText = (card['text'] ?? '').toString().trim();
-        if (rawText.isNotEmpty) {
-          final firstSentence = rawText.split(RegExp(r'[.!?\n]')).first.trim();
-          return firstSentence;
-        }
-      }
-      return '';
-    }
-
-    final sections = report['sections'];
-    if (sections is Map<String, dynamic>) {
-      for (final section in sections.values) {
-        if (section is! Map<String, dynamic>) continue;
-        final direct = extractFromCards(section['cards'] as List<dynamic>?);
-        if (direct.isNotEmpty) return direct;
-
-        final subsections = section['subsections'];
-        if (subsections is List) {
-          for (final subsection in subsections) {
-            if (subsection is! Map<String, dynamic>) continue;
-            final fromSub = extractFromCards(subsection['cards'] as List<dynamic>?);
-            if (fromSub.isNotEmpty) return fromSub;
-          }
-        }
-      }
-    }
-
-    final cards = report['cards'];
-    if (cards is List<dynamic>) {
-      final fromRoot = extractFromCards(cards);
-      if (fromRoot.isNotEmpty) return fromRoot;
-    }
-
-    return '';
-  }
-
-  String _questStorageKey(int lifestyleId) => 'home_quest_done_$lifestyleId';
-
-  Set<String> _extractCompletedIdsFromServer(dynamic report) {
-    if (report is! Map<String, dynamic>) {
-      return <String>{};
-    }
-
-    final questProgress = report['quest_progress'];
-    if (questProgress is! Map<String, dynamic>) {
-      return <String>{};
-    }
-
-    final completed = questProgress['completed_action_ids'];
-    if (completed is! List) {
-      return <String>{};
-    }
-
-    return completed
-        .map((entry) => entry.toString().trim())
-        .where((entry) => entry.isNotEmpty)
-        .toSet();
-  }
-
-  Future<void> _restorePracticedStateFromLocal(int lifestyleId, List<_QuestItem> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    final doneIds = prefs.getStringList(_questStorageKey(lifestyleId)) ?? [];
-    for (final item in items) {
-      item.isDone = doneIds.contains(item.id);
-    }
-  }
-
-  Future<void> _savePracticedStateToLocal(int lifestyleId, List<_QuestItem> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    final doneIds = items
-        .where((item) => item.isDone)
-        .map((item) => item.id)
-        .toList();
-
-    await prefs.setStringList(_questStorageKey(lifestyleId), doneIds);
-  }
-
-  Future<void> _savePracticedStateToServer(int lifestyleId, List<_QuestItem> items) async {
-    final doneIds = items.where((item) => item.isDone).map((item) => item.id).toList();
-    final result = await _lifestyleService.updateQuestProgress(lifestyleId, doneIds);
-    if (!mounted) return;
-
-    if (result['success'] != true) {
-      final message = (result['message'] ?? '퀘스트 저장에 실패했습니다.').toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    }
-  }
-
-  Future<void> _toggleQuestItem(_QuestItem item) async {
+  Future<void> _toggleQuestItem(HomeQuestItem item) async {
     final lifestyleId = _lifestyleId;
 
     setState(() {
@@ -472,8 +201,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (lifestyleId == null) return;
 
-    await _savePracticedStateToLocal(lifestyleId, _questItems);
-    await _savePracticedStateToServer(lifestyleId, _questItems);
+    await _questController.savePracticedStateToLocal(lifestyleId, _questItems);
+    final result = await _questController.savePracticedStateToServer(
+      lifestyleId,
+      _questItems,
+    );
+    if (!mounted) return;
+    if (result['success'] != true) {
+      final message = (result['message'] ?? '퀘스트 저장에 실패했습니다.').toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   @override
@@ -481,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!widget.embedded) {
       return const MainTabShell(initialTab: AppNavTab.home);
     }
-    final isVisible = _isHomeScreenVisible();
+    final isVisible = HomeVisibilityHelper.isHomeScreenVisible(context);
 
     if (!isVisible && _showBlankCanvas) {
       return const Scaffold(
@@ -505,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: FadeTransition(
                   opacity: _pageOpacity,
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(
+                    padding: const EdgeInsets.fromLTRB(
                       24,
                       0,
                       24,
@@ -592,434 +331,60 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildSimulationSection(BuildContext context) {
-    return Container(
-      height: 256,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _primary.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: _primary.withValues(alpha: 0.15),
-            blurRadius: 30,
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuAqdPZ9vYSCR_uxbMvaZXz8CoKZk7C4HEgzibttSr0a6H0rqO9PqtmOlRhp5gNEnBf3AecYZamAOsoS577N5fqTGfoGqGW4NfMcACIek9httob2CDPOhZh1VgBC-vzT95VddwkJdPS5DXhPP8qDAF7vlIlHgcqd9jVK7c_1Kj4zpLlfJpfLY5Vv2XQNolEmv_TxBGz3_gpADtnqOdrwJKU9athsm3v21Ev1u7D1PFf_3J64GiH8obx1l3XN6Do8kqEPc9VHUwAJ_qw',
-            fit: BoxFit.cover,
-            color: Colors.black.withValues(alpha: 0.6),
-            colorBlendMode: BlendMode.darken,
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  _backgroundDark.withValues(alpha: 0.9),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _primary,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'AI PREDICT',
-                          style: TextStyle(
-                            color: _backgroundDark,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        '미래 시뮬레이션',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          height: 1.05,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '생활 습관 기반의 노화 타임랩스',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: _primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _primary.withValues(alpha: 0.3),
-                          offset: const Offset(0, 4),
-                          blurRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
-                      color: _backgroundDark,
-                      size: 34,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return HomeSimulationSection(
+      primaryColor: _primary,
+      backgroundDarkColor: _backgroundDark,
+      onStartScan: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const FaceScanScreen()),
+        );
+      },
     );
   }
 
   Widget _buildQuestSection(BuildContext context) {
-    final int totalCount = _questItems.length;
-    final int doneCount = _questItems.where((item) => item.isDone).length;
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: _gameCard,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 14,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.verified, color: _primary, size: 22),
-              const SizedBox(width: 8),
-              const Text(
-                '오늘의 퀘스트',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$doneCount/$totalCount 완료',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.65),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '당신을 위한 맞춤 솔루션',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_isLoadingQuests)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: CircularProgressIndicator(color: _primary),
-              ),
-            )
-          else if (_questError != null)
-            _buildQuestFallback(context)
-          else
-            ..._questItems.map((item) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildQuestItem(item),
-              );
-            }),
-        ],
-      ),
+    return HomeQuestSection(
+      primaryColor: _primary,
+      gameCardColor: _gameCard,
+      isLoadingQuests: _isLoadingQuests,
+      questError: _questError,
+      questItems: _questItems,
+      onToggleQuestItem: _toggleQuestItem,
+      onOpenQuestDetail: _showQuestDetailDialog,
+      onGoToReport: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const FaceScanScreen()),
+        );
+      },
     );
   }
 
   Widget _buildRecentPredictionSection(BuildContext context) {
-    final hasOriginal = _originalImageUrl != null && _originalImageUrl!.isNotEmpty;
-    final hasGenerated = _generatedImageUrl != null && _generatedImageUrl!.isNotEmpty;
-    final hasPoint = _predictionPoint != null && _predictionPoint!.isNotEmpty;
-
-    if (!hasOriginal && !hasGenerated && !hasPoint) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              '최근 노화 예측 결과',
-              style: TextStyle(
-                color: Color(0xFF102217),
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ResultScreen()),
-                );
-              },
-              child: const Text(
-                '전체 보기',
-                style: TextStyle(
-                  color: _primary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _gameCard,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-          ),
-          child: Row(
-            children: [
-              _buildPredictionImage(
-                imageUrl: _originalImageUrl,
-                fallbackLabel: 'NOW',
-              ),
-              const SizedBox(width: 10),
-              _buildPredictionImage(
-                imageUrl: _generatedImageUrl,
-                fallbackLabel: '+YEARS',
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '예측 포인트',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      hasPoint ? _predictionPoint! : '최근 예측 결과를 확인해보세요.',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 38,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const ResultScreen()),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _primary,
-                          foregroundColor: _backgroundDark,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        child: const Text(
-                          'AI 분석 리포트',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return HomeRecentPredictionSection(
+      primaryColor: _primary,
+      backgroundDarkColor: _backgroundDark,
+      gameCardColor: _gameCard,
+      originalImageUrl: _originalImageUrl,
+      generatedImageUrl: _generatedImageUrl,
+      predictionPoint: _predictionPoint,
+      onOpenResult: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ResultScreen()),
+        );
+      },
     );
   }
 
-  Widget _buildPredictionImage({
-    required String? imageUrl,
-    required String fallbackLabel,
-  }) {
-    return Container(
-      width: 78,
-      height: 108,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _primary.withValues(alpha: 0.25)),
-        color: Colors.white.withValues(alpha: 0.05),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          if (imageUrl != null && imageUrl.isNotEmpty)
-            Positioned.fill(
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.image_not_supported_outlined,
-                      color: Colors.white.withValues(alpha: 0.35),
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            Container(
-              color: Colors.white.withValues(alpha: 0.04),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.image_outlined,
-                color: Colors.white.withValues(alpha: 0.35),
-              ),
-            ),
-          Positioned(
-            left: 6,
-            bottom: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                fallbackLabel,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuestFallback(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _questError ?? '맞춤 솔루션을 불러오지 못했습니다.',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.65),
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 14),
-        SizedBox(
-          height: 44,
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FaceScanScreen()),
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _primary,
-              side: BorderSide(color: _primary.withValues(alpha: 0.25)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('리포트 만들러 가기'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showQuestDetailDialog(_QuestItem item) {
+  void _showQuestDetailDialog(HomeQuestItem item) {
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return Dialog(
           backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: 360,
@@ -1093,106 +458,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildQuestItem(_QuestItem item) {
-    final bool isDone = item.isDone;
-
-    return InkWell(
-      onTap: () => _toggleQuestItem(item),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDone
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.white.withValues(alpha: 0.02),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDone
-                ? _primary.withValues(alpha: 0.12)
-                : Colors.white.withValues(alpha: 0.05),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDone
-                    ? _primary.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.05),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isDone ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: isDone
-                    ? _primary
-                    : Colors.white.withValues(alpha: 0.25),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    style: TextStyle(
-                      color: isDone
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.85),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (item.detail.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      item.detail,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: () => _showQuestDetailDialog(item),
-                      style: TextButton.styleFrom(
-                        foregroundColor: _primary,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        minimumSize: const Size(0, 32),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text(
-                        '상세보기',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildBottomNavigation(BuildContext context) {
     return const Positioned(
       left: 0,
@@ -1202,18 +467,3 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 }
-
-class _QuestItem {
-  _QuestItem({
-    required this.id,
-    required this.title,
-    required this.detail,
-    this.isDone = false,
-  });
-
-  final String id;
-  final String title;
-  final String detail;
-  bool isDone;
-}
-

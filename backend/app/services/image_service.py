@@ -23,6 +23,7 @@ class ImageGenerationService:
     async def request_aging_simulation(
         self,
         lifestyle_id: int,
+        user_id: Optional[int] = None,
         db: Optional[Session] = None,
         gender: Optional[str] = None,
         target_years: Optional[int] = None,
@@ -36,9 +37,10 @@ class ImageGenerationService:
             db = SessionLocal()
 
         try:
-            lifestyle = db.query(Lifestyle).filter(
-                Lifestyle.id == lifestyle_id
-            ).first()
+            query = db.query(Lifestyle).filter(Lifestyle.id == lifestyle_id)
+            if user_id is not None:
+                query = query.filter(Lifestyle.user_id == user_id)
+            lifestyle = query.first()
 
             if not lifestyle:
                 raise Exception("Lifestyle not found")
