@@ -7,6 +7,8 @@ from sqlalchemy.exc import OperationalError
 from .database import engine, get_db
 from . import models
 from .api import auth, data  # 만약 경로 에러가 나면 from app.api import auth로 시도
+from dotenv import load_dotenv
+load_dotenv()  # .env 파일에서 환경 변수 로드
 
 app = FastAPI(title="BioStream API")
 
