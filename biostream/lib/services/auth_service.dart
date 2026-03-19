@@ -4,10 +4,36 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_config.dart';
 
 class AuthService {
   final storage = const FlutterSecureStorage();
+  static const String _nativeAuthTokenKey = 'auth_bearer_token';
+
+  Future<void> _mirrorTokenToNative(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_nativeAuthTokenKey, token);
+  }
+
+  Future<void> _clearNativeTokenMirror() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_nativeAuthTokenKey);
+  }
+
+  /// 명시적 로그아웃 처리
+  /// - 로컬 JWT 토큰 삭제
+  /// - 카카오 세션이 있으면 함께 종료(실패해도 로컬 로그아웃은 유지)
+  Future<void> logout() async {
+    try {
+      await UserApi.instance.logout();
+    } catch (_) {
+      // 카카오 세션 종료 실패는 무시하고 로컬 로그아웃을 진행합니다.
+    } finally {
+      await storage.delete(key: 'jwt_token');
+      await _clearNativeTokenMirror();
+    }
+  }
 
   /// 앱 시작 시 저장된 토큰으로 세션 복원 가능 여부를 확인합니다.
   ///
@@ -38,6 +64,7 @@ class AuthService {
 
       if (response.statusCode == 401 || response.statusCode == 403) {
         await storage.delete(key: 'jwt_token');
+        await _clearNativeTokenMirror();
         return false;
       }
 
@@ -109,7 +136,9 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         // JWT 토큰을 기기에 안전하게 저장
-        await storage.write(key: 'jwt_token', value: data['access_token']);
+        final accessToken = data['access_token'] as String;
+        await storage.write(key: 'jwt_token', value: accessToken);
+        await _mirrorTokenToNative(accessToken);
         return {
           "success": true,
           "nickname": data['nickname'],
@@ -164,7 +193,9 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        await storage.write(key: 'jwt_token', value: data['access_token']);
+        final accessToken = data['access_token'] as String;
+        await storage.write(key: 'jwt_token', value: accessToken);
+        await _mirrorTokenToNative(accessToken);
         return {
           "success": true,
           "nickname": data['nickname'],

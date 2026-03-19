@@ -2,6 +2,7 @@ package com.example.biostream.network
 
 import android.content.Context
 import android.util.Log
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -10,6 +11,7 @@ object RetrofitClient {
     private const val DEFAULT_BASE_URL = "http://10.0.2.2:8080/"
     private const val FLUTTER_PREFS = "FlutterSharedPreferences"
     private const val KEY_BASE_ORIGIN = "flutter.api_base_origin"
+    private const val KEY_AUTH_BEARER_TOKEN = "flutter.auth_bearer_token"
 
     @Volatile
     private var cachedBaseUrl: String? = null
@@ -32,6 +34,7 @@ object RetrofitClient {
 
             val retrofit = Retrofit.Builder()
                 .baseUrl(baseUrl)
+                .client(buildHttpClient(context))
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
 
@@ -52,5 +55,19 @@ object RetrofitClient {
 
     private fun ensureTrailingSlash(url: String): String {
         return if (url.endsWith('/')) url else "$url/"
+    }
+
+    private fun buildHttpClient(context: Context): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val prefs = context.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                val token = prefs.getString(KEY_AUTH_BEARER_TOKEN, null)?.trim().orEmpty()
+                val builder = chain.request().newBuilder()
+                if (token.isNotEmpty()) {
+                    builder.header("Authorization", "Bearer $token")
+                }
+                chain.proceed(builder.build())
+            }
+            .build()
     }
 }

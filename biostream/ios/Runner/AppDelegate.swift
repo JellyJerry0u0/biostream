@@ -80,6 +80,16 @@ import UIKit
             )
           )
         }
+      } catch IOSHealthSyncError.authTokenMissing {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "auth_token_missing",
+              message: "Auth token is missing. Please login first.",
+              details: nil
+            )
+          )
+        }
       } catch IOSHealthSyncError.healthAuthorizationDenied {
         await MainActor.run {
           result(
@@ -152,6 +162,16 @@ import UIKit
             )
           )
         }
+      } catch IOSHealthSyncError.authTokenMissing {
+        await MainActor.run {
+          result(
+            FlutterError(
+              code: "auth_token_missing",
+              message: "Auth token is missing. Please login first.",
+              details: nil
+            )
+          )
+        }
       } catch IOSHealthSyncError.healthAuthorizationDenied {
         await MainActor.run {
           result(
@@ -201,6 +221,7 @@ import UIKit
 private enum IOSHealthSyncError: Error {
   case healthDataNotAvailable
   case userIdMissing
+  case authTokenMissing
   case healthAuthorizationDenied
   case invalidApiBaseUrl
   case httpError(statusCode: Int, body: String)
@@ -250,6 +271,7 @@ private final class IOSHealthSyncService {
 
   private let flutterUserIdKey = "flutter.profile_user_id"
   private let flutterApiOriginKey = "flutter.api_base_origin"
+  private let flutterAuthTokenKey = "flutter.auth_bearer_token"
   private let defaultApiOrigin = "http://127.0.0.1:8080"
   private let healthKitErrorDomain = "com.healthkit"
   private let noDataErrorCode = 11
@@ -641,9 +663,11 @@ private final class IOSHealthSyncService {
   }
 
   private func postSyncPayload(payload: IOSHealthPayload, url: URL) async throws {
+    let authToken = try resolveAuthToken()
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
     request.httpBody = try JSONSerialization.data(withJSONObject: payload.dictionary)
 
     let (data, response) = try await URLSession.shared.data(for: request)
@@ -655,5 +679,13 @@ private final class IOSHealthSyncService {
       let body = String(data: data, encoding: .utf8) ?? ""
       throw IOSHealthSyncError.httpError(statusCode: httpResponse.statusCode, body: body)
     }
+  }
+
+  private func resolveAuthToken() throws -> String {
+    guard let token = userDefaults.string(forKey: flutterAuthTokenKey)?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !token.isEmpty else {
+      throw IOSHealthSyncError.authTokenMissing
+    }
+    return token
   }
 }

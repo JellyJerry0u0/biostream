@@ -3,8 +3,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/profile_service.dart';
+import '../services/auth_service.dart';
 import 'my_info/my_info_profile_controller.dart';
 import 'my_info/my_info_visibility_helper.dart';
+import 'onboarding_screen.dart';
 import 'past_face_archive_screen.dart';
 import 'past_report_history_screen.dart';
 import '../widgets/app_bottom_nav_bar.dart';
@@ -27,6 +29,7 @@ class _MyInfoScreenState extends State<MyInfoScreen>
 
   final ImagePicker _imagePicker = ImagePicker();
   final ProfileService _profileService = ProfileService();
+  final AuthService _authService = AuthService();
   late final MyInfoProfileController _profileController =
       MyInfoProfileController(
     profileService: _profileService,
@@ -287,6 +290,15 @@ class _MyInfoScreenState extends State<MyInfoScreen>
     emailController.dispose();
   }
 
+  Future<void> _logout() async {
+    await _authService.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isVisible = MyInfoVisibilityHelper.isMyInfoScreenVisible(context);
@@ -366,7 +378,7 @@ class _MyInfoScreenState extends State<MyInfoScreen>
                                     ),
                                   );
                                 },
-                                onLogout: () {},
+                                onLogout: _logout,
                               ),
                             ),
                           ),
