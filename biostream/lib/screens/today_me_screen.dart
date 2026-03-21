@@ -1,5 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:http/http.dart' as http;
+
+import 'home_screen.dart';
+import 'my_info_screen.dart';
+import 'facescan_screen.dart';
+import 'future_face_compare_screen.dart';
+import 'coach_chat_screen.dart';
 
 class TodayMeScreen extends StatefulWidget {
   const TodayMeScreen({super.key});
@@ -12,22 +20,77 @@ class _TodayMeScreenState extends State<TodayMeScreen> {
   static const Color primary = Color(0xFF2BEE75);
   static const Color bg = Color(0xFFF6F8F6);
 
+  List<Map<String, dynamic>> history = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final res = await http.get(
+        Uri.parse("http://localhost:8000/api/fcm/skin-age-history/1"),
+      );
+
+      final data = jsonDecode(res.body);
+
+      setState(() {
+        history = List<Map<String, dynamic>>.from(data['skin_age_history']);
+        isLoading = false;
+      });
+    } catch (e) {
+      print("API 에러: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  List<FlSpot> _spots() {
+    return List.generate(history.length, (i) {
+      return FlSpot(i.toDouble(), history[i]['age'].toDouble());
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: bg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Stack(
             children: [
-              _header(),
-              _faceCard(),
-              _graphCard(),
-              _activityCard(),
-              _reportList(),
-              _recordButton(),
+              SafeArea(
+                child: Column(
+                  children: [
+                    _topBar(),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 108),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _faceCard(),
+                            const SizedBox(height: 20),
+                            _graphCard(),
+                            const SizedBox(height: 20),
+                            _activityCard(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _bottomNav(context),
             ],
           ),
         ),
@@ -35,259 +98,235 @@ class _TodayMeScreenState extends State<TodayMeScreen> {
     );
   }
 
-  /// ✅ 상단
-  Widget _header() {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+  /// 🔙 상단바 (MyInfo 동일 스타일)
+  Widget _topBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: primary.withOpacity(0.1)),
+        ),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.arrow_back_ios_new, size: 18),
+            ),
+          ),
+          const Expanded(
+            child: Text(
+              '오늘의 나',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ),
+          const SizedBox(width: 40),
+        ],
+      ),
+    );
+  }
+
+  /// 얼굴 카드
+  Widget _faceCard() {
+    return Container(
+      height: 260,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        image: const DecorationImage(
+          image: NetworkImage(
+              "https://images.unsplash.com/photo-1527980965255-d3b416303d12"),
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+
+  /// 그래프 (API 유지)
+  Widget _graphCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("2024년 5월 24일",
-              style: TextStyle(fontSize: 12, color: Color(0xFF7A8380))),
-          SizedBox(height: 4),
-          Text("오늘의 나",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  /// ✅ 얼굴 카드
-  Widget _faceCard() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        height: 300,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          image: const DecorationImage(
-            image: NetworkImage(
-                "https://lh3.googleusercontent.com/aida-public/AB6AXuDcE5q_Esr_MHKVrXd8SBkI7pdqDBfYtByECWmGx4SxcKr9XVzrUp0Q3onHL2Dm5HsS1to8RiOufjQkZwqT5ll6qhNJzZokn5AmOvVCafALQ6jbLKtWJ1izG1LFTlh4EsA1vlAOqH8y0X8MlQ16vWO2--WejX_JUDuX7nFapkopER4m7U4X76atduqJLTgUrsRqrD_19_UT6JuO7wM886RJKztU_K5B-mE6Gz-6O7KmUUDUS7hEicxgVMeNxyPWpqrUy8E5Cxq-Xqk"),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          alignment: Alignment.bottomLeft,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              colors: [Colors.black.withOpacity(0.5), Colors.transparent],
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-            ),
-          ),
-          child: const Text(
-            "생성 시간: 오전 08:30",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// ✅ 그래프 카드 (🔥 업그레이드 완료)
-  Widget _graphCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Color(0xFFE7F3EC)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("피부 나이 변화 추이",
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-
-            Container(
-              height: 140,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F8F7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: LineChart(
-                  LineChartData(
-                    gridData: FlGridData(show: false),
-                    borderData: FlBorderData(show: false),
-                    titlesData: FlTitlesData(show: false),
-
-                    lineBarsData: [
-                      LineChartBarData(
-                        isCurved: true,
-                        color: primary,
-                        barWidth: 3,
-
-                        dotData: FlDotData(show: true),
-
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: primary.withOpacity(0.2),
-                        ),
-
-                        spots: [
-                          FlSpot(0, 30),
-                          FlSpot(1, 29),
-                          FlSpot(2, 28),
-                          FlSpot(3, 28),
-                        ],
-                      ),
-                    ],
+          const Text("피부 나이 변화 추이",
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 140,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(show: true),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        if (value.toInt() >= history.length) {
+                          return const Text('');
+                        }
+                        final date = history[value.toInt()]['date'];
+                        return Text(
+                          "${date.split('-')[1]}/${date.split('-')[2]}",
+                          style: const TextStyle(fontSize: 10),
+                        );
+                      },
+                    ),
                   ),
+                  leftTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: _spots(),
+                    isCurved: true,
+                    color: primary,
+                    barWidth: 3,
+                  )
+                ],
               ),
             ),
-
-            const SizedBox(height: 10),
-
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("5/10"),
-                Text("5/14"),
-                Text("5/18"),
-                Text("오늘"),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            const Text("현재 피부 나이: 28세",
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// ✅ 활동 카드
-  Widget _activityCard() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Color(0xFFE7F3EC)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("어제의 나의 활동",
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              children: const [
-                _MetricBox("거리", "5.2 km"),
-                _MetricBox("운동", "45 min"),
-                _MetricBox("수면", "7.5 hr"),
-                _MetricBox("혈당", "92 mg/dL"),
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// ✅ 리포트 리스트
-  Widget _reportList() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: const [
-          _ReportItem("5월 24일", "피부 나이 28세"),
-          _ReportItem("5월 23일", "피부 나이 29세"),
-          _ReportItem("5월 22일", "피부 나이 30세"),
+          ),
         ],
       ),
     );
   }
 
-  /// ✅ 기록 버튼
-  Widget _recordButton() {
-    return Padding(
+  /// 활동 카드 (UI 복구)
+  Widget _activityCard() {
+    return Container(
       padding: const EdgeInsets.all(20),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF102217),
-          padding: const EdgeInsets.all(18),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.2,
+        children: const [
+          _MetricBox("이동 거리", "5.2", "km", Icons.map),
+          _MetricBox("걸음 수", "8432", "보", Icons.directions_walk),
+          _MetricBox("산소 포화도", "98", "%", Icons.favorite),
+          _MetricBox("수면 시간", "7.5", "시간", Icons.bedtime),
+        ],
+      ),
+    );
+  }
+
+  /// 네비게이션 (핵심 수정)
+  Widget _bottomNav(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: 90,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            top: BorderSide(color: primary.withOpacity(0.1)),
+          ),
         ),
-        onPressed: () {},
-        child: const Row(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Icon(Icons.camera_alt, color: primary),
-            SizedBox(width: 12),
-            Text("오늘의 얼굴 기록하기",
-                style: TextStyle(color: Colors.white)),
+            _nav(Icons.timer, true, () {}),
+            _nav(Icons.assignment, false, () {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => const FaceScanScreen()));
+            }),
+            _nav(Icons.home, false, () {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+            }),
+            _nav(Icons.face, false, () {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => const FutureFaceCompareScreen()));
+            }),
+            _nav(Icons.chat, false, () {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => const CoachChatScreen()));
+            }),
+            _nav(Icons.person, false, () {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => const MyInfoScreen()));
+            }),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _nav(IconData icon, bool active, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: active ? primary : Colors.grey),
+          const SizedBox(height: 4),
+          Text("",
+              style: TextStyle(
+                  fontSize: 10,
+                  color: active ? primary : Colors.grey)),
+        ],
       ),
     );
   }
 }
 
-/// ===============================
-/// 컴포넌트들
-/// ===============================
-
+/// 카드 UI 유지
 class _MetricBox extends StatelessWidget {
   final String title;
   final String value;
+  final String unit;
+  final IconData icon;
 
-  const _MetricBox(this.title, this.value);
+  const _MetricBox(this.title, this.value, this.unit, this.icon);
 
   @override
   Widget build(BuildContext context) {
+    const primary = Color(0xFF2BEE75);
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6F8F7),
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFFF6F8F6),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Icon(icon, color: primary, size: 20),
+          const Spacer(),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text("$title · $unit",
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
         ],
-      ),
-    );
-  }
-}
-
-class _ReportItem extends StatelessWidget {
-  final String date;
-  final String value;
-
-  const _ReportItem(this.date, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        tileColor: const Color(0xFFF6F8F7),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
-        title: Text(date),
-        subtitle: Text(value),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       ),
     );
   }

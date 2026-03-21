@@ -10,6 +10,8 @@ from .database import engine, get_db
 from . import models
 from .api import auth, data, health, notification  # 만약 경로 에러가 나면 from app.api import auth로 시도
 from .scheduler import start_scheduler, stop_scheduler
+from app.api import analytics
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -54,6 +56,7 @@ init_db()
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(data.router, prefix="/data", tags=["Data Collection"])
 app.include_router(health.router)
+app.include_router(analytics.router, prefix="/api/fcm", tags=["Analytics"])
 app.include_router(notification.router)
 
 # Lifestyle 설문조사 API (Lifestyle 모델 기반)
