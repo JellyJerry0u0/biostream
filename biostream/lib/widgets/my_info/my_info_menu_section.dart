@@ -4,13 +4,15 @@ class MyInfoMenuSection extends StatelessWidget {
   const MyInfoMenuSection({
     super.key,
     required this.onOpenPastReports,
-    required this.onOpenPastFaces,
+    required this.onEditProfile,
     required this.onLogout,
+    this.onNotificationSettings,
   });
 
   final VoidCallback onOpenPastReports;
-  final VoidCallback onOpenPastFaces;
+  final VoidCallback onEditProfile;
   final VoidCallback onLogout;
+  final VoidCallback? onNotificationSettings;
 
   static const Color _primary = Color(0xFF2BEE75);
 
@@ -22,36 +24,24 @@ class MyInfoMenuSection extends StatelessWidget {
         _sectionTitle('활동 및 설정'),
         const SizedBox(height: 10),
         _menuTile(
-          icon: Icons.payments,
-          title: '나의 포인트 내역',
-          subtitle: '포인트 적립 및 사용 내역 확인',
-          trailingText: '2,450 P',
-        ),
-        const SizedBox(height: 10),
-        _menuTile(
           icon: Icons.analytics,
           title: '과거 리포트 조회',
-          subtitle: '지금까지 분석된 노화 예측 리포트',
+          subtitle: '생성일 기준으로 이전 리포트를 다시 열어봅니다',
           onTap: onOpenPastReports,
-        ),
-        const SizedBox(height: 10),
-        _menuTile(
-          icon: Icons.face_retouching_natural,
-          title: '과거 얼굴 조회',
-          subtitle: '생성했던 AI 미래 얼굴 아카이브',
-          onTap: onOpenPastFaces,
         ),
         const SizedBox(height: 10),
         _menuTile(
           icon: Icons.person,
           title: '내 정보 수정',
-          subtitle: '개인정보 및 헬스케어 목표 설정',
+          subtitle: '이메일·닉네임·키·몸무게',
+          onTap: onEditProfile,
         ),
         const SizedBox(height: 10),
         _menuTile(
           icon: Icons.notifications,
           title: '알림 설정',
           subtitle: '푸시 알림 및 분석 리마인더 관리',
+          onTap: onNotificationSettings,
         ),
         const SizedBox(height: 28),
         Center(

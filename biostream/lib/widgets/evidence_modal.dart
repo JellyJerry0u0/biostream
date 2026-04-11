@@ -68,7 +68,7 @@ class EvidenceModal extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 정량 근거
+                  // 정량 근거 — 논문 제목 + Paper ID만 (서술 근거와 동일 톤)
                   if (quantRefs.isNotEmpty) ...[
                     Text(
                       '정량 근거',
@@ -86,32 +86,27 @@ class EvidenceModal extends StatelessWidget {
                             return const SizedBox.shrink();
                           }
                           final refMap = ref;
+                          final rawTitle =
+                              refMap['title']?.toString().trim() ?? '';
                           final outcome =
-                              refMap['outcome_mapped']?.toString() ?? '';
-                          final timeframe =
-                              refMap['timeframe_days']?.toString() ?? '';
-                          final effect =
-                              refMap['effect_signed_value']?.toString() ?? '';
-                          final unit = refMap['effect_unit']?.toString() ?? '%';
-                          final pLabel = refMap['p_label']?.toString() ?? '';
-                          final sourceSnippet =
-                              refMap['source_snippet']?.toString();
-
-                          return _buildExpandableCard(
+                              refMap['outcome_mapped']?.toString().trim() ?? '';
+                          final title = rawTitle.isNotEmpty
+                              ? rawTitle
+                              : (outcome.isNotEmpty ? outcome : '정량 근거');
+                          final paperId =
+                              refMap['paper_id']?.toString().trim() ?? '';
+                          return _buildPaperCitationCard(
                             context,
                             isDark,
-                            title: outcome.isNotEmpty ? outcome : '정량 근거',
-                            subtitle:
-                                '$timeframe일 후: $effect$unit${pLabel.isNotEmpty ? ' (근거 강도: $pLabel)' : ''}',
-                            content: sourceSnippet,
+                            title: title,
+                            paperId: paperId,
                           );
                         })
-                        .where((widget) => widget is! SizedBox)
-                        ,
+                        .where((widget) => widget is! SizedBox),
                     SizedBox(height: Responsive.padding(context, 24)),
                   ],
 
-                  // 서술 근거
+                  // 서술 근거 — 논문 제목 + Paper ID만
                   if (narrativeRefs.isNotEmpty) ...[
                     Text(
                       '서술 근거',
@@ -129,53 +124,21 @@ class EvidenceModal extends StatelessWidget {
                             return const SizedBox.shrink();
                           }
                           final refMap = ref;
-                          final title = refMap['title']?.toString() ?? '';
-                          final paperId = refMap['paper_id']?.toString() ?? '';
-                          final chunkId = refMap['chunk_id']?.toString() ?? '';
-
-                          return Container(
-                            margin: EdgeInsets.only(
-                                bottom: Responsive.padding(context, 8)),
-                            padding:
-                                EdgeInsets.all(Responsive.padding(context, 12)),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.black.withValues(alpha: 0.2)
-                                  : Colors.grey[50],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (title.isNotEmpty)
-                                  Text(
-                                    title,
-                                    style: TextStyle(
-                                      fontSize:
-                                          Responsive.fontSize(context, 13),
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                SizedBox(
-                                    height: Responsive.padding(context, 4)),
-                                Text(
-                                  'Paper ID: $paperId | Chunk: $chunkId',
-                                  style: TextStyle(
-                                    fontSize: Responsive.fontSize(context, 11),
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
+                          final rawTitle =
+                              refMap['title']?.toString().trim() ?? '';
+                          final title = rawTitle.isNotEmpty
+                              ? rawTitle
+                              : '논문 제목 없음';
+                          final paperId =
+                              refMap['paper_id']?.toString().trim() ?? '';
+                          return _buildPaperCitationCard(
+                            context,
+                            isDark,
+                            title: title,
+                            paperId: paperId,
                           );
                         })
-                        .where((widget) => widget is! SizedBox)
-                        ,
+                        .where((widget) => widget is! SizedBox),
                   ],
 
                   if (quantRefs.isEmpty && narrativeRefs.isEmpty)
@@ -203,63 +166,46 @@ class EvidenceModal extends StatelessWidget {
     );
   }
 
-  Widget _buildExpandableCard(
+  /// 논문 제목 + Paper ID만 표시 (스니펫·Chunk·정량 수치 제외)
+  Widget _buildPaperCitationCard(
     BuildContext context,
     bool isDark, {
     required String title,
-    required String subtitle,
-    String? content,
+    required String paperId,
   }) {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return Container(
-          margin: EdgeInsets.only(bottom: Responsive.padding(context, 8)),
-          decoration: BoxDecoration(
-            color:
-                isDark ? Colors.black.withValues(alpha: 0.2) : Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
+    final idLine =
+        paperId.isNotEmpty ? 'Paper ID: $paperId' : 'Paper ID: —';
+    return Container(
+      margin: EdgeInsets.only(bottom: Responsive.padding(context, 8)),
+      padding: EdgeInsets.all(Responsive.padding(context, 12)),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.2)
+            : Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 13),
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.all(Responsive.padding(context, 12)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: Responsive.fontSize(context, 13),
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    SizedBox(height: Responsive.padding(context, 4)),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: Responsive.fontSize(context, 11),
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                    if (content != null && content.isNotEmpty) ...[
-                      SizedBox(height: Responsive.padding(context, 8)),
-                      Text(
-                        content,
-                        style: TextStyle(
-                          fontSize: Responsive.fontSize(context, 12),
-                          color: isDark ? Colors.grey[300] : Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+          SizedBox(height: Responsive.padding(context, 4)),
+          Text(
+            idLine,
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 11),
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

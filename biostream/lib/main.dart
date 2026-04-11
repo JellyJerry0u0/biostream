@@ -5,9 +5,11 @@ import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_config.dart';
 import 'services/auth_service.dart';
+import 'services/lifestyle_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/notification_service.dart';
+import 'services/uv_prompt_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,12 +35,17 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  static const MethodChannel _devChannel = MethodChannel('com.example.biostream/dev');
+  static const MethodChannel _devChannel =
+      MethodChannel('com.example.biostream/dev');
   static const String _yesterdaySyncDateKey = 'yesterday_health_sync_date';
   static const String _todaySyncDateKey = 'today_health_sync_date';
   bool _isSyncingYesterday = false;
   bool _isSyncingToday = false;
   final AuthService _authService = AuthService();
+  final UvPromptService _uvPromptService = UvPromptService(
+    lifestyleService: LifestyleService(),
+    notificationService: NotificationService.instance,
+  );
   late final Future<bool> _sessionFuture;
 
   @override
@@ -48,6 +55,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _syncYesterdayHealthAfterOneAmOnForeground();
     _syncTodayHealthOnForeground();
+    _uvPromptService.maybeAskOutdoorPrompt();
   }
 
   @override
@@ -61,6 +69,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _syncYesterdayHealthAfterOneAmOnForeground();
       _syncTodayHealthOnForeground();
+      _uvPromptService.maybeAskOutdoorPrompt();
     }
   }
 
@@ -74,7 +83,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      final yesterday = now.subtract(const Duration(days: 1)).toIso8601String().split('T').first;
+      final yesterday = now
+          .subtract(const Duration(days: 1))
+          .toIso8601String()
+          .split('T')
+          .first;
       final lastSyncedDate = prefs.getString(_yesterdaySyncDateKey);
 
       if (lastSyncedDate == yesterday) {
@@ -120,6 +133,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MaterialApp(
       title: 'SkinAI Onboarding',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => child ?? const SizedBox.shrink(),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -152,4 +166,3 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 }
-

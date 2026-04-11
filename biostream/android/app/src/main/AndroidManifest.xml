@@ -72,6 +72,9 @@
                 <data android:scheme="kakao2a989319843d4d7fa3409daeb094d0ca" android:host="oauth"/>
             </intent-filter>
         </activity>
+        <receiver
+            android:name="com.example.biostream.receiver.UvOutdoorActionReceiver"
+            android:exported="false" />
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

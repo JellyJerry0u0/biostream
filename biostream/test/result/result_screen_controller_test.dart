@@ -21,7 +21,7 @@ class _FakeLifestyleService extends LifestyleService {
     },
   };
   final List<bool> forceFlags = [];
-
+  final List<int> generateRequestIds = [];
   @override
   Future<Map<String, dynamic>> getLifestyleData() async {
     return lifestyleDataResponse;
@@ -35,6 +35,19 @@ class _FakeLifestyleService extends LifestyleService {
   }) async {
     forceFlags.add(force);
     return generateReportResponse;
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestGenerateDefault(int lifestyleId) async {
+    generateRequestIds.add(lifestyleId);
+    return const {'success': true};
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestSkinEdit({
+    required int lifestyleId,
+  }) async {
+    return const {'success': true};
   }
 }
 

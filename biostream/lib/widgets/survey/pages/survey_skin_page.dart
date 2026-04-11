@@ -8,25 +8,19 @@ class SurveySkinPage extends StatelessWidget {
     super.key,
     required this.isDark,
     required this.skinType,
-    required this.skinConcerns,
     required this.skinSatisfaction,
     required this.onSkinTypeChanged,
-    required this.onSkinConcernToggled,
     required this.onSkinSatisfactionChanged,
     required this.choiceBuilder,
-    required this.chipBuilder,
     required this.sliderBuilder,
   });
 
   final bool isDark;
   final String? skinType;
-  final List<String> skinConcerns;
   final double skinSatisfaction;
   final ValueChanged<String?> onSkinTypeChanged;
-  final ValueChanged<String> onSkinConcernToggled;
   final ValueChanged<double> onSkinSatisfactionChanged;
   final SurveyChoiceBuilder choiceBuilder;
-  final SurveyChipBuilder chipBuilder;
   final SurveySliderBuilder sliderBuilder;
 
   @override
@@ -36,15 +30,6 @@ class SurveySkinPage extends StatelessWidget {
       {'value': 'oily', 'label': '지성'},
       {'value': 'combination', 'label': '복합성'},
       {'value': 'sensitive', 'label': '민감성'},
-    ];
-
-    const skinConcernOptions = [
-      {'value': 'wrinkle', 'label': '주름'},
-      {'value': 'pigmentation', 'label': '색소'},
-      {'value': 'elasticity', 'label': '탄력'},
-      {'value': 'dryness', 'label': '건조'},
-      {'value': 'redness', 'label': '홍조'},
-      {'value': 'acne', 'label': '트러블'},
     ];
 
     return SingleChildScrollView(
@@ -79,30 +64,6 @@ class SurveySkinPage extends StatelessWidget {
                     label: option['label']!,
                     isSelected: skinType == option['value'],
                     onTap: () => onSkinTypeChanged(option['value']),
-                    isDark: isDark,
-                  );
-                }).toList(),
-              ),
-              SizedBox(height: Responsive.padding(context, 24)),
-              Text(
-                '주요 피부 고민 (복수 선택 가능)',
-                style: TextStyle(
-                  fontSize: Responsive.fontSize(context, 14),
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-              SizedBox(height: Responsive.padding(context, 12)),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: Responsive.padding(context, 12),
-                runSpacing: Responsive.padding(context, 12),
-                children: skinConcernOptions.map((option) {
-                  final value = option['value']!;
-                  return chipBuilder(
-                    label: option['label']!,
-                    isSelected: skinConcerns.contains(value),
-                    onTap: () => onSkinConcernToggled(value),
                     isDark: isDark,
                   );
                 }).toList(),

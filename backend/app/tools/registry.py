@@ -6,10 +6,10 @@ Tool Registry — MCP 대비 도구 레이어
 - ToolRegistry 에 등록하고, run(tool_id, payload, context) 로 실행
 """
 
-from typing import Dict, Any, List, Optional, Type
+from typing import Dict, Any, List, Optional, Type, Tuple
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, timedelta
 
 
 # ══════════════════════════════════════════════
@@ -220,18 +220,18 @@ class FetchReportSummaryTool(BaseTool):
         if not self._get_db:
             return ToolResult(success=False, error="DB 접속 불가")
         try:
-            from app.models import Lifestyle
+            from app.models import Lifestyle, Report
 
             db = next(self._get_db())
-            lifestyle = (
-                db.query(Lifestyle)
-                .filter(Lifestyle.id == payload.report_id)
+            report_row = (
+                db.query(Report)
+                .filter(Report.lifestyle_id == payload.report_id)
                 .first()
             )
-            if not lifestyle or not lifestyle.health_report:
+            if not report_row or not report_row.report:
                 return ToolResult(success=False, error="리포트를 찾을 수 없음")
 
-            summary = _extract_report_summary(lifestyle.health_report)
+            summary = _extract_report_summary(report_row.report)
             return ToolResult(success=True, data=summary)
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -254,6 +254,9 @@ def _extract_report_summary(report: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(section, dict):
             continue
         cards = section.get("cards", [])
+        if not cards and section.get("subsections"):
+            sub = section["subsections"][0] if section["subsections"] else {}
+            cards = sub.get("cards", [])
         card_summaries = []
         for card in cards:
             ctype = card.get("type", "")
@@ -271,6 +274,103 @@ def _extract_report_summary(report: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ══════════════════════════════════════════════
+#  내장 도구 4) get_habits_summary — 습관 체크인 요약 조회
+# ══════════════════════════════════════════════
+
+class GetHabitsSummaryInput(BaseModel):
+    days: Optional[int] = Field(7, description="조회할 일수 (기본 7일)")
+
+
+class GetHabitsSummaryTool(BaseTool):
+    id = "get_habits_summary"
+    name = "습관 실천 현황 조회"
+    description = "사용자가 '할게요'로 선택한 습관과 최근 체크인(했어요/못했어요) 현황을 조회합니다. 실천률이 낮거나 연속 미실천 시 격려가 필요한 사용자 판단에 활용하세요."
+    input_schema = GetHabitsSummaryInput
+
+    def __init__(self, db_getter=None):
+        self._get_db = db_getter
+
+    async def run(
+        self, payload: GetHabitsSummaryInput, context: ToolContext
+    ) -> ToolResult:
+        if not self._get_db or not context.user_id:
+            return ToolResult(success=False, error="DB 또는 user_id 없음")
+        try:
+            from app.models import UserCommittedAction, ActionCheckIn
+
+            db = next(self._get_db())
+            days = min(max(payload.days or 7, 1), 30)
+            today = date.today()
+            from_date = today - timedelta(days=days)
+
+            actions = (
+                db.query(UserCommittedAction)
+                .filter(
+                    UserCommittedAction.user_id == context.user_id,
+                    UserCommittedAction.status == "active",
+                )
+                .order_by(UserCommittedAction.committed_at.desc())
+                .all()
+            )
+            if not actions:
+                return ToolResult(
+                    success=True,
+                    data={
+                        "habits": [],
+                        "summary": "등록된 습관이 없습니다.",
+                        "days": days,
+                    },
+                )
+
+            action_ids = [a.id for a in actions]
+            check_ins = (
+                db.query(ActionCheckIn)
+                .filter(
+                    ActionCheckIn.committed_action_id.in_(action_ids),
+                    ActionCheckIn.check_date >= from_date,
+                    ActionCheckIn.check_date <= today,
+                )
+                .all()
+            )
+
+            by_action: Dict[int, List[Tuple[date, bool]]] = {
+                aid: [] for aid in action_ids
+            }
+            for c in check_ins:
+                by_action.setdefault(c.committed_action_id, []).append(
+                    (c.check_date, c.completed)
+                )
+            for aid in by_action:
+                by_action[aid].sort(key=lambda x: x[0], reverse=True)
+
+            habits = []
+            for a in actions:
+                checks = by_action.get(a.id, [])
+                completed_count = sum(1 for _, done in checks if done)
+                total = len(checks)
+                rate = (completed_count / total * 100) if total else 0
+                today_done = next((c for d, c in checks if d == today), None)
+                habits.append({
+                    "action_title": a.action_title,
+                    "section_key": a.section_key,
+                    "completed_count": completed_count,
+                    "total_days": total,
+                    "rate_pct": round(rate, 1),
+                    "today_completed": today_done,
+                })
+            summary = (
+                f"최근 {days}일간 {len(habits)}개 습관 중 "
+                f"평균 실천률 {sum(h['rate_pct'] for h in habits) / len(habits):.0f}%"
+            )
+            return ToolResult(
+                success=True,
+                data={"habits": habits, "summary": summary, "days": days},
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+
+# ══════════════════════════════════════════════
 #  레지스트리 팩토리
 # ══════════════════════════════════════════════
 
@@ -280,4 +380,5 @@ def create_default_registry(db_getter=None) -> ToolRegistry:
     registry.register(SaveGoalTool())
     registry.register(GenerateTodayPlanTool())
     registry.register(FetchReportSummaryTool(db_getter))
+    registry.register(GetHabitsSummaryTool(db_getter))
     return registry

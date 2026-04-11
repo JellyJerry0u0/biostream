@@ -37,11 +37,20 @@ class SessionData:
     report_summary_cache: Optional[Dict[str, Any]] = None
     rag_cache: List[Dict[str, Any]] = field(default_factory=list)
 
-    # 엔진 모드: "quick" (함수 체이닝) | "deep" (LangGraph + tool calling)
+    # 엔진 모드: "quick" | "coach" (LangGraph 적응형 코치)
     engine: str = "quick"
+
+    # 코치 에이전트 지속 상태 (목표·에피소드·코칭 메모리 JSON)
+    coach_agent_persisted: Dict[str, Any] = field(default_factory=dict)
+
+    # 마지막 코치 턴에서 제안된 목표 조정 (동의 API와 매칭)
+    coach_pending_goal_updates: List[Dict[str, Any]] = field(default_factory=list)
 
     # 마지막 RAG 검색 결과 텍스트 (근거 보기에서 사용)
     last_rag_text: Optional[str] = None
+
+    # 코치 모드 등에서 하루 치 대화 유지용 (None이면 MAX_HISTORY_TURNS 사용)
+    history_cap: Optional[int] = None
 
     created_at: float = field(default_factory=time.time)
     last_active: float = field(default_factory=time.time)
@@ -52,16 +61,20 @@ class SessionData:
     # ── 히스토리 ──
 
     def add_turn(self, role: str, content: str):
-        """대화 턴 추가 (최근 MAX_HISTORY_TURNS 쌍만 유지)"""
+        """대화 턴 추가 (최근 N턴 쌍만 유지 — 코치 모드는 history_cap으로 확장 가능)"""
         self.history.append(ChatTurn(role=role, content=content))
-        max_items = self.MAX_HISTORY_TURNS * 2
+        cap_turns = self.history_cap if self.history_cap is not None else self.MAX_HISTORY_TURNS
+        cap_turns = max(self.MAX_HISTORY_TURNS, cap_turns)
+        max_items = cap_turns * 2
         if len(self.history) > max_items:
             self.history = self.history[-max_items:]
         self.last_active = time.time()
 
     def get_history_for_prompt(self) -> List[Dict[str, str]]:
         """프롬프트에 넣을 최근 히스토리"""
-        recent = self.history[-(self.MAX_HISTORY_TURNS * 2):]
+        cap_turns = self.history_cap if self.history_cap is not None else self.MAX_HISTORY_TURNS
+        cap_turns = max(self.MAX_HISTORY_TURNS, cap_turns)
+        recent = self.history[-(cap_turns * 2) :]
         return [{"role": t.role, "content": t.content} for t in recent]
 
     # ── RAG 캐시 ──

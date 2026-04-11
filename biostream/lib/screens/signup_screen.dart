@@ -6,11 +6,13 @@ import 'facescan_screen.dart';
 import 'login_screen.dart';
 import 'profile_completion_screen.dart';
 import 'signup/signup_controller.dart';
+import '../widgets/signup/signup_smoking_section.dart';
 import '../services/auth_service.dart';
 import '../widgets/signup/signup_form_fields.dart';
 import '../widgets/signup/signup_gender_pregnancy_section.dart';
 import '../widgets/signup/signup_header.dart';
 import '../widgets/signup/signup_hero_footer.dart';
+import '../utils/app_snackbar.dart';
 import '../widgets/signup/signup_social_section.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -34,6 +36,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _agreeToTerms = false;
   String? _selectedGender;
   bool? _isPregnant; // 임신 여부 (여성일 경우에만 사용)
+  String? _selectedSmoking; // 흡연 여부: never / former / current
   DateTime? _selectedDate;
 
   @override
@@ -102,13 +105,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
       gender: _selectedGender,
       agreeToTerms: _agreeToTerms,
       isPregnant: _isPregnant,
+      smokingStatus: _selectedSmoking,
     );
 
     final result = await _signUpController.submit(input);
     if (!mounted) return;
 
-    _showSnackBar(result.message);
     if (!result.success) {
+      showErrorSnackBar(context, result.message);
       return;
     }
 
@@ -129,18 +133,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _onKakaoSignUp() async {
-    _showSnackBar('카카오로 가입 중...');
     final result = await _authService.loginWithKakao();
     if (!mounted) return;
     if (result['success']) {
@@ -152,7 +145,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       );
     } else {
-      _showSnackBar(result['message']);
+      showErrorSnackBar(context, result['message']?.toString() ?? '카카오 가입에 실패했습니다.');
     }
   }
 
@@ -254,6 +247,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   _isPregnant = value;
                                 });
                               },
+                            ),
+                            SizedBox(height: Responsive.padding(context, 20)),
+                            SignUpSmokingSection(
+                              isDark: isDark,
+                              selectedSmoking: _selectedSmoking,
+                              onSelectSmoking: (v) =>
+                                  setState(() => _selectedSmoking = v),
                             ),
                             SizedBox(height: Responsive.padding(context, 8)),
                             SignUpTermsAgreementRow(

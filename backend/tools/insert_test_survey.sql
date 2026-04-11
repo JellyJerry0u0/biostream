@@ -38,14 +38,11 @@ INSERT INTO lifestyles (
     smoking_status,
     smoking_amount_per_day,
     stress_score,
-    caffeine_intake,
-    caffeine_timing,
     aerobic_weekly,
     resistance_weekly,
     height,
     weight,
     skin_type,
-    skin_concerns,
     skin_satisfaction,
     target_years,
     created_at
@@ -66,16 +63,13 @@ VALUES (
     'never',  -- 흡연 상태
     NULL,  -- 하루 흡연량
     7.0,  -- 스트레스 점수 (0~10)
-    '2',  -- 카페인 섭취량
-    'afternoon',  -- 카페인 섭취 시간
     '3-4',  -- 주당 유산소
     '2',  -- 주당 근력운동
     165.0,  -- 키 (cm)
     55.0,  -- 몸무게 (kg)
     'combination',  -- 피부 타입
-    '["wrinkle", "pigmentation", "dryness"]'::json,  -- 피부 고민
     5.0,  -- 피부 만족도 (0~10)
-    10,  -- 10년 후 예측
+    30,  -- 목표 연도 (고정값)
     NOW()
 )
 ON CONFLICT (id) DO UPDATE SET
@@ -91,14 +85,11 @@ ON CONFLICT (id) DO UPDATE SET
     drinking_amount_per_session = EXCLUDED.drinking_amount_per_session,
     smoking_status = EXCLUDED.smoking_status,
     stress_score = EXCLUDED.stress_score,
-    caffeine_intake = EXCLUDED.caffeine_intake,
-    caffeine_timing = EXCLUDED.caffeine_timing,
     aerobic_weekly = EXCLUDED.aerobic_weekly,
     resistance_weekly = EXCLUDED.resistance_weekly,
     height = EXCLUDED.height,
     weight = EXCLUDED.weight,
     skin_type = EXCLUDED.skin_type,
-    skin_concerns = EXCLUDED.skin_concerns,
     skin_satisfaction = EXCLUDED.skin_satisfaction,
     target_years = EXCLUDED.target_years;
 

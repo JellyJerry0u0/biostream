@@ -19,7 +19,7 @@ class _FakeCoachWsClient extends CoachWsClient {
   void disconnect() {}
 
   @override
-  void sendUserMessage(String message, {String mode = 'auto'}) {
+  void sendUserMessage(String message, {String mode = 'auto', String? engine}) {
     sentUserMessage = message;
   }
 
@@ -30,7 +30,7 @@ class _FakeCoachWsClient extends CoachWsClient {
   }
 
   @override
-  void sendModeSwitch(String engine) {
+  void sendModeSwitch(String engine, {String? context}) {
     sentModeEngine = engine;
   }
 
@@ -167,13 +167,13 @@ void main() {
       controller.connect(reportId: 11);
       controller.sendUserMessage('테스트');
       controller.sendAction(action);
-      controller.sendModeSwitch(CoachEngine.deep);
+      controller.sendModeSwitch(CoachEngine.coach);
 
       expect(fakeWs.connectedReportId, 11);
       expect(fakeWs.sentUserMessage, '테스트');
       expect(fakeWs.sentActionId, 'save_goal');
       expect(fakeWs.sentActionPayload, {'goal': 'sleep'});
-      expect(fakeWs.sentModeEngine, 'deep');
+      expect(fakeWs.sentModeEngine, 'coach');
     });
   });
 }

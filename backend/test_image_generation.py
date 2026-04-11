@@ -9,7 +9,7 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 if backend_dir not in sys.path:
     sys.path.append(backend_dir)
 
-from langgraph_modules.report_graph import generate_report
+from report_modules.report_graph import generate_report
 
 def test_image_generation():
     """기존 lifestyle 데이터로 리포트 + 이미지 생성 테스트"""

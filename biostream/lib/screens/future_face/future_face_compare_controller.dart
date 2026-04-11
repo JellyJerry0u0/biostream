@@ -4,13 +4,16 @@ import '../../services/lifestyle_service.dart';
 class FutureFaceLoadResult {
   const FutureFaceLoadResult({
     required this.futureImageUrl,
-    required this.currentImageUrl,
+    required this.leftImageUrl,
     required this.simulationPromptText,
     required this.errorMessage,
   });
 
+  /// 미래 얼굴 탭 슬라이더 왼쪽: 동일 /generate 입력 + **습관 점수 전부 100** skin-edit.
+  /// 없으면(구 데이터) 촬영 원본으로 폴백.
+  final String? leftImageUrl;
+  /// 미래 얼굴 탭 슬라이더 오른쪽: 동일 입력 + **설문 생활습관** skin-edit(`generated_image_url`).
   final String? futureImageUrl;
-  final String? currentImageUrl;
   final String simulationPromptText;
   final String? errorMessage;
 }
@@ -29,12 +32,15 @@ class FutureFaceCompareController {
       final data = result['data'] as Map<String, dynamic>? ?? {};
       final generatedImage =
           await _resolveImageUrl(data['generated_image_url']?.toString());
+      final idealHabitsImage =
+          await _resolveImageUrl(data['ideal_habits_skin_image_url']?.toString());
       final originalImage =
           await _resolveImageUrl(data['original_image_url']?.toString());
+      final leftImage = idealHabitsImage ?? originalImage;
 
       return FutureFaceLoadResult(
         futureImageUrl: generatedImage,
-        currentImageUrl: originalImage,
+        leftImageUrl: leftImage,
         simulationPromptText:
             (data['simulation_prompt_text']?.toString().trim() ?? ''),
         errorMessage: null,
@@ -43,7 +49,7 @@ class FutureFaceCompareController {
 
     return FutureFaceLoadResult(
       futureImageUrl: null,
-      currentImageUrl: null,
+      leftImageUrl: null,
       simulationPromptText: '',
       errorMessage: result['message']?.toString() ?? '이미지를 불러오지 못했습니다.',
     );

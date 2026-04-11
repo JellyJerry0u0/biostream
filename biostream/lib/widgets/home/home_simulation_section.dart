@@ -78,7 +78,7 @@ class HomeSimulationSection extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        '미래 시뮬레이션',
+                        '주간 안티에이징 AI 리포트',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 28,
@@ -88,7 +88,7 @@ class HomeSimulationSection extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '생활 습관 기반의 노화 타임랩스',
+                        '30년 뒤 노화 시나리오를 확인해보세요',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.6),
                           fontSize: 13,

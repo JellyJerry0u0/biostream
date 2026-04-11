@@ -16,6 +16,7 @@ class SignUpSubmissionInput {
     required this.gender,
     required this.agreeToTerms,
     this.isPregnant,
+    this.smokingStatus,
   });
 
   final String email;
@@ -26,6 +27,7 @@ class SignUpSubmissionInput {
   final String? gender;
   final bool agreeToTerms;
   final bool? isPregnant;
+  final String? smokingStatus; // never / former / current
 }
 
 class SignUpSubmissionResult {
@@ -62,6 +64,7 @@ class SignUpController {
     final birthdate = input.birthdate.trim();
     final gender = input.gender!;
     final isPregnant = gender == '여성' ? input.isPregnant : null;
+    final smokingStatus = input.smokingStatus;
 
     final signUpResult = await _authService.signUp(
       email,
@@ -70,6 +73,7 @@ class SignUpController {
       birthdate,
       gender,
       isPregnant,
+      smokingStatus: smokingStatus,
     );
 
     if (signUpResult['success'] != true) {
@@ -119,6 +123,9 @@ class SignUpController {
     }
     if (input.gender == null || input.gender!.isEmpty) {
       missingFields.add('성별');
+    }
+    if (input.smokingStatus == null || input.smokingStatus!.isEmpty) {
+      missingFields.add('흡연 여부');
     }
     if (!input.agreeToTerms) {
       missingFields.add('약관 동의');

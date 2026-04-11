@@ -333,19 +333,21 @@ class _SurveyIntegerTextFieldBuilderState
     extends State<SurveyIntegerTextFieldBuilder> {
   late TextEditingController _controller;
 
+  void _handleControllerChanged() {
+    final text = _controller.text;
+    if (text.isEmpty) {
+      widget.onChanged(null);
+    } else {
+      final value = int.tryParse(text);
+      widget.onChanged(value);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value?.toString() ?? '');
-    _controller.addListener(() {
-      final text = _controller.text;
-      if (text.isEmpty) {
-        widget.onChanged(null);
-      } else {
-        final value = int.tryParse(text);
-        widget.onChanged(value);
-      }
-    });
+    _controller.addListener(_handleControllerChanged);
   }
 
   @override
@@ -353,7 +355,10 @@ class _SurveyIntegerTextFieldBuilderState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value &&
         widget.value?.toString() != _controller.text) {
+      // `text =`는 리스너를 호출해 상위 setState가 빌드 중에 돌 수 있음 → 잠시 분리
+      _controller.removeListener(_handleControllerChanged);
       _controller.text = widget.value?.toString() ?? '';
+      _controller.addListener(_handleControllerChanged);
     }
   }
 
@@ -459,20 +464,24 @@ class SurveyTextFieldBuilder extends StatefulWidget {
 class _SurveyTextFieldBuilderState extends State<SurveyTextFieldBuilder> {
   late TextEditingController _controller;
 
+  void _handleControllerChanged() {
+    widget.onChanged(_controller.text.isEmpty ? null : _controller.text);
+  }
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value ?? '');
-    _controller.addListener(() {
-      widget.onChanged(_controller.text.isEmpty ? null : _controller.text);
-    });
+    _controller.addListener(_handleControllerChanged);
   }
 
   @override
   void didUpdateWidget(covariant SurveyTextFieldBuilder oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value && widget.value != _controller.text) {
+      _controller.removeListener(_handleControllerChanged);
       _controller.text = widget.value ?? '';
+      _controller.addListener(_handleControllerChanged);
     }
   }
 

@@ -14,6 +14,7 @@ from .report_constants import (
     ReportState,
     OUTCOME_LABELS,
     SECTION_CARD_TYPE_KEYWORDS,
+    SECTION_TOPIC_SCOPE,
     CARD_SYSTEM_PROMPT,
     LIFESTYLE_COMBINED_SYSTEM_PROMPT,
 )
@@ -21,11 +22,14 @@ from .report_llm import invoke_llm_json, REPORT_DEBUG
 from .report_formatters import (
     normalize_survey_value,
     format_survey_data,
+    format_skin_and_outcomes_for_prompt,
     get_personalization_note,
     format_quant_data,
     format_user_profile_for_prompt,
+    simulation_effect_phrase,
     timeframe_days_to_label,
     strip_markdown,
+    visual_simulation_chart_values,
 )
 
 
@@ -57,13 +61,24 @@ def build_card_prompt_enhanced(
     situation_block = ""
     if situation_text and situation_text.strip():
         situation_block = f"""
-🔥 [필수] 사용자가 직접 입력한 참고 상황 (action 카드에 반드시 반영):
+🔥 [참고 상황] 사용자 입력:
 "{situation_text.strip()[:300]}"
-→ action 3개 중 최소 1개는 위 내용(예: 모낭염이면 턱 부위 관리, 피부결이면 각질/수분 조언)을 구체적으로 언급해야 합니다. 무시하면 안 됩니다.
+→ 위 내용이 **이 섹션 주제와 관련되면** action 3개 중 최소 1개에 반영하세요. (예: 수면 섹션에서 "야근 많다"→취침 습관 조언) 관련 없으면 이 섹션 주제만 다루세요.
 
 """
+    # 해당 섹션 주제 범위 (다른 탭 내용 금지)
+    topic_scope = SECTION_TOPIC_SCOPE.get(section, {})
+    scope_block = ""
+    if topic_scope:
+        scope_block = f"""
+🚫 [필수] 이 섹션("{section}")은 {topic_scope.get("scope", "")}만 다룹니다.
+{topic_scope.get("forbidden", "")}
+action(행동 3가지)은 {topic_scope.get("action_scope", "")}만 제안하세요. 다른 탭 주제(선크림, 수면, 운동 등)를 끌어오지 마세요.
+
+"""
+
     return f"""섹션: {section}
-{situation_block}
+{scope_block}{situation_block}
 ⚠️ 중요: 반드시 사용자 설문 데이터와 구조화된 주장(claims)을 바탕으로 개인화된 리포트를 작성하세요.
 일반론적 표현("수면이 부족하면", "자외선에 노출되면")은 절대 사용하지 마세요.
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
@@ -82,8 +97,9 @@ def build_card_prompt_enhanced(
 
 ⚠️ 각 카드 작성 규칙:
 - 논리적·유기적 연결: [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·논문 근거(claims)를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
+- problem/cause/simulation: 이 섹션 주제 밖의 내용(다른 탭 키워드) 절대 금지.
 - problem/cause: 위 claims의 "claim"과 "support_text"를 바탕으로 작성하되, 설문 수치를 자연스럽게 요약해 반영
-- action: 반드시 앞선 [현재 상태]+[왜 이런 상태인가]와 연계. action 3개 각각이 위에서 말한 원인(cause)을 해결하는 구체적 행동이어야 함. 설문+신체정보+참고 상황 고려. 위 [참고 상황]이 있으면 그중 최소 1개는 그 상황에 직접 맞는 조언. 정량적 효과(%, 기간 등)는 action에 넣지 마세요.
+- action: **매일 체크할 할 일**만. **title**은 「~하기」·짧은 명사구(예: 선크림 바르기). title에 **하세요/해 보세요** 금지. **detail**은 1문장 평서·설명. 이 섹션과 직접 관련된 행동만. (활동 탭이면 운동·걷기만, 선크림/수면/음주 금지). 앞선 cause와 연계. [참고 상황] 있으면 최소 1개는 그 상황에 맞게(단, 이 섹션 주제 범위 내에서). 정량적 효과(%, 기간)는 action에 넣지 마세요.
 - simulation: [정량 근거]에 있는 효과량(%, 기간)을 모두 여기에 반영하세요. 여러 가지가 있으면 모두 나열해도 됩니다.
 - 각 카드에 evidence 기반 키워드(근거 support_text에서 추출한 키워드) 최소 1개 포함
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
@@ -129,6 +145,7 @@ def build_card_prompt(
 {narrative_text}
 
 ⚠️ [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·근거를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
+⚠️ action 각 item: **title**=할 일 제목(~하기/명사구, 하세요체 금지), **detail**=1문장 설명(평서 권장).
 
 위 정보를 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
 각 카드는 사용자 설문 데이터를 직접 인용하여 개인화되게 작성하세요."""
@@ -361,19 +378,19 @@ def build_lifestyle_combined_prompt(
     user_profile: dict,
     situation_text: Optional[str] = None,
 ) -> str:
-    """생활습관 서브섹션 통합 프롬프트 (1회 호출용)"""
+    """생활습관 섹션 통합 프롬프트 (1회 호출로 smoking/drinking/stress 각각 생성)"""
     profile_text = format_user_profile_for_prompt(user_profile)
     quant_text = format_quant_data(section_quant)
 
     situation_block = ""
     if situation_text and situation_text.strip():
         situation_block = f"""
-🔥 [필수] 사용자가 직접 입력한 참고 상황 (action 카드에 반드시 반영):
+🔥 [참고 상황] 사용자 입력:
 "{situation_text.strip()[:300]}"
-→ action 3개 중 최소 1개는 위 내용(예: 모낭염이면 턱 부위 관리, 피부결이면 각질/수분 조언)을 구체적으로 언급해야 합니다. 무시하면 안 됩니다.
+→ 위 내용이 **각 섹션(흡연/음주/스트레스) 주제와 관련되면** 해당 섹션 action에 반영. 관련 없으면 해당 섹션 주제만 다루세요.
 
 """
-    # 서브섹션별 설문 데이터 정리
+    # 섹션별 설문 데이터 정리
     survey_parts = []
     smoking_kr = normalize_survey_value(survey.get("smoking_status", "N/A"), "smoking_status")
     drinking = survey.get("drinking_days_per_week", "N/A")
@@ -387,33 +404,39 @@ def build_lifestyle_combined_prompt(
         survey_parts.append(f"[스트레스]\n- 스트레스 점수: {stress}/10점")
 
     survey_text = "\n\n".join(survey_parts)
+    skin_ctx = format_skin_and_outcomes_for_prompt(survey)
+    if skin_ctx:
+        survey_text = f"[피부 맥락 — 흡연/음주/스트레스가 피부에 미치는 설명·행동에 반영]\n{skin_ctx}\n\n{survey_text}"
 
     # claims 포맷
     claims_texts = _format_claims_text(section_claims) if section_claims else []
     claims_text = "\n\n".join(claims_texts) if claims_texts else "구조화된 주장 없음"
 
-    # 서브섹션별 요구사항
+    # 섹션별 요구사항 + 주제 범위 (다른 탭 내용 금지)
     sub_requirements = []
     for key in subsection_keys:
         label = _SUBSECTION_LABELS.get(key, key)
         focus = _SUBSECTION_SKIN_FOCUS.get(key, "피부 건강에 미치는 영향에 집중")
+        topic_scope = SECTION_TOPIC_SCOPE.get(key, {})
+        scope_note = ""
+        if topic_scope:
+            scope_note = f" | 이 섹션만: {topic_scope.get('scope', '')}. action은 {topic_scope.get('action_scope', '')}만. 다른 주제 금지."
         sub_requirements.append(
-            f"- \"{key}\" 서브섹션: {label} → {focus}"
+            f"- \"{key}\" 섹션: {label} → {focus}{scope_note}"
         )
     sub_requirements_text = "\n".join(sub_requirements)
 
     subsection_keys_str = ", ".join([f'"{k}"' for k in subsection_keys])
 
-    return f"""섹션: lifestyle (생활습관)
-서브섹션: {subsection_keys_str}
+    return f"""섹션: {subsection_keys_str} (흡연/음주/스트레스 각각 독립 탭)
 {situation_block}
-⚠️ 중요: 각 서브섹션({', '.join([_SUBSECTION_LABELS.get(k, k) for k in subsection_keys])})별로 독립적인 4개 카드를 생성하세요.
-각 서브섹션의 카드는 해당 생활습관 요인에만 집중하세요. 다른 요인을 혼합하지 마세요.
+⚠️ 중요: 각 섹션({', '.join([_SUBSECTION_LABELS.get(k, k) for k in subsection_keys])})별로 독립적인 4개 카드를 생성하세요.
+각 섹션의 카드는 해당 주제에만 집중하세요. 다른 주제를 혼합하지 마세요.
 "당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
 
 {sub_requirements_text}
 
-[사용자 설문 데이터 - 반드시 해당 서브섹션의 수치를 자연스럽게 반영하세요]
+[사용자 설문 데이터 - 반드시 해당 섹션의 수치를 자연스럽게 반영하세요]
 {survey_text}
 
 [사용자 기본 정보]
@@ -427,14 +450,15 @@ def build_lifestyle_combined_prompt(
 
 ⚠️ 각 카드 작성 규칙:
 - 논리적·유기적 연결: [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·논문 근거를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
+- problem/cause/simulation: 각 섹션(흡연/음주/스트레스) 주제만. 다른 섹션 주제 혼합 금지.
 - problem: 이 사용자의 현재 해당 습관이 피부에 미치는 상태를 구체적으로 서술
 - cause: 해당 습관이 피부에 악영향을 미치는 생물학적 메커니즘 설명
-- action: 반드시 앞선 [현재 상태]+[왜 이런 상태인가]와 연계. action 3개 각각이 위에서 말한 원인(cause)을 해결하는 구체적 행동이어야 함. 위 [참고 상황]이 있으면 그중 최소 1개는 그 상황에 직접 맞는 조언. 정량적 효과는 action에 넣지 마세요.
+- action: **매일 체크할 할 일**만. **title**=「~하기」·짧은 명사구(하세요/해 보세요 금지). **detail**=1문장 평서·설명. 해당 섹션만(흡연→금연 관련, 음주→절주 관련, 스트레스→스트레스 관리). 다른 섹션 금지. [참고 상황] 있으면 최소 1개 반영. 정량적 효과는 action에 넣지 마세요. [피부 맥락]이 있으면 최소 1개 action에 피부 타입·고민에 맞는 구체를 넣으세요.
 - simulation: 12주 후 개선 예상 경로. [정량 근거]의 효과량(%, 기간)을 모두 여기에 반영. 여러 가지가 있으면 모두 나열
 - 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
 - 근거에서 말하는 메커니즘/방향성을 1번 이상 언급
 
-위 정보를 바탕으로 {len(subsection_keys)}개 서브섹션의 카드를 JSON 형식으로 생성하세요."""
+위 정보를 바탕으로 {len(subsection_keys)}개 섹션의 카드를 JSON 형식으로 생성하세요."""
 
 
 def generate_lifestyle_cards(
@@ -445,11 +469,11 @@ def generate_lifestyle_cards(
     state: ReportState,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
-    생활습관 서브섹션 카드를 1회 LLM 호출로 통합 생성.
+    생활습관 섹션(smoking/drinking/stress) 카드를 1회 LLM 호출로 통합 생성.
 
     Returns:
         {"smoking": [4 cards], "drinking": [4 cards], "stress": [4 cards]}
-        (활성화된 서브섹션만 포함)
+        (활성화된 섹션만 포함)
     """
     subsection_keys = get_lifestyle_subsection_keys(survey)
     if not subsection_keys:
@@ -472,7 +496,7 @@ def generate_lifestyle_cards(
         situation_text=situation_text,
     )
     if REPORT_DEBUG:
-        print(f"    📝 [lifestyle] combined 프롬프트 길이: {len(prompt)}자, 서브섹션: {subsection_keys}")
+        print(f"    📝 [lifestyle] combined 프롬프트 길이: {len(prompt)}자, 섹션: {subsection_keys}")
 
     result: Dict[str, List[Dict[str, Any]]] = {}
 
@@ -508,7 +532,7 @@ def generate_lifestyle_cards(
         if REPORT_DEBUG:
             print(f"    📝 에러 상세:\n{traceback.format_exc()}")
 
-    # ── 누락된 서브섹션은 템플릿 fallback ──
+    # ── 누락된 섹션은 템플릿 fallback ──
     for sub_key in subsection_keys:
         if sub_key not in result:
             print(f"    🔄 [lifestyle.{sub_key}] 템플릿 fallback 사용")
@@ -602,9 +626,9 @@ def _smoking_cards(survey: dict):
         f"현재 흡연 상태가 '{smoking_kr}'인 편입니다. 흡연은 피부 콜라겐 분해를 촉진하고 혈류 순환을 저하시켜 피부 노화를 가속화합니다.",
         "담배 연기 속 활성산소가 피부 세포를 직접 손상시키고, 니코틴이 혈관을 수축시켜 영양소와 산소 공급이 줄어들기 때문입니다.",
         [
-            {"title": "흡연량 줄이기", "detail": "하루 흡연량을 절반으로 줄여, 피부에 가해지는 산화 스트레스를 낮추세요."},
-            {"title": "금연 계획 세우기", "detail": "단계적으로 금연을 시작하면 2~4주 내 혈류 개선 효과를 체감할 수 있습니다."},
-            {"title": "항산화 케어 강화", "detail": "비타민 C 세럼 등 항산화 제품을 사용해 활성산소로 인한 피부 손상을 완화하세요."},
+            {"title": "하루 흡연량 절반 줄이기", "detail": "담배 값을 줄이면 피부 산화 스트레스 부담도 함께 줄어드는 경향이 있습니다."},
+            {"title": "단계적 금연 계획 세우기", "detail": "2~4주 뒤부터 혈류가 나아진다는 보고가 있어, 작은 목표부터 시도해 볼 만합니다."},
+            {"title": "항산화 세럼 바르기", "detail": "비타민 C 등 항산화 케어는 활성산소로 인한 손상 완화에 도움이 될 수 있습니다."},
         ],
     )
 
@@ -615,9 +639,9 @@ def _drinking_cards(survey: dict):
         f"주당 음주 빈도가 {drinking}일인 편입니다. 잦은 음주는 피부 탈수와 염증 반응을 유발해 피부 장벽 회복을 방해합니다.",
         "알코올이 체내 수분을 빼앗고 간 기능에 부담을 주면서, 피부에 필요한 비타민과 항산화 물질의 흡수가 저하되기 때문입니다.",
         [
-            {"title": "음주 빈도 줄이기", "detail": "주당 음주 일수를 1~2일로 줄여 피부 회복 시간을 확보하세요."},
-            {"title": "음주량 조절하기", "detail": "한 번에 마시는 양을 소주 2잔 이하로 줄이면 다음 날 피부 붓기가 줄어듭니다."},
-            {"title": "음주 후 수분 보충", "detail": "음주 후 물을 충분히 마시고, 보습제를 바로 발라 탈수를 완화하세요."},
+            {"title": "주당 음주 일수 줄이기", "detail": "음주가 잦을수록 피부 장벽 회복에 쓸 시간이 줄어드는 편입니다."},
+            {"title": "한 번에 마시는 양 조절하기", "detail": "소주 기준 2잔 이하로 낮추면 다음 날 붓기·홍조가 덜한 경우가 많습니다."},
+            {"title": "음주 후 물·보습 챙기기", "detail": "수분을 보충하고 바로 보습하면 알코올성 탈수 완화에 도움이 됩니다."},
         ],
     )
 
@@ -629,9 +653,9 @@ def _stress_cards(survey: dict):
         f"스트레스 수준이 {stress}/10점으로 {level} 편입니다. 만성 스트레스는 코르티솔 분비를 높여 피부 장벽을 약화시키고, 염증 반응을 촉진합니다.",
         "코르티솔이 지속적으로 분비되면 피부 세라마이드 합성이 억제되고, 피지 분비가 증가하면서 여드름·건조함이 동시에 나타날 수 있습니다.",
         [
-            {"title": "스트레스 관리 루틴 만들기", "detail": "하루 10분 명상이나 가벼운 스트레칭만으로도 코르티솔 수치를 낮출 수 있습니다."},
-            {"title": "충분한 휴식 시간 확보", "detail": "의도적으로 디지털 기기를 내려놓는 시간을 만들어 뇌 피로를 줄이세요."},
-            {"title": "수면의 질 개선", "detail": "자기 전 1시간은 블루라이트를 차단하고, 규칙적인 수면 패턴을 유지하세요."},
+            {"title": "하루 10분 명상·스트레칭", "detail": "짧은 호흡·스트레칭만으로도 코르티솔을 낮추는 연구가 있습니다."},
+            {"title": "스크린 없는 휴식 시간 갖기", "detail": "기기를 내려놓는 구간이 있으면 뇌 피로 회복에 유리합니다."},
+            {"title": "취침 전 블루라이트 줄이기", "detail": "잠들기 한 시간 전부터 스마트폰·TV를 끄면 수면의 질이 나아지기 쉽습니다."},
         ],
     )
 
@@ -642,9 +666,9 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
     problem_text = "현재 생활습관이 피부에 미치는 영향을 분석하고 있습니다."
     cause_text = "생활습관과 환경 요인이 복합적으로 피부 건강에 영향을 줍니다."
     action_items = [
-        {"title": "피부 보습 강화", "detail": "세안 후 3분 이내에 보습제를 발라 수분 증발을 막으세요."},
-        {"title": "자외선 차단 습관", "detail": "외출 시 SPF 30 이상 선크림을 사용하세요."},
-        {"title": "충분한 수분 섭취", "detail": "하루 1.5~2L의 물을 나눠 마시세요."},
+        {"title": "세안 후 3분 안 보습하기", "detail": "이 시간 안에 바르면 수분이 날아가기 전에 잠가 두기 쉽습니다."},
+        {"title": "외출 전 SPF 도포하기", "detail": "SPF30 이상을 바르면 낮 동안 기본 자외선 차단에 유리합니다."},
+        {"title": "하루 물 1.5~2L 나눠 마시기", "detail": "체내 수분이 충분할수록 피부 탄력·장벽에도 도움이 됩니다."},
     ]
 
     # 설문 기반 개인화 시도
@@ -657,9 +681,9 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
                     problem_text = f"수면 패턴을 보면 평일 평균 {hours_float:.1f}시간 정도로 부족한 편입니다. 수면 부족은 피부 재생에 필요한 성장호르몬 분비를 저하시킵니다."
                     cause_text = "수면 중 분비되는 멜라토닌과 성장호르몬이 부족해지면서 피부 세포 회복 속도가 느려지기 때문입니다."
                     action_items = [
-                        {"title": "수면 시간을 7시간 이상으로 늘리기", "detail": "평일 취침 시간을 30분씩 앞당겨 점진적으로 수면 시간을 확보하세요."},
-                        {"title": "수면 전 카페인 섭취 줄이기", "detail": "오후 2시 이후 카페인을 피하면 숙면의 질이 크게 개선됩니다."},
-                        {"title": "수면 환경 개선", "detail": "어둡고 서늘한 환경(18~20°C)을 유지하면 멜라토닌 분비에 도움이 됩니다."},
+                        {"title": "평일 취침 30분 앞당기기", "detail": "조금씩 앞당기면 7시간에 가까워지기 쉽고, 성장호르몬·회복에 유리합니다."},
+                        {"title": "오후 2시 이후 카페인 끊기", "detail": "늦은 카페인은 숙면을 방해해 피부 회복 시간이 줄어들 수 있습니다."},
+                        {"title": "침실 어둡게·18~20°C 맞추기", "detail": "멜라토닌 분비와 숙면 유지에 도움이 되는 환경입니다."},
                     ]
             except (ValueError, TypeError):
                 pass
@@ -670,17 +694,17 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
             problem_text = f"선크림 사용 빈도가 '{sunscreen_kr}'인 편입니다. 자외선은 피부 노화의 가장 큰 외부 요인입니다."
             cause_text = "UV-A는 진피층까지 침투해 콜라겐을 분해하고, UV-B는 표피를 손상시켜 색소침착과 주름을 유발합니다."
             action_items = [
-                {"title": "매일 선크림 사용하기", "detail": "흐린 날에도 UV-A가 도달하므로 매일 SPF 30 이상 선크림을 바르세요."},
-                {"title": "자외선 강한 시간대 주의", "detail": "오전 10시~오후 4시 사이 야외 활동 시 모자와 선글라스를 활용하세요."},
-                {"title": "선크림 재도포하기", "detail": "야외 활동 시 2~3시간마다 선크림을 다시 발라야 효과가 유지됩니다."},
+                {"title": "아침 세안 후 SPF 도포하기", "detail": "흐린 날에도 UV-A는 통과하므로 SPF30+를 바르는 편이 안전합니다."},
+                {"title": "10~16시 야외 시 모자·선글라스", "detail": "직사광선이 강한 시간대는 물리적 차단을 겹치면 좋습니다."},
+                {"title": "야외 2~3시간마다 차단제 덧바르기", "detail": "땀·마찰로 지워지기 쉬워 주기적 재도포가 효과 유지에 중요합니다."},
             ]
         else:
             problem_text = "자외선 관리 습관을 확인할 수 없었습니다. 자외선은 피부 노화의 가장 큰 외부 요인입니다."
             cause_text = "UV-A는 진피층까지 침투해 콜라겐을 분해하고, UV-B는 표피를 손상시켜 색소침착과 주름을 유발합니다."
             action_items = [
-                {"title": "매일 선크림 사용하기", "detail": "외출 전 SPF 30 이상 선크림을 바르는 습관을 만드세요."},
-                {"title": "자외선 강한 시간대 주의", "detail": "오전 10시~오후 4시 사이 야외 활동 시 자외선 차단에 신경 쓰세요."},
-                {"title": "자외선 차단 도구 활용", "detail": "모자, 선글라스, 긴 소매 등을 활용해 피부를 보호하세요."},
+                {"title": "외출 전 SPF 도포하기", "detail": "SPF30 이상을 습관화하면 기본 광노화 차단에 유리합니다."},
+                {"title": "강한 자외선 시간대 외출 줄이기", "detail": "10~16시 야외는 노출량이 커서 차단제·의복을 함께 쓰는 편이 좋습니다."},
+                {"title": "모자·긴소매로 보완하기", "detail": "크림만으로는 부족한 부위를 의복으로 가리면 추가 보호가 됩니다."},
             ]
     elif section == "lifestyle":
         stress = survey.get("stress_score")
@@ -692,9 +716,9 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
                     problem_text = f"스트레스 수준이 {stress}/10점으로 높은 편입니다. 만성 스트레스는 코르티솔 분비를 높여 피부 장벽을 약화시킵니다."
                     cause_text = "코르티솔이 지속적으로 분비되면 피부 세라마이드 합성이 억제되면서 건조함과 염증이 동시에 나타날 수 있습니다."
                     action_items = [
-                        {"title": "스트레스 관리 루틴 만들기", "detail": "하루 10분 명상이나 가벼운 스트레칭으로 코르티솔 수치를 낮추세요."},
-                        {"title": "충분한 휴식 시간 확보", "detail": "의도적으로 디지털 기기를 내려놓는 시간을 만들어 뇌 피로를 줄이세요."},
-                        {"title": "수면의 질 개선", "detail": "자기 전 1시간은 블루라이트를 차단하고 규칙적인 수면 패턴을 유지하세요."},
+                        {"title": "하루 10분 호흡·스트레칭", "detail": "짧은 루틴만으로도 코르티솔을 낮추는 연구가 있습니다."},
+                        {"title": "스크린 없는 휴식 블록", "detail": "기기를 내려놓는 시간이 뇌 피로 회복에 도움이 됩니다."},
+                        {"title": "취침 전 1시간 블루라이트 끄기", "detail": "수면의 질이 나아지면 장벽 회복에도 이롭습니다."},
                     ]
             except (ValueError, TypeError):
                 pass
@@ -702,9 +726,9 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
             problem_text = f"현재 흡연 상태가 '{smoking_kr}'인 편입니다. 흡연은 피부 콜라겐 분해를 촉진하고 혈류 순환을 저하시킵니다."
             cause_text = "담배 연기 속 활성산소가 피부 세포를 손상시키고, 니코틴이 혈관을 수축시켜 영양소와 산소 공급이 줄어들기 때문입니다."
             action_items = [
-                {"title": "흡연량 줄이기", "detail": "하루 흡연량을 절반으로 줄여 피부에 가해지는 산화 스트레스를 낮추세요."},
-                {"title": "금연 계획 세우기", "detail": "단계적 금연을 시작하면 2~4주 내 혈류 개선 효과를 체감할 수 있습니다."},
-                {"title": "항산화 케어 강화", "detail": "비타민 C 세럼 등 항산화 제품을 사용해 활성산소로 인한 피부 손상을 완화하세요."},
+                {"title": "하루 흡연량 절반 줄이기", "detail": "담배 값을 줄이면 피부 산화 부담도 함께 줄어드는 경향이 있습니다."},
+                {"title": "단계적 금연 계획 세우기", "detail": "2~4주 뒤 혈류 개선을 보고한 사례가 있습니다."},
+                {"title": "항산화 세럼 바르기", "detail": "비타민 C 등은 활성산소 손상 완화에 도움이 될 수 있습니다."},
             ]
     elif section == "activity":
         aerobic = survey.get("aerobic_weekly")
@@ -715,9 +739,9 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
                     problem_text = "운동 빈도가 낮은 편입니다. 규칙적인 운동은 피부 혈류를 증가시켜 영양소 공급과 노폐물 배출을 돕습니다."
                     cause_text = "운동 부족으로 인한 혈류 저하와 대사 감소가 피부 세포 재생 속도를 늦추기 때문입니다."
                     action_items = [
-                        {"title": "주 3회 이상 유산소 운동", "detail": "30분 걷기나 조깅만으로도 피부 혈류가 크게 개선됩니다."},
-                        {"title": "근력 운동 추가하기", "detail": "주 2회 이상 근력 운동을 하면 성장호르몬 분비가 촉진됩니다."},
-                        {"title": "일상 활동량 늘리기", "detail": "계단 이용, 짧은 산책 등으로 하루 활동량을 조금씩 늘리세요."},
+                        {"title": "주 3회 30분 걷기·조깅", "detail": "가벼운 유산소만으로도 피부 혈류가 좋아진다는 보고가 있습니다."},
+                        {"title": "주 2회 근력 운동 넣기", "detail": "근력은 성장호르몬·대사에 긍정적 영향이 있습니다."},
+                        {"title": "계단·짧은 산책으로 NEAT 늘리기", "detail": "일상 움직임을 조금씩 늘리면 활동량 누적에 유리합니다."},
                     ]
             except (ValueError, TypeError):
                 pass
@@ -728,9 +752,9 @@ def create_default_cards(section: str, survey: dict = None) -> List[Dict[str, An
         problem_text = f"현재 {focus_text}에 관심을 가지고 계십니다. 생활습관과 환경 요인이 복합적으로 피부 건강에 영향을 미칩니다."
         cause_text = "피부 노화는 자외선·스트레스 같은 외부 요인과 수면·영양 등 내부 요인이 함께 작용한 결과입니다."
         action_items = [
-            {"title": "자외선 차단 생활화", "detail": "매일 SPF 30 이상 선크림을 바르고, 외출 시 자외선 차단 도구를 활용하세요."},
-            {"title": "보습과 영양 케어", "detail": "세안 후 보습제를 바로 바르고, 비타민 C·E 등 항산화 성분을 활용하세요."},
-            {"title": "수면과 스트레스 관리", "detail": "7시간 이상 숙면을 취하고, 스트레스를 줄이는 루틴을 만드세요."},
+            {"title": "매일 SPF·모자 병행하기", "detail": "크림과 의복 차단을 같이 쓰면 광노화 관리에 유리합니다."},
+            {"title": "세안 직후 보습·항산화 케어", "detail": "비타민 C·E 등은 산화 스트레스 완화에 도움이 될 수 있습니다."},
+            {"title": "7시간 수면·짧은 스트레스 루틴", "detail": "숙면과 호흡·스트레칭은 장벽·염증 관리의 기본입니다."},
         ]
 
     _section_sim_map = {
@@ -955,6 +979,7 @@ def format_simulation_text(section_key: str, survey: dict, section_quant: dict) 
 
     if mode == "grounded" and stats_by_outcome:
         parts: List[str] = []
+        visual_list: List[dict] = []
         for outcome, stats in stats_by_outcome.items():
             if isinstance(stats, dict) and "timeframe_groups" in stats:
                 timeframe_groups = stats["timeframe_groups"]
@@ -967,11 +992,23 @@ def format_simulation_text(section_key: str, survey: dict, section_quant: dict) 
                 median = group.get("median", group.get("mean", 0))
                 min_val = group.get("min", 0)
                 max_val = group.get("max", 0)
-                parts.append(
-                    f"{outcome_label} {tf_label} 뒤 중앙값 {median:.1f}%(범위 {min_val:.1f}~{max_val:.1f}%)"
+                phrase = simulation_effect_phrase(
+                    median, min_val, max_val, outcome, quant_mode="grounded"
                 )
+                parts.append(f"{outcome_label} {tf_label} 뒤 {phrase}")
+                vm, vl, vh = visual_simulation_chart_values(
+                    outcome, median, min_val, max_val, quant_mode="grounded"
+                )
+                visual_list.append({
+                    "outcome_label": outcome_label,
+                    "median": round(vm, 1),
+                    "min_val": round(vl, 1),
+                    "max_val": round(vh, 1),
+                    "timeframe_label": tf_label,
+                })
                 print(f"    📊 [{section_key}] condition=\"{condition}\", tf={tf_label}, outcome={outcome_label}")
         if parts:
+            meta["visual_data"] = visual_list
             text = (
                 f"{condition} 연구에서는 "
                 + ", ".join(parts)
@@ -993,11 +1030,25 @@ def format_simulation_text(section_key: str, survey: dict, section_quant: dict) 
         median = est.get("median", 0)
         min_val = est.get("min", 0)
         max_val = est.get("max", 0)
+        outcome_for_polarity = selected_outcomes[0] if selected_outcomes else section_key
+        phrase = simulation_effect_phrase(
+            median, min_val, max_val, outcome_for_polarity, quant_mode="estimated"
+        )
         text = (
             f"{condition} {tf_label} 뒤에는, 정량 근거가 부족해 논문 전반을 바탕으로 보수적으로 보면 "
-            f"{outcome_label}이(가) 대략 {median:.1f}% 안팎(범위 {min_val:.1f}~{max_val:.1f}%) 변화할 수 있습니다."
+            f"{outcome_label}이(가) 대략 {phrase} 경향이 있을 수 있습니다."
         )
         meta["disclaimer_small"] = "이 수치는 개별 연구를 평균낸 값이 아니라, 논문 전반을 바탕으로 한 AI 추정치입니다."
+        vm, vl, vh = visual_simulation_chart_values(
+            outcome_for_polarity, median, min_val, max_val, quant_mode="estimated"
+        )
+        meta["visual_data"] = {
+            "outcome_label": outcome_label,
+            "median": round(vm, 1),
+            "min_val": round(vl, 1),
+            "max_val": round(vh, 1),
+            "timeframe_label": tf_label,
+        }
         print(f"    📊 [{section_key}] condition=\"{condition}\", tf={tf_label}, outcome={outcome_label} (estimated)")
         return text, meta
 

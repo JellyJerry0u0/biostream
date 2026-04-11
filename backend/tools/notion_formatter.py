@@ -684,35 +684,40 @@ def load_report_from_db(user_id: int, lifestyle_id: Optional[int] = None) -> Opt
     """DB에서 리포트 로드"""
     try:
         from app.database import get_db
-        from app.models import Lifestyle
+        from app.models import Lifestyle, Report
     except (ImportError, Exception) as e:
         print(f"❌ DB 모듈 import 실패: {e}")
         return None
-    
+
     try:
         db_gen = get_db()
         db = next(db_gen)
     except Exception as e:
         print(f"❌ DB 연결 실패: {e}")
         return None
-    
+
     try:
         if lifestyle_id:
             lifestyle = db.query(Lifestyle).filter(
                 Lifestyle.id == lifestyle_id,
-                Lifestyle.user_id == user_id
+                Lifestyle.user_id == user_id,
             ).first()
         else:
             lifestyle = db.query(Lifestyle).filter(
                 Lifestyle.user_id == user_id
             ).order_by(Lifestyle.created_at.desc()).first()
-        
-        if not lifestyle or not lifestyle.health_report:
+
+        report_row = (
+            db.query(Report).filter(Report.lifestyle_id == lifestyle.id).first()
+            if lifestyle
+            else None
+        )
+        if not lifestyle or not report_row or not report_row.report:
             print(f"⚠️ 리포트를 찾을 수 없습니다. (user_id={user_id})")
             return None
-        
+
         print(f"✅ 리포트 로드 완료 (lifestyle_id={lifestyle.id})")
-        return lifestyle.health_report
+        return report_row.report
         
     except Exception as e:
         print(f"❌ 리포트 로드 실패: {e}")

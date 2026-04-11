@@ -1,19 +1,111 @@
 import Flutter
 import Foundation
+import BackgroundTasks
 import HealthKit
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let devChannelName = "com.example.biostream/dev"
+  private let uvPromptTaskIdentifier = "com.biostream.uvprompt.refresh"
   private let syncService = IOSHealthSyncService()
+  private let uvPromptService = IOSUvPromptService()
   private var devChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    configureUvPromptPipeline(application: application)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func applicationDidEnterBackground(_ application: UIApplication) {
+    super.applicationDidEnterBackground(application)
+    if #available(iOS 13.0, *) {
+      scheduleUvPromptRefreshTask()
+    }
+  }
+
+  private func configureUvPromptPipeline(application: UIApplication) {
+    UNUserNotificationCenter.current().delegate = self
+    uvPromptService.configureNotificationCategory()
+
+    if #available(iOS 13.0, *) {
+      BGTaskScheduler.shared.register(
+        forTaskWithIdentifier: uvPromptTaskIdentifier,
+        using: nil
+      ) { [weak self] task in
+        guard let self, let appRefreshTask = task as? BGAppRefreshTask else {
+          task.setTaskCompleted(success: false)
+          return
+        }
+        self.handleUvPromptRefreshTask(appRefreshTask)
+      }
+      scheduleUvPromptRefreshTask()
+    }
+
+    uvPromptService.startStepObserver()
+  }
+
+  private func handleUvPromptRefreshTask(_ task: BGAppRefreshTask) {
+    scheduleUvPromptRefreshTask()
+    task.expirationHandler = {
+      task.setTaskCompleted(success: false)
+    }
+
+    Task {
+      let success = await uvPromptService.evaluateAndPromptIfNeeded(trigger: "bg_task")
+      task.setTaskCompleted(success: success)
+    }
+  }
+
+  private func scheduleUvPromptRefreshTask() {
+    guard #available(iOS 13.0, *) else { return }
+    let request = BGAppRefreshTaskRequest(identifier: uvPromptTaskIdentifier)
+    request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+    do {
+      try BGTaskScheduler.shared.submit(request)
+    } catch {
+      NSLog("[IOSUvPrompt] failed to schedule BGTask: %@", String(describing: error))
+    }
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let userInfo = response.notification.request.content.userInfo
+    let category = response.notification.request.content.categoryIdentifier
+    guard category == IOSUvPromptService.notificationCategoryIdentifier else {
+      completionHandler()
+      return
+    }
+
+    let date = (userInfo["date"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let stepsSnapshot = userInfo["stepsSnapshot"] as? Int ?? 0
+    let answer: String
+    switch response.actionIdentifier {
+    case IOSUvPromptService.actionYesIdentifier:
+      answer = "yes"
+    case IOSUvPromptService.actionNoIdentifier:
+      answer = "no"
+    default:
+      answer = "unknown"
+    }
+
+    Task {
+      if !date.isEmpty {
+        await uvPromptService.submitOutdoorResponse(
+          date: date,
+          answer: answer,
+          stepsSnapshot: stepsSnapshot
+        )
+      }
+      completionHandler()
+    }
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
@@ -687,5 +779,295 @@ private final class IOSHealthSyncService {
       throw IOSHealthSyncError.authTokenMissing
     }
     return token
+  }
+}
+
+private final class IOSUvPromptService {
+  static let notificationCategoryIdentifier = "outdoor_uv_check"
+  static let actionYesIdentifier = "OUTDOOR_YES"
+  static let actionNoIdentifier = "OUTDOOR_NO"
+
+  private let healthStore = HKHealthStore()
+  private let userDefaults = UserDefaults.standard
+  private var stepObserverQuery: HKObserverQuery?
+
+  private let flutterApiOriginKey = "flutter.api_base_origin"
+  private let flutterAuthTokenKey = "flutter.auth_bearer_token"
+  private let defaultApiOrigin = "http://127.0.0.1:8080"
+  private let noDataErrorCode = 11
+  private let healthKitErrorDomain = "com.healthkit"
+
+  private let stepThreshold = 2500.0
+  private let dailyLimit = 3
+  private let cooldownSeconds: TimeInterval = 2 * 60 * 60
+
+  private let keyLastPromptEpoch = "ios_uv_last_prompt_epoch"
+  private let keyPromptDay = "ios_uv_prompt_day"
+  private let keyPromptCount = "ios_uv_prompt_count"
+  private let keyPendingQueue = "ios_uv_pending_queue"
+
+  func configureNotificationCategory() {
+    let yesAction = UNNotificationAction(
+      identifier: Self.actionYesIdentifier,
+      title: "예",
+      options: []
+    )
+    let noAction = UNNotificationAction(
+      identifier: Self.actionNoIdentifier,
+      title: "아니오",
+      options: []
+    )
+    let category = UNNotificationCategory(
+      identifier: Self.notificationCategoryIdentifier,
+      actions: [yesAction, noAction],
+      intentIdentifiers: [],
+      options: []
+    )
+    UNUserNotificationCenter.current().setNotificationCategories([category])
+  }
+
+  func startStepObserver() {
+    guard HKHealthStore.isHealthDataAvailable(),
+          let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
+      return
+    }
+    if let existing = stepObserverQuery {
+      healthStore.stop(existing)
+    }
+
+    let query = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, completion, _ in
+      Task {
+        _ = await self?.evaluateAndPromptIfNeeded(trigger: "step_observer")
+        completion()
+      }
+    }
+    stepObserverQuery = query
+    healthStore.execute(query)
+    healthStore.enableBackgroundDelivery(for: stepType, frequency: .hourly) { success, error in
+      if let error {
+        NSLog("[IOSUvPrompt] enable background delivery failed: %@", String(describing: error))
+        return
+      }
+      NSLog("[IOSUvPrompt] background delivery enabled: %@", success.description)
+    }
+  }
+
+  func evaluateAndPromptIfNeeded(trigger: String) async -> Bool {
+    do {
+      try await flushPendingResponses()
+      guard shouldAskNow() else { return true }
+      let todaySteps = try await readTodayStepCount()
+      guard todaySteps >= stepThreshold else { return true }
+      try await enqueuePromptNotification(stepsSnapshot: Int(todaySteps))
+      markPromptShown()
+      NSLog("[IOSUvPrompt] prompt shown (%@), steps=%.0f", trigger, todaySteps)
+      return true
+    } catch {
+      NSLog("[IOSUvPrompt] prompt evaluation failed (%@): %@", trigger, String(describing: error))
+      return false
+    }
+  }
+
+  func submitOutdoorResponse(date: String, answer: String, stepsSnapshot: Int) async {
+    let payload: [String: Any] = [
+      "date": date,
+      "answer": answer,
+      "stepsSnapshot": stepsSnapshot
+    ]
+
+    do {
+      try await postOutdoorResponse(payload: payload)
+    } catch {
+      enqueuePending(payload)
+      NSLog("[IOSUvPrompt] response submission failed; queued: %@", String(describing: error))
+    }
+  }
+
+  private func shouldAskNow() -> Bool {
+    let now = Date()
+    let calendar = Calendar.current
+    let hour = calendar.component(.hour, from: now)
+    guard hour >= 8 && hour <= 18 else { return false }
+
+    let today = dayString(now)
+    var todayCount = userDefaults.integer(forKey: keyPromptCount)
+    let storedDay = userDefaults.string(forKey: keyPromptDay)
+    if storedDay != today {
+      todayCount = 0
+      userDefaults.set(today, forKey: keyPromptDay)
+      userDefaults.set(0, forKey: keyPromptCount)
+    }
+    guard todayCount < dailyLimit else { return false }
+
+    let lastPromptEpoch = userDefaults.double(forKey: keyLastPromptEpoch)
+    if lastPromptEpoch > 0 {
+      let lastPromptDate = Date(timeIntervalSince1970: lastPromptEpoch)
+      if now.timeIntervalSince(lastPromptDate) < cooldownSeconds {
+        return false
+      }
+    }
+    return true
+  }
+
+  private func markPromptShown() {
+    let now = Date()
+    let today = dayString(now)
+    let storedDay = userDefaults.string(forKey: keyPromptDay)
+    if storedDay != today {
+      userDefaults.set(today, forKey: keyPromptDay)
+      userDefaults.set(0, forKey: keyPromptCount)
+    }
+    let current = userDefaults.integer(forKey: keyPromptCount)
+    userDefaults.set(current + 1, forKey: keyPromptCount)
+    userDefaults.set(now.timeIntervalSince1970, forKey: keyLastPromptEpoch)
+  }
+
+  private func enqueuePromptNotification(stepsSnapshot: Int) async throws {
+    let center = UNUserNotificationCenter.current()
+    let settings = await withCheckedContinuation { continuation in
+      center.getNotificationSettings { settings in
+        continuation.resume(returning: settings)
+      }
+    }
+    guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
+      return
+    }
+
+    let date = dayString(Date())
+    let content = UNMutableNotificationContent()
+    content.title = "야외 활동 확인"
+    content.body = "지금 야외에 계신가요?"
+    content.sound = .default
+    content.categoryIdentifier = Self.notificationCategoryIdentifier
+    content.userInfo = [
+      "date": date,
+      "stepsSnapshot": stepsSnapshot
+    ]
+
+    let request = UNNotificationRequest(
+      identifier: "uv_prompt_\(date)_\(stepsSnapshot)",
+      content: content,
+      trigger: nil
+    )
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      center.add(request) { error in
+        if let error {
+          continuation.resume(throwing: error)
+          return
+        }
+        continuation.resume(returning: ())
+      }
+    }
+  }
+
+  private func readTodayStepCount() async throws -> Double {
+    guard let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else { return 0 }
+    let calendar = Calendar.current
+    let startOfDay = calendar.startOfDay(for: Date())
+    let predicate = HKQuery.predicateForSamples(
+      withStart: startOfDay,
+      end: Date(),
+      options: .strictStartDate
+    )
+
+    return try await withCheckedThrowingContinuation { continuation in
+      let query = HKStatisticsQuery(
+        quantityType: stepType,
+        quantitySamplePredicate: predicate,
+        options: .cumulativeSum
+      ) { _, result, error in
+        if let error {
+          if self.isHealthKitNoDataError(error) {
+            continuation.resume(returning: 0.0)
+            return
+          }
+          continuation.resume(throwing: error)
+          return
+        }
+        let value = result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0.0
+        continuation.resume(returning: value)
+      }
+      self.healthStore.execute(query)
+    }
+  }
+
+  private func postOutdoorResponse(payload: [String: Any]) async throws {
+    let authToken = try resolveAuthToken()
+    let url = try resolveOutdoorResponseURL()
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+    request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+    let (_, response) = try await URLSession.shared.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse,
+          (200...299).contains(httpResponse.statusCode) else {
+      throw URLError(.badServerResponse)
+    }
+  }
+
+  private func flushPendingResponses() async throws {
+    guard var queue = userDefaults.array(forKey: keyPendingQueue) as? [[String: Any]],
+          !queue.isEmpty else {
+      return
+    }
+
+    var failed: [[String: Any]] = []
+    for payload in queue {
+      do {
+        try await postOutdoorResponse(payload: payload)
+      } catch {
+        failed.append(payload)
+      }
+    }
+    queue = failed
+    if queue.isEmpty {
+      userDefaults.removeObject(forKey: keyPendingQueue)
+    } else {
+      userDefaults.set(queue, forKey: keyPendingQueue)
+    }
+  }
+
+  private func enqueuePending(_ payload: [String: Any]) {
+    var queue = userDefaults.array(forKey: keyPendingQueue) as? [[String: Any]] ?? []
+    queue.append(payload)
+    if queue.count > 20 {
+      queue = Array(queue.suffix(20))
+    }
+    userDefaults.set(queue, forKey: keyPendingQueue)
+  }
+
+  private func resolveOutdoorResponseURL() throws -> URL {
+    let origin = (userDefaults.string(forKey: flutterApiOriginKey) ?? defaultApiOrigin)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !origin.isEmpty else { throw URLError(.badURL) }
+    let normalized = origin.hasSuffix("/") ? String(origin.dropLast()) : origin
+    guard let url = URL(string: normalized + "/api/v1/outdoor-check-response") else {
+      throw URLError(.badURL)
+    }
+    return url
+  }
+
+  private func resolveAuthToken() throws -> String {
+    guard let token = userDefaults.string(forKey: flutterAuthTokenKey)?
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+      !token.isEmpty else {
+      throw URLError(.userAuthenticationRequired)
+    }
+    return token
+  }
+
+  private func dayString(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter.string(from: date)
+  }
+
+  private func isHealthKitNoDataError(_ error: Error) -> Bool {
+    let nsError = error as NSError
+    return nsError.code == noDataErrorCode
+      && (nsError.domain == healthKitErrorDomain || nsError.domain.contains("health"))
   }
 }

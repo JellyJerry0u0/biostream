@@ -38,6 +38,10 @@ class CoachWsClient {
   WsEventCallback? onMemoryUpdate;
   WsEventCallback? onModeInfo;
   WsEventCallback? onToolStatus;
+  WsEventCallback? onCoachProgress;
+  WsEventCallback? onGoalProposals;
+  WsEventCallback? onHabitDomainChart;
+  WsEventCallback? onHabitPersonalizationProposals;
   WsEventCallback? onDone;
   WsEventCallback? onError;
   VoidCallback? onConnected;
@@ -105,13 +109,18 @@ class CoachWsClient {
   }
 
   /// 사용자 메시지 전송
-  void sendUserMessage(String message, {String mode = 'auto'}) {
+  void sendUserMessage(
+    String message, {
+    String mode = 'auto',
+    String? engine,
+  }) {
     send({
       'type': 'user_message',
       if (sessionId != null) 'session_id': sessionId,
       'message': message,
       if (reportId != null) 'report_id': reportId,
       'mode': mode,
+      if (engine != null) 'engine': engine,
     });
   }
 
@@ -125,11 +134,30 @@ class CoachWsClient {
     });
   }
 
+  /// Action Plan 초기화 요청 (result 화면에서 최초 진입 시)
+  void sendActionPlanInit(List<int> newActionIds) {
+    send({
+      'type': 'action_plan_init',
+      if (sessionId != null) 'session_id': sessionId,
+      'new_action_ids': newActionIds,
+    });
+  }
+
+  /// 모든 개인화 수락/거절 완료 시 마무리 요청
+  void sendActionPlanComplete() {
+    send({
+      'type': 'action_plan_complete',
+      if (sessionId != null) 'session_id': sessionId,
+    });
+  }
+
   /// 엔진 모드 전환 요청
-  void sendModeSwitch(String engine) {
+  /// [context] `action_plan`이면 리포트 직후 플로우로 간주해 수동 코치 브리핑을 생략한다.
+  void sendModeSwitch(String engine, {String? context}) {
     send({
       'type': 'mode_switch',
       'engine': engine,
+      if (context != null) 'context': context,
     });
   }
 
@@ -175,6 +203,18 @@ class CoachWsClient {
           break;
         case 'tool_status':
           onToolStatus?.call(data);
+          break;
+        case 'coach_progress':
+          onCoachProgress?.call(data);
+          break;
+        case 'goal_proposals':
+          onGoalProposals?.call(data);
+          break;
+        case 'habit_domain_chart':
+          onHabitDomainChart?.call(data);
+          break;
+        case 'habit_personalization_proposals':
+          onHabitPersonalizationProposals?.call(data);
           break;
         case 'done':
           onDone?.call(data);

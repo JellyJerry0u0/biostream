@@ -18,6 +18,7 @@ object ChronoWorkScheduler {
     private const val TAG = "ChronoWorkScheduler"
     private const val WORK_NAME = "DailyHealthSyncWork"
     private const val ONE_TIME_WORK_NAME = "DebugHealthSyncWork"
+    private const val UV_PROMPT_WORK_NAME = "UvOutdoorPromptWork"
 
     fun scheduleDailySync(context: Context) {
         val workManager = WorkManager.getInstance(context)
@@ -42,6 +43,8 @@ object ChronoWorkScheduler {
             ExistingPeriodicWorkPolicy.KEEP,
             dailyWorkRequest
         )
+
+        scheduleOutdoorPrompt(context)
     }
 
     fun enqueueOneTimeSync(context: Context) {
@@ -73,5 +76,27 @@ object ChronoWorkScheduler {
         }
 
         return Duration.between(now, target).toMillis()
+    }
+
+    private fun scheduleOutdoorPrompt(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val promptWorkRequest = PeriodicWorkRequestBuilder<UvOutdoorPromptWorker>(
+            15, TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            UV_PROMPT_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            promptWorkRequest
+        )
+
+        Log.i(TAG, "Outdoor UV prompt periodic work scheduled")
     }
 }

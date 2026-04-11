@@ -8,6 +8,7 @@ import 'profile_completion_screen.dart';
 import 'signup_screen.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import '../utils/app_snackbar.dart';
 import '../widgets/login/login_form_section.dart';
 import '../widgets/login/login_header_section.dart';
 import '../widgets/login/login_social_footer_section.dart';
@@ -28,12 +29,16 @@ class _LoginScreenState extends State<LoginScreen> {
   );
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -47,26 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (!result.success) {
-      _showSnackBar(result.message);
+      showErrorSnackBar(context, result.message);
       return;
     }
 
-    switch (result.nextRoute) {
-      case LoginNextRoute.home:
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-        break;
-      case LoginNextRoute.profileCompletion:
-      case LoginNextRoute.faceScan:
-      case LoginNextRoute.none:
-        break;
-    }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    _navigateForResult(result.nextRoute);
   }
 
   void _onForgotPassword() {
@@ -82,24 +72,34 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _onKakaoLogin() async {
-    _showSnackBar('카카오 로그인 중...');
-    final result = await _loginController.submitKakaoLogin();
-    if (!mounted) return;
-    if (result.success) {
-      if (result.nextRoute == LoginNextRoute.profileCompletion) {
+  void _navigateForResult(LoginNextRoute route) {
+    switch (route) {
+      case LoginNextRoute.home:
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      case LoginNextRoute.profileCompletion:
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
               builder: (context) => const ProfileCompletionScreen()),
         );
-      } else if (result.nextRoute == LoginNextRoute.faceScan) {
+      case LoginNextRoute.faceScan:
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const FaceScanScreen()),
         );
-      }
-    } else {
-      _showSnackBar(result.message);
+      case LoginNextRoute.none:
+        break;
     }
+  }
+
+  void _onKakaoLogin() async {
+    final result = await _loginController.submitKakaoLogin();
+    if (!mounted) return;
+    if (!result.success) {
+      showErrorSnackBar(context, result.message);
+      return;
+    }
+    _navigateForResult(result.nextRoute);
   }
 
   @override
@@ -163,6 +163,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               isDark: isDark,
                               emailController: _emailController,
                               passwordController: _passwordController,
+                              emailFocusNode: _emailFocusNode,
+                              passwordFocusNode: _passwordFocusNode,
                               obscurePassword: _obscurePassword,
                               onTogglePasswordVisibility: () {
                                 setState(() {

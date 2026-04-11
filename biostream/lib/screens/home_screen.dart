@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../services/lifestyle_service.dart';
+import '../utils/app_snackbar.dart';
 import 'facescan_screen.dart';
 import 'result/result_screen.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+import '../widgets/home/home_habit_distribution_section.dart';
+import '../widgets/home/home_quest_detail_dialog.dart';
 import '../widgets/home/home_quest_section.dart';
 import '../widgets/home/home_recent_prediction_section.dart';
 import '../widgets/home/home_simulation_section.dart';
@@ -37,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String? _originalImageUrl;
   String? _generatedImageUrl;
   String? _predictionPoint;
+  Map<String, dynamic>? _reportSummaryData;
   bool _showBlankCanvas = false;
 
   late final AnimationController _introCtrl;
@@ -187,31 +191,68 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _originalImageUrl = result.originalImageUrl;
       _generatedImageUrl = result.generatedImageUrl;
       _predictionPoint = result.predictionPoint;
+      _reportSummaryData = result.summaryData;
       _isLoadingQuests = false;
       _questError = result.success ? null : result.errorMessage;
     });
   }
 
-  Future<void> _toggleQuestItem(HomeQuestItem item) async {
-    final lifestyleId = _lifestyleId;
+  Future<void> _setQuestItemDone(HomeQuestItem item, bool done) async {
+    if (item.isDone == done) return;
 
     setState(() {
-      item.isDone = !item.isDone;
+      item.isDone = done;
     });
 
+    final lifestyleId = _lifestyleId;
     if (lifestyleId == null) return;
 
     await _questController.savePracticedStateToLocal(lifestyleId, _questItems);
     final result = await _questController.savePracticedStateToServer(
       lifestyleId,
       _questItems,
+      toggledItem: item,
     );
     if (!mounted) return;
     if (result['success'] != true) {
-      final message = (result['message'] ?? '퀘스트 저장에 실패했습니다.').toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      setState(() {
+        item.isDone = !done;
+      });
+      final message =
+          (result['message'] ?? '생활습관 저장에 실패했습니다.').toString();
+      showErrorSnackBar(context, message);
+    }
+  }
+
+  /// 상세 다이얼로그 안에서 삭제 확인 후 호출 (별도 확인 팝업 없음)
+  Future<void> _removeCommittedHabitFromDialog(
+    HomeQuestItem item,
+    BuildContext editorContext,
+  ) async {
+    final id = item.committedActionId;
+    if (id == null) return;
+
+    final result = await _questController.retireCommittedAction(id);
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      final lifestyleId = _lifestyleId;
+      setState(() {
+        _questItems.removeWhere((e) => e.id == item.id);
+      });
+      if (lifestyleId != null) {
+        await _questController.savePracticedStateToLocal(
+          lifestyleId,
+          _questItems,
+        );
+      }
+      if (editorContext.mounted) {
+        Navigator.of(editorContext).pop();
+      }
+      if (!mounted) return;
+    } else {
+      final message = (result['message'] ?? '삭제에 실패했습니다.').toString();
+      showErrorSnackBar(context, message);
     }
   }
 
@@ -285,7 +326,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               position: _questSlide,
                               child: FadeTransition(
                                 opacity: _questOpacity,
-                                child: _buildQuestSection(context),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildQuestSection(context),
+                                    const SizedBox(height: 16),
+                                    HomeHabitDistributionSection(
+                                      questItems: _questItems,
+                                      isLoading: _isLoadingQuests,
+                                      hasError: _questError != null,
+                                      primaryColor: _primary,
+                                      gameCardColor: _gameCard,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                             const SizedBox(height: 28),
@@ -349,8 +403,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       isLoadingQuests: _isLoadingQuests,
       questError: _questError,
       questItems: _questItems,
-      onToggleQuestItem: _toggleQuestItem,
-      onOpenQuestDetail: _showQuestDetailDialog,
+      onOpenQuestEditor: _showQuestEditorDialog,
+      onToggleDoneOnList: _setQuestItemDone,
       onGoToReport: () {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const FaceScanScreen()),
@@ -361,100 +415,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildRecentPredictionSection(BuildContext context) {
     return HomeRecentPredictionSection(
-      primaryColor: _primary,
-      backgroundDarkColor: _backgroundDark,
-      gameCardColor: _gameCard,
       originalImageUrl: _originalImageUrl,
       generatedImageUrl: _generatedImageUrl,
       predictionPoint: _predictionPoint,
+      summaryData: _reportSummaryData,
+      primaryColor: _primary,
+      gameCardColor: _gameCard,
       onOpenResult: () {
+        final id = _lifestyleId;
+        if (id == null) {
+          return;
+        }
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ResultScreen()),
+          MaterialPageRoute<void>(
+            builder: (_) => ResultScreen(viewOnlyLifestyleId: id),
+          ),
         );
       },
     );
   }
 
-  void _showQuestDetailDialog(HomeQuestItem item) {
-    showDialog<void>(
+  void _showQuestEditorDialog(HomeQuestItem item) {
+    showHomeQuestDetailDialog(
       context: context,
-      builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 360,
-              minHeight: 180,
-              maxHeight: 320,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          '퀘스트 상세보기',
-                          style: TextStyle(
-                            color: Color(0xFF102217),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(
-                          Icons.close,
-                          color: Color(0xFF4D5C54),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: Color(0xFFE6ECE8)),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: const TextStyle(
-                            color: Color(0xFF102217),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            height: 1.3,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SelectableText(
-                          item.detail.trim().isNotEmpty
-                              ? item.detail
-                              : '상세 설명이 아직 없습니다.',
-                          style: const TextStyle(
-                            color: Color(0xFF24352D),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      item: item,
+      accentColor: _primary,
+      onConfirmRemoveCommitted: _removeCommittedHabitFromDialog,
     );
   }
 

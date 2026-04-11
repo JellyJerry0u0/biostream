@@ -9,24 +9,16 @@ class SurveyUvPage extends StatelessWidget {
     required this.isDark,
     required this.uvExposure10to16,
     required this.sunscreenFrequency,
-    required this.sunscreenReapply,
-    required this.outdoorSportsUv,
     required this.onUvExposureChanged,
     required this.onSunscreenFrequencyChanged,
-    required this.onSunscreenReapplyChanged,
-    required this.onOutdoorSportsUvChanged,
     required this.choiceBuilder,
   });
 
   final bool isDark;
   final String? uvExposure10to16;
   final String? sunscreenFrequency;
-  final String? sunscreenReapply;
-  final String? outdoorSportsUv;
   final ValueChanged<String?> onUvExposureChanged;
   final ValueChanged<String?> onSunscreenFrequencyChanged;
-  final ValueChanged<String?> onSunscreenReapplyChanged;
-  final ValueChanged<String?> onOutdoorSportsUvChanged;
   final SurveyChoiceBuilder choiceBuilder;
 
   @override
@@ -73,7 +65,7 @@ class SurveyUvPage extends StatelessWidget {
                 }).toList(),
               ),
               SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '선크림 사용 빈도'),
+              _title(context, '선크림 사용 빈도 (주 몇 회)'),
               SizedBox(height: Responsive.padding(context, 16)),
               Wrap(
                 alignment: WrapAlignment.center,
@@ -81,58 +73,16 @@ class SurveyUvPage extends StatelessWidget {
                 spacing: Responsive.padding(context, 12),
                 runSpacing: Responsive.padding(context, 12),
                 children: [
-                  {'value': 'never', 'label': '안함'},
-                  {'value': 'sometimes', 'label': '가끔'},
-                  {'value': 'most_days', 'label': '대부분'},
-                  {'value': 'daily_with_reapply', 'label': '매일 (재도포 포함)'},
+                  {'value': '0', 'label': '0회'},
+                  {'value': '1', 'label': '1회'},
+                  {'value': '2-3', 'label': '2~3회'},
+                  {'value': '4-5', 'label': '4~5회'},
+                  {'value': '6-7', 'label': '6~7회'},
                 ].map((option) {
                   return choiceBuilder(
                     label: option['label']!,
                     isSelected: sunscreenFrequency == option['value'],
                     onTap: () => onSunscreenFrequencyChanged(option['value']),
-                    isDark: isDark,
-                  );
-                }).toList(),
-              ),
-              SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '재도포 (2~3시간 간격)'),
-              SizedBox(height: Responsive.padding(context, 16)),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: Responsive.padding(context, 12),
-                runSpacing: Responsive.padding(context, 12),
-                children: [
-                  {'value': 'never', 'label': '안함'},
-                  {'value': 'rarely', 'label': '드물게'},
-                  {'value': 'sometimes', 'label': '가끔'},
-                  {'value': 'often', 'label': '자주'},
-                ].map((option) {
-                  return choiceBuilder(
-                    label: option['label']!,
-                    isSelected: sunscreenReapply == option['value'],
-                    onTap: () => onSunscreenReapplyChanged(option['value']),
-                    isDark: isDark,
-                  );
-                }).toList(),
-              ),
-              SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '야외스포츠 (강한 UV)'),
-              SizedBox(height: Responsive.padding(context, 16)),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: Responsive.padding(context, 12),
-                runSpacing: Responsive.padding(context, 12),
-                children: [
-                  {'value': 'none', 'label': '안함'},
-                  {'value': 'monthly', 'label': '월 1회'},
-                  {'value': 'weekly', 'label': '주 1회 이상'},
-                ].map((option) {
-                  return choiceBuilder(
-                    label: option['label']!,
-                    isSelected: outdoorSportsUv == option['value'],
-                    onTap: () => onOutdoorSportsUvChanged(option['value']),
                     isDark: isDark,
                   );
                 }).toList(),

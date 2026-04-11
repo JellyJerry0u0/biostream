@@ -26,17 +26,15 @@ def _lifestyle_to_dict(lifestyle: Lifestyle) -> Dict[str, Any]:
         "drinking_amount_per_session": lifestyle.drinking_amount_per_session,
         "smoking_status": lifestyle.smoking_status,
         "smoking_amount_per_day": lifestyle.smoking_amount_per_day,
+        "smoking_days_per_week": lifestyle.smoking_days_per_week,
         "stress_score": lifestyle.stress_score,
-        "caffeine_intake": lifestyle.caffeine_intake,
-        "caffeine_timing": lifestyle.caffeine_timing,
         "aerobic_weekly": lifestyle.aerobic_weekly,
         "resistance_weekly": lifestyle.resistance_weekly,
         "height": lifestyle.height,
         "weight": lifestyle.weight,
         "skin_type": lifestyle.skin_type,
-        "skin_concerns": lifestyle.skin_concerns or [],
         "skin_satisfaction": lifestyle.skin_satisfaction,
-        "target_years": lifestyle.target_years,
+        "target_years": lifestyle.target_years if lifestyle.target_years is not None else 30,
         "created_at": lifestyle.created_at.isoformat() if lifestyle.created_at else None
     }
 

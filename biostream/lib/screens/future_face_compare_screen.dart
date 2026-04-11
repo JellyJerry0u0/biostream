@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../services/lifestyle_service.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/future_face/future_face_comparison_slider.dart';
-import '../widgets/future_face/future_face_scenario_cards.dart';
 import 'future_face/future_face_compare_controller.dart';
 import 'future_face/future_face_visibility_helper.dart';
 
@@ -24,7 +23,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
       FutureFaceVisibilityHelper();
 
   double _sliderRatio = 0.5;
-  bool _wellManaged = true;
   bool _showBlankCanvas = false;
 
   late final AnimationController _introCtrl;
@@ -32,14 +30,10 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
   late final Animation<double> _pageOpacity;
   late final Animation<Offset> _heroSlide;
   late final Animation<Offset> _sliderSlide;
-  late final Animation<Offset> _cardsSlide;
   late final Animation<double> _heroOpacity;
   late final Animation<double> _sliderOpacity;
-  late final Animation<double> _cardsOpacity;
-  late final Animation<double> _fabOpacity;
   String? _futureImageUrl;
-  String? _currentImageUrl;
-  String _simulationPromptText = '';
+  String? _leftImageUrl;
   bool _isLoadingImages = true;
   String? _imageError;
 
@@ -77,15 +71,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
         curve: const Interval(0.15, 0.65, curve: Curves.easeOutCubic),
       ),
     );
-    _cardsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _introCtrl,
-        curve: const Interval(0.34, 0.84, curve: Curves.easeOutCubic),
-      ),
-    );
     _heroOpacity = CurvedAnimation(
       parent: _introCtrl,
       curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
@@ -93,14 +78,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
     _sliderOpacity = CurvedAnimation(
       parent: _introCtrl,
       curve: const Interval(0.15, 0.65, curve: Curves.easeOut),
-    );
-    _cardsOpacity = CurvedAnimation(
-      parent: _introCtrl,
-      curve: const Interval(0.34, 0.84, curve: Curves.easeOut),
-    );
-    _fabOpacity = CurvedAnimation(
-      parent: _introCtrl,
-      curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
     );
     _controller =
         FutureFaceCompareController(lifestyleService: _lifestyleService);
@@ -118,8 +95,7 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
 
     setState(() {
       _futureImageUrl = result.futureImageUrl;
-      _currentImageUrl = result.currentImageUrl;
-      _simulationPromptText = result.simulationPromptText;
+      _leftImageUrl = result.leftImageUrl;
       _imageError = result.errorMessage;
       _isLoadingImages = false;
     });
@@ -236,7 +212,7 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                                   ),
                                   const SizedBox(height: 10),
                                   Text(
-                                    '+20년 후의 모습 변화',
+                                    '+30년 후의 모습 변화',
                                     style: TextStyle(
                                       color: textColor,
                                       fontSize: 26,
@@ -264,36 +240,25 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
                             child: Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
-                              child: FutureFaceComparisonSlider(
-                                isDark: isDark,
-                                isLoading: _isLoadingImages,
-                                currentImageUrl: _currentImageUrl,
-                                futureImageUrl: _futureImageUrl,
-                                imageError: _imageError,
-                                sliderRatio: _sliderRatio,
-                                primaryColor: _primary,
-                                onSliderRatioChanged: (value) {
-                                  setState(() => _sliderRatio = value);
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        SlideTransition(
-                          position: _cardsSlide,
-                          child: FadeTransition(
-                            opacity: _cardsOpacity,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                              child: FutureFaceScenarioCards(
-                                isDark: isDark,
-                                textColor: textColor,
-                                primaryColor: _primary,
-                                wellManaged: _wellManaged,
-                                simulationPromptText: _simulationPromptText,
-                                onScenarioChanged: (wellManaged) {
-                                  setState(() => _wellManaged = wellManaged);
-                                },
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  FutureFaceComparisonSlider(
+                                    isDark: isDark,
+                                    isLoading: _isLoadingImages,
+                                    leftImageUrl: _leftImageUrl,
+                                    futureImageUrl: _futureImageUrl,
+                                    imageError: _imageError,
+                                    sliderRatio: _sliderRatio,
+                                    primaryColor: _primary,
+                                    onSliderRatioChanged: (value) {
+                                      setState(() => _sliderRatio = value);
+                                    },
+                                  ),
+                                  const SizedBox(
+                                    height: AppBottomNavBar.height + 24,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -306,22 +271,6 @@ class _FutureFaceCompareScreenState extends State<FutureFaceCompareScreen>
             ),
             _buildBottomNavigation(),
           ],
-        ),
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 66),
-        child: FadeTransition(
-          opacity: _fabOpacity,
-          child: FloatingActionButton.extended(
-            onPressed: () {},
-            backgroundColor: _primary,
-            foregroundColor: const Color(0xFF102217),
-            label: const Text(
-              '솔루션 보기',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            icon: const Icon(Icons.auto_awesome),
-          ),
         ),
       ),
     );

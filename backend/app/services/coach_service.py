@@ -124,16 +124,21 @@ def load_report_context(session: SessionData, db=None) -> Dict[str, Any]:
         return ctx
 
     try:
-        from app.models import Lifestyle
+        from app.models import Lifestyle, Report
 
         lifestyle = db.query(Lifestyle).filter(
             Lifestyle.id == report_id,
             Lifestyle.user_id == session.user_id,
         ).first()
-        if not lifestyle or not lifestyle.health_report:
+        report_row = (
+            db.query(Report).filter(Report.lifestyle_id == report_id).first()
+            if lifestyle
+            else None
+        )
+        if not lifestyle or not report_row or not report_row.report:
             return ctx
 
-        report = lifestyle.health_report
+        report = report_row.report
         if not isinstance(report, dict):
             return ctx
 
@@ -153,6 +158,9 @@ def load_report_context(session: SessionData, db=None) -> Dict[str, Any]:
 
             title = section.get("title", tab)
             cards = section.get("cards", [])
+            if not cards and section.get("subsections"):
+                sub = section["subsections"][0] if section["subsections"] else {}
+                cards = sub.get("cards", [])
             card_texts = []
 
             for card in cards:
@@ -197,6 +205,90 @@ def load_report_context(session: SessionData, db=None) -> Dict[str, Any]:
         traceback.print_exc()
 
     return ctx
+
+
+# ══════════════════════════════════════════════
+#  습관 체크인 컨텍스트 로드 (개인화용)
+# ══════════════════════════════════════════════
+
+def load_habits_context(session: SessionData, db=None, days: int = 7) -> str:
+    """
+    사용자의 습관(UserCommittedAction)과 최근 N일 체크인 현황을 요약하여 반환.
+    prepare_context에서 시스템 프롬프트에 주입하여 개인화된 코칭에 활용.
+    """
+    if not db or not session.user_id:
+        return ""
+
+    try:
+        from datetime import date, timedelta
+        from app.models import UserCommittedAction, ActionCheckIn
+
+        actions = (
+            db.query(UserCommittedAction)
+            .filter(
+                UserCommittedAction.user_id == session.user_id,
+                UserCommittedAction.status == "active",
+            )
+            .order_by(UserCommittedAction.committed_at.desc())
+            .all()
+        )
+        if not actions:
+            return ""
+
+        today = date.today()
+        from_date = today - timedelta(days=days)
+        action_ids = [a.id for a in actions]
+
+        check_ins = (
+            db.query(ActionCheckIn)
+            .filter(
+                ActionCheckIn.committed_action_id.in_(action_ids),
+                ActionCheckIn.check_date >= from_date,
+                ActionCheckIn.check_date <= today,
+            )
+            .all()
+        )
+
+        # 액션별 체크인 집계
+        by_action: Dict[int, List[Tuple[date, bool]]] = {aid: [] for aid in action_ids}
+        for c in check_ins:
+            by_action.setdefault(c.committed_action_id, []).append(
+                (c.check_date, c.completed)
+            )
+        for aid in by_action:
+            by_action[aid].sort(key=lambda x: x[0], reverse=True)
+
+        lines = []
+        for a in actions:
+            checks = by_action.get(a.id, [])
+            completed_count = sum(1 for _, done in checks if done)
+            total = len(checks)
+            rate_str = f"최근 {days}일 {completed_count}/{total}회 완료" if total else "체크인 없음"
+
+            # 어제/오늘 완료 여부
+            today_check = next((c for d, c in checks if d == today), None)
+            yesterday_check = next((c for d, c in checks if d == today - timedelta(days=1)), None)
+            recent = ""
+            if today_check is not None:
+                recent = " (오늘 ✓)" if today_check else " (오늘 ✗)"
+            elif yesterday_check is not None:
+                recent = " (어제 ✓)" if yesterday_check else " (어제 ✗)"
+
+            # 연속 실패 패턴 (최근 3일)
+            if len(checks) >= 2:
+                recent_3 = [c for d, c in sorted(checks, key=lambda x: x[0], reverse=True)[:3]]
+                if all(not c for c in recent_3) and len(recent_3) >= 2:
+                    recent += " [최근 연속 미실천]"
+
+            lines.append(f"- {a.action_title}: {rate_str}{recent}")
+
+        if lines:
+            return "## 습관 실천 현황\n" + "\n".join(lines)
+        return ""
+    except Exception as e:
+        print(f"[CoachService] 습관 컨텍스트 로드 실패: {e}")
+        traceback.print_exc()
+        return ""
 
 
 # ══════════════════════════════════════════════
@@ -438,7 +530,7 @@ async def stream_llm_response(
             google_api_key=api_key,
             streaming=True,
             temperature=0.7,
-            max_output_tokens=1024,
+            max_output_tokens=8192,
         )
 
         # langchain 메시지 형식으로 변환
@@ -497,18 +589,20 @@ class CoachService:
             assistant_msg_id: 어시스턴트 메시지 ID
             send_json: async callable — dict를 WS로 전송
             db: SQLAlchemy DB 세션
-            engine_override: 메시지 단위 엔진 오버라이드 ("quick" | "deep")
+            engine_override: 메시지 단위 엔진 오버라이드 ("quick" | "coach")
         """
-        # 엔진 결정: 메시지 오버라이드 > 세션 설정
         engine = engine_override or session.engine or "quick"
-
-        # ── Deep 모드 분기 ──
         if engine == "deep":
+            engine = "coach"
+            session.engine = "coach"
+
+        # ── Coach 모드 (LangGraph 적응형 에이전트) ──
+        if engine == "coach":
             try:
-                from app.services.coach_graph import run_deep_coach
+                from app.coach_agent.runner import run_coach_agent
 
                 report_ctx = load_report_context(session, db)
-                await run_deep_coach(
+                await run_coach_agent(
                     session=session,
                     user_message=user_message,
                     mode=mode,
@@ -519,9 +613,9 @@ class CoachService:
                 )
                 return
             except ImportError as e:
-                print(f"[CoachService] Deep Coach 모듈 로드 실패, Quick 모드로 폴백: {e}")
+                print(f"[CoachService] Coach Agent 모듈 로드 실패, Quick 모드로 폴백: {e}")
             except Exception as e:
-                print(f"[CoachService] Deep Coach 실행 실패, Quick 모드로 폴백: {e}")
+                print(f"[CoachService] Coach Agent 실행 실패, Quick 모드로 폴백: {e}")
                 traceback.print_exc()
 
         # ── Quick 모드 (기존 로직) ──

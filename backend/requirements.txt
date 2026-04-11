@@ -9,6 +9,7 @@ email-validator
 bcrypt==4.0.1
 google-generativeai>=0.3.0  # Gemini API 호출용 (최신 모델 지원)
 httpx  # HTTP 클라이언트
+Pillow>=10.0.0  # GPU 출력을 원본과 동일 픽셀 크기로 맞춤
 langgraph>=0.2.0  # LangGraph 워크플로우 구성
 langchain>=0.3.0  # LangChain 기본
 langchain-google-genai>=2.0.0  # Google Gemini 통합

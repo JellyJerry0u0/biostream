@@ -81,11 +81,11 @@ class _PastFaceArchiveScreenState extends State<PastFaceArchiveScreen> {
             final targetYears = map['target_years'];
             final int parsedYears = targetYears is int
                 ? targetYears
-                : int.tryParse('$targetYears') ?? 0;
+                : int.tryParse('$targetYears') ?? 30;
 
             return _ArchiveItem(
               date: _formatDate(generatedAt),
-              horizonLabel: parsedYears > 0 ? '+$parsedYears년 뒤' : '+미래',
+              horizonLabel: parsedYears > 0 ? '+$parsedYears년 뒤' : '+30년 뒤',
               imageUrl: (map['image_url'] ?? '').toString(),
             );
           })

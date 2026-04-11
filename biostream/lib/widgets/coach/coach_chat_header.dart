@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/coach_models.dart';
 import '../../utils/responsive.dart';
 import '../common/app_icon_button.dart';
+import 'coach_chat_shell_colors.dart';
 
 class CoachChatHeader extends StatelessWidget {
   const CoachChatHeader({
@@ -14,6 +15,7 @@ class CoachChatHeader extends StatelessWidget {
     required this.isAssistantStreaming,
     required this.onBack,
     required this.onToggleEngine,
+    this.onCoachGoalsTap,
   });
 
   final bool isDark;
@@ -23,12 +25,13 @@ class CoachChatHeader extends StatelessWidget {
   final bool isAssistantStreaming;
   final VoidCallback onBack;
   final VoidCallback onToggleEngine;
+  /// Coach 모드일 때만 상단에서 적응형 목표 시트를 연다.
+  final VoidCallback? onCoachGoalsTap;
 
   @override
   Widget build(BuildContext context) {
-    final isDeep = engine == CoachEngine.deep;
-    final accentColor =
-        isDeep ? const Color(0xFF7C4DFF) : const Color(0xFF37EC13);
+    final accentColor = CoachChatShellColors.accent(engine);
+    final isCoach = engine == CoachEngine.coach;
 
     return Container(
       padding: EdgeInsets.only(
@@ -38,8 +41,7 @@ class CoachChatHeader extends StatelessWidget {
         right: horizontalPadding,
       ),
       decoration: BoxDecoration(
-        color: (isDark ? const Color(0xFF132210) : const Color(0xFFF6F8F6))
-            .withValues(alpha: 0.95),
+        color: CoachChatShellColors.stripBg(isDark: isDark, engine: engine),
         border: Border(
           bottom: BorderSide(
             color: isDark
@@ -97,6 +99,22 @@ class CoachChatHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (isCoach && onCoachGoalsTap != null) ...[
+            const SizedBox(width: 4),
+            AppIconButton(
+              icon: Icons.track_changes_rounded,
+              onTap: () {
+                if (isAssistantStreaming) return;
+                onCoachGoalsTap!();
+              },
+              iconColor: accentColor.withValues(
+                alpha: isAssistantStreaming ? 0.45 : 1,
+              ),
+              iconSize: 21,
+              buttonSize: 38,
+              borderRadius: 20,
+            ),
+          ],
           const SizedBox(width: 8),
           GestureDetector(
             onTap: isAssistantStreaming ? null : onToggleEngine,
@@ -112,13 +130,13 @@ class CoachChatHeader extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    isDeep ? Icons.psychology : Icons.bolt,
+                    isCoach ? Icons.psychology : Icons.bolt,
                     size: 16,
                     color: accentColor,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    isDeep ? 'Deep' : 'Quick',
+                    isCoach ? 'Coach' : 'Quick',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,

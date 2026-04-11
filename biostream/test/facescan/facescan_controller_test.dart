@@ -7,8 +7,8 @@ class _FakeImageService extends ImageService {
   Map<String, dynamic> uploadResponse = {'success': false};
 
   @override
-  Future<Map<String, dynamic>> uploadImage(
-      XFile imageFile, int targetYears) async {
+  Future<Map<String, dynamic>> uploadImage(XFile imageFile,
+      {int targetYears = 30}) async {
     return uploadResponse;
   }
 }

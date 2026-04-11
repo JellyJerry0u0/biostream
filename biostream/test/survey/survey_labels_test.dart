@@ -15,33 +15,24 @@ void main() {
     test('uvExposureSummary composes all selected parts', () {
       final summary = SurveyLabels.uvExposureSummary(
         uvExposure10to16: '1~2h',
-        sunscreenFrequency: 'most_days',
-        sunscreenReapply: 'often',
-        outdoorSportsUv: 'weekly',
+        sunscreenFrequency: '6-7',
       );
 
-      expect(
-        summary,
-        '야외노출: 1~2시간, 선크림: 대부분, 재도포: 자주, 야외스포츠: 주 1회 이상',
-      );
+      expect(summary, '야외노출: 1~2시간, 선크림: 주 6~7회');
     });
 
-    test('drinkingSmokingSummary includes smoking amount only when current',
-        () {
+    test('drinkingSmokingSummary includes smoking days when current', () {
       final summary = SurveyLabels.drinkingSmokingSummary(
         drinkingDaysPerWeek: '2-3',
-        drinkingAmountPerSession: '맥주 2병',
         smokingStatus: 'current',
-        smokingAmountUnit: '개비',
-        smokingAmountText: '5',
+        smokingDaysPerWeek: '4-5',
       );
 
-      expect(summary, '음주: 2-3일, 1회량: 맥주 2병, 흡연: 현재 흡연, 5개비');
+      expect(summary, '음주: 2-3일, 흡연: 현재 흡연, 흡연일: 4-5일');
     });
 
-    test('skin labels map known values and keep fallback', () {
+    test('skin type label maps known values', () {
       expect(SurveyLabels.skinTypeLabel('sensitive'), '민감성');
-      expect(SurveyLabels.skinConcernLabel('unknown_issue'), 'unknown_issue');
     });
   });
 }

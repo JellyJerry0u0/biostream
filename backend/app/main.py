@@ -47,9 +47,22 @@ app.include_router(lifestyle_survey.router, prefix="/api", tags=["Lifestyle Surv
 from .api import report
 app.include_router(report.router, prefix="/api", tags=["Health Report"])
 
+# 습관 코칭 API
+from .api import committed_actions
+app.include_router(committed_actions.router)
+
 # 코치 챗봇 WebSocket (/ws/coach)
 from .api import coach_ws
 app.include_router(coach_ws.router, tags=["Coach Chatbot"])
+
+from .api import coach_agent_api
+app.include_router(coach_agent_api.router)
+
+from .api import coach_goals
+app.include_router(coach_goals.router)
+
+from .api import coach_inbox
+app.include_router(coach_inbox.router)
 
 @app.get("/")
 def read_root():

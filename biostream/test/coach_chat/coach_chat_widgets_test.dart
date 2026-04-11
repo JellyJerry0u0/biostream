@@ -16,6 +16,7 @@ void main() {
             body: CoachChatInputBar(
               isDark: false,
               horizontalPadding: 16,
+              engine: CoachEngine.quick,
               inputController: controller,
               isAssistantStreaming: false,
               onSend: () {},
@@ -45,6 +46,7 @@ void main() {
             body: CoachChatInputBar(
               isDark: false,
               horizontalPadding: 16,
+              engine: CoachEngine.quick,
               inputController: controller,
               isAssistantStreaming: true,
               onSend: () {
@@ -68,6 +70,7 @@ void main() {
       final message = CoachChatMessage(
         id: 'a1',
         role: 'assistant',
+        channel: CoachEngine.quick,
         content: '추천 액션입니다.',
         isStreaming: false,
         actions: [

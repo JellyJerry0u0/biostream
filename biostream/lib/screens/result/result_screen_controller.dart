@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 import '../../services/lifestyle_service.dart';
 import 'result_screen_helper.dart';
@@ -67,7 +66,8 @@ class ResultScreenController {
       final lifestyleResult = await _lifestyleService.getLifestyleData();
       debugPrint('🔍 Lifestyle 데이터 로드 결과: $lifestyleResult');
 
-      if (lifestyleResult['success'] == true && lifestyleResult['data'] != null) {
+      if (lifestyleResult['success'] == true &&
+          lifestyleResult['data'] != null) {
         final lifestyleData = lifestyleResult['data'] as Map<String, dynamic>;
         final resolvedOriginal = await ResultScreenHelper.resolveImageUrl(
           ResultScreenHelper.extractOriginalImageUrl(lifestyleData, null),
@@ -85,7 +85,8 @@ class ResultScreenController {
 
       return LoadLifestyleResult(
         success: false,
-        errorMessage: lifestyleResult['message']?.toString() ?? '데이터를 불러올 수 없습니다.',
+        errorMessage:
+            lifestyleResult['message']?.toString() ?? '데이터를 불러올 수 없습니다.',
       );
     } catch (e, stackTrace) {
       debugPrint('❌ 에러 발생: $e');
@@ -111,6 +112,8 @@ class ResultScreenController {
           errorMessage: '설문조사 데이터를 찾을 수 없습니다. 먼저 설문조사를 완료해주세요.',
         );
       }
+
+      // /generate 는 페이스스캔 직후(선행), /skin-edit 은 설문 제출 직후.
 
       final result = await _lifestyleService.generateHealthReport(
         lifestyleId,
@@ -151,11 +154,14 @@ class ResultScreenController {
         );
       }
 
-      final reportData = rawReport.containsKey('tabs') && rawReport.containsKey('sections')
-          ? rawReport
-          : ResultScreenHelper.convertOldSchemaToNew(rawReport, result['cards']);
+      final reportData =
+          rawReport.containsKey('tabs') && rawReport.containsKey('sections')
+              ? rawReport
+              : ResultScreenHelper.convertOldSchemaToNew(
+                  rawReport, result['cards']);
 
-      final refreshedLifestyleResult = await _lifestyleService.getLifestyleData();
+      final refreshedLifestyleResult =
+          await _lifestyleService.getLifestyleData();
       Map<String, dynamic>? refreshedLifestyleData;
       if (refreshedLifestyleResult['success'] == true &&
           refreshedLifestyleResult['data'] != null) {
@@ -163,12 +169,15 @@ class ResultScreenController {
             refreshedLifestyleResult['data'] as Map<String, dynamic>;
       }
 
-      final mergedLifestyleData = refreshedLifestyleData ?? currentLifestyleData;
+      final mergedLifestyleData =
+          refreshedLifestyleData ?? currentLifestyleData;
       final resolvedOriginal = await ResultScreenHelper.resolveImageUrl(
-        ResultScreenHelper.extractOriginalImageUrl(mergedLifestyleData, reportData),
+        ResultScreenHelper.extractOriginalImageUrl(
+            mergedLifestyleData, reportData),
       );
       final resolvedGenerated = await ResultScreenHelper.resolveImageUrl(
-        ResultScreenHelper.extractGeneratedImageUrl(mergedLifestyleData, reportData),
+        ResultScreenHelper.extractGeneratedImageUrl(
+            mergedLifestyleData, reportData),
       );
 
       final tabs = reportData['tabs'] as List<dynamic>? ?? [];
@@ -192,10 +201,10 @@ class ResultScreenController {
     }
   }
 
-  Future<SaveComparisonResult> saveComparison({
+  /// 리포트를 서버에만 저장 (사진 없이도 가능)
+  Future<SaveComparisonResult> saveReportToServer({
     required int? lifestyleId,
     required Map<String, dynamic>? reportData,
-    required String? generatedImageUrl,
   }) async {
     if (lifestyleId == null || reportData == null) {
       return const SaveComparisonResult(
@@ -203,13 +212,6 @@ class ResultScreenController {
         message: '저장할 리포트 데이터가 없습니다.',
       );
     }
-    if (generatedImageUrl == null || generatedImageUrl.isEmpty) {
-      return const SaveComparisonResult(
-        success: false,
-        message: '저장할 GPU 결과 이미지가 없습니다.',
-      );
-    }
-
     try {
       final saveReportResult = await _lifestyleService.saveGeneratedReport(
         lifestyleId: lifestyleId,
@@ -221,40 +223,17 @@ class ResultScreenController {
           message: saveReportResult['message']?.toString() ?? '리포트 저장에 실패했습니다.',
         );
       }
-
-      final gpuBytes = await ResultScreenHelper.downloadImageBytes(generatedImageUrl);
-      if (gpuBytes == null || gpuBytes.isEmpty) {
-        return const SaveComparisonResult(
-          success: false,
-          message: '이미지 저장에 실패했습니다.',
-        );
-      }
-
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final saveResult = await ImageGallerySaverPlus.saveImage(
-        gpuBytes,
-        quality: 100,
-        name: 'biostream_gpu_result_$timestamp',
-      );
-
-      if (!ResultScreenHelper.isGallerySaveSuccess(saveResult)) {
-        debugPrint('갤러리 저장 실패 응답: $saveResult');
-        return const SaveComparisonResult(
-          success: false,
-          message: '갤러리 저장에 실패했습니다.',
-        );
-      }
-
       return const SaveComparisonResult(
         success: true,
-        message: '리포트와 GPU 이미지가 저장되었습니다.',
+        message: '리포트가 저장되었습니다.',
       );
     } catch (e) {
-      debugPrint('Save Comparison 실패: $e');
+      debugPrint('Save Report 실패: $e');
       return const SaveComparisonResult(
         success: false,
         message: '저장 중 오류가 발생했습니다.',
       );
     }
   }
+
 }

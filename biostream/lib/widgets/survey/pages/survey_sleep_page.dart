@@ -14,6 +14,7 @@ class SurveySleepPage extends StatelessWidget {
     required this.onSleepHoursWeekendChanged,
     required this.onSleepQualityScoreChanged,
     required this.sliderBuilder,
+    this.prefillHint,
   });
 
   final bool isDark;
@@ -24,6 +25,7 @@ class SurveySleepPage extends StatelessWidget {
   final ValueChanged<double> onSleepHoursWeekendChanged;
   final ValueChanged<double> onSleepQualityScoreChanged;
   final SurveySliderBuilder sliderBuilder;
+  final String? prefillHint;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +48,17 @@ class SurveySleepPage extends StatelessWidget {
                   color: isDark ? Colors.white : Colors.black87,
                 ),
               ),
+              if ((prefillHint ?? '').isNotEmpty) ...[
+                SizedBox(height: Responsive.padding(context, 12)),
+                Text(
+                  prefillHint ?? '',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: Responsive.fontSize(context, 13),
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
               SizedBox(height: Responsive.padding(context, 32)),
               sliderBuilder(
                 label: '평균 수면시간 (평일)',

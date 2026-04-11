@@ -17,8 +17,6 @@ class SurveyLabels {
   static String uvExposureSummary({
     required String? uvExposure10to16,
     required String? sunscreenFrequency,
-    required String? sunscreenReapply,
-    required String? outdoorSportsUv,
   }) {
     final parts = <String>[];
     if (uvExposure10to16 != null) {
@@ -27,47 +25,28 @@ class SurveyLabels {
     if (sunscreenFrequency != null) {
       parts.add('선크림: ${sunscreenFrequencyLabel(sunscreenFrequency)}');
     }
-    if (sunscreenReapply != null) {
-      parts.add('재도포: ${sunscreenReapplyLabel(sunscreenReapply)}');
-    }
-    if (outdoorSportsUv != null) {
-      parts.add('야외스포츠: ${outdoorSportsLabel(outdoorSportsUv)}');
-    }
     return parts.isEmpty ? '미입력' : parts.join(', ');
   }
 
   static String drinkingSmokingSummary({
     required String? drinkingDaysPerWeek,
-    required String? drinkingAmountPerSession,
     required String? smokingStatus,
-    required String? smokingAmountUnit,
-    required String smokingAmountText,
+    required String? smokingDaysPerWeek,
   }) {
     final parts = <String>[];
     if (drinkingDaysPerWeek != null) {
       parts.add('음주: ${drinkingDaysLabel(drinkingDaysPerWeek)}');
-    }
-    if (drinkingAmountPerSession != null &&
-        drinkingAmountPerSession.isNotEmpty) {
-      parts.add('1회량: $drinkingAmountPerSession');
     }
     if (smokingStatus != null) {
       final smokingLabel = smokingStatus == 'never'
           ? '안함'
           : (smokingStatus == 'former' ? '과거 흡연' : '현재 흡연');
       parts.add('흡연: $smokingLabel');
-      if (smokingStatus == 'current' &&
-          smokingAmountUnit != null &&
-          smokingAmountText.isNotEmpty) {
-        parts.add('$smokingAmountText$smokingAmountUnit');
+      if (smokingStatus == 'current' && smokingDaysPerWeek != null) {
+        parts.add('흡연일: ${drinkingDaysLabel(smokingDaysPerWeek)}');
       }
     }
     return parts.isEmpty ? '미입력' : parts.join(', ');
-  }
-
-  static String caffeineTimingLabel(String? value) {
-    const map = {'before_noon': '오전', 'afternoon': '오후', 'evening': '저녁'};
-    return map[value] ?? '';
   }
 
   static String aerobicLabel(String? value) {
@@ -90,18 +69,6 @@ class SurveyLabels {
     return map[value] ?? value ?? '미입력';
   }
 
-  static String skinConcernLabel(String value) {
-    const map = {
-      'wrinkle': '주름',
-      'pigmentation': '색소',
-      'elasticity': '탄력',
-      'dryness': '건조',
-      'redness': '홍조',
-      'acne': '트러블',
-    };
-    return map[value] ?? value;
-  }
-
   static String uvExposureLabel(String? value) {
     const map = {
       '<30m': '30분 미만',
@@ -118,22 +85,12 @@ class SurveyLabels {
       'sometimes': '가끔',
       'most_days': '대부분',
       'daily_with_reapply': '매일(재도포)',
+      '0': '주 0회',
+      '1': '주 1회',
+      '2-3': '주 2~3회',
+      '4-5': '주 4~5회',
+      '6-7': '주 6~7회',
     };
-    return map[value] ?? value ?? '';
-  }
-
-  static String sunscreenReapplyLabel(String? value) {
-    const map = {
-      'never': '안함',
-      'rarely': '드물게',
-      'sometimes': '가끔',
-      'often': '자주',
-    };
-    return map[value] ?? value ?? '';
-  }
-
-  static String outdoorSportsLabel(String? value) {
-    const map = {'none': '안함', 'monthly': '월 1회', 'weekly': '주 1회 이상'};
     return map[value] ?? value ?? '';
   }
 

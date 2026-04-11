@@ -1,36 +1,29 @@
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
+import 'auth_service.dart';
+import 'authorized_http.dart';
 
 class ProfileService {
-  static const _tokenKey = 'jwt_token';
-
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final AuthorizedHttp _http = AuthorizedHttp();
+  final AuthService _auth = AuthService();
 
   Future<Map<String, dynamic>> getMyProfile() async {
     try {
-      final token = await _storage.read(key: _tokenKey);
-      if (token == null || token.isEmpty) {
+      if (!await _http.hasAnyCredential()) {
         return {'success': false, 'message': '로그인이 필요합니다.'};
       }
 
       final origin = await ApiConfig.getBaseOrigin();
-      final response = await http.get(
-        Uri.parse('$origin/auth/me'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
+      final response = await _http.get(Uri.parse('$origin/auth/me'));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return {'success': true, 'data': data};
       }
       if (response.statusCode == 401) {
-        await _storage.delete(key: _tokenKey);
         return {
           'success': false,
           'token_expired': true,
@@ -52,41 +45,58 @@ class ProfileService {
 
   Future<Map<String, dynamic>> updateMyProfile({
     required String nickname,
-    required String email,
-    String? profileImagePath,
+    required String accountEmail,
+    double? heightCm,
+    double? weightKg,
   }) async {
     try {
-      final token = await _storage.read(key: _tokenKey);
-      if (token == null || token.isEmpty) {
+      if (!await _http.hasAnyCredential()) {
         return {'success': false, 'message': '로그인이 필요합니다.'};
       }
 
       final origin = await ApiConfig.getBaseOrigin();
-      final request =
-          http.MultipartRequest('PUT', Uri.parse('$origin/auth/me'));
-      request.headers['Authorization'] = 'Bearer $token';
-      request.fields['nickname'] = nickname;
-      request.fields['email'] = email;
 
-      if (profileImagePath != null && profileImagePath.isNotEmpty) {
-        request.files.add(await http.MultipartFile.fromPath(
-            'profile_image', profileImagePath));
+      Future<http.StreamedResponse> sendMultipart() async {
+        final token = await _auth.storage.read(key: 'jwt_token');
+        final request =
+            http.MultipartRequest('PUT', Uri.parse('$origin/auth/me'));
+        if (token != null && token.isNotEmpty) {
+          request.headers['Authorization'] = 'Bearer $token';
+        }
+        request.fields['nickname'] = nickname;
+        request.fields['email'] = accountEmail;
+        if (heightCm != null && heightCm > 0) {
+          request.fields['height_cm'] = heightCm.toString();
+        }
+        if (weightKg != null && weightKg > 0) {
+          request.fields['weight_kg'] = weightKg.toString();
+        }
+
+        return request.send();
       }
 
-      final streamed = await request.send();
-      final responseBody = await streamed.stream.bytesToString();
+      var streamed = await sendMultipart();
+      var responseBody = await streamed.stream.bytesToString();
 
-      if (streamed.statusCode == 200) {
-        final data = jsonDecode(responseBody) as Map<String, dynamic>;
-        return {'success': true, 'data': data};
-      }
       if (streamed.statusCode == 401) {
-        await _storage.delete(key: _tokenKey);
+        if (await _auth.refreshTokens()) {
+          streamed = await sendMultipart();
+          responseBody = await streamed.stream.bytesToString();
+        }
+      }
+
+      if (streamed.statusCode == 401) {
+        await _auth.invalidateLocalSession();
         return {
           'success': false,
           'token_expired': true,
           'message': '로그인이 만료되었습니다. 다시 로그인해주세요.',
         };
+      }
+
+      if (streamed.statusCode == 200) {
+        final data = jsonDecode(responseBody) as Map<String, dynamic>;
+        return {'success': true, 'data': data};
       }
 
       final body = responseBody.isNotEmpty ? jsonDecode(responseBody) : null;

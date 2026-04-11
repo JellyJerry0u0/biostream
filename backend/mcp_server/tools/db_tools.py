@@ -100,6 +100,7 @@ def fetch_user_aging_context(user_id:int):
                 "smoking":{
                     "smoking_status": lifestyle.smoking_status,
                     "smoking_amount_per_day": lifestyle.smoking_amount_per_day if lifestyle.smoking_amount_per_day else None,
+                    "smoking_days_per_week": lifestyle.smoking_days_per_week if lifestyle.smoking_days_per_week else None,
                 },
                 "sleep":{
                     "sleep_hours_weekday": f"{lifestyle.sleep_hours_weekday} hours" if lifestyle.sleep_hours_weekday is not None else None,
@@ -118,8 +119,6 @@ def fetch_user_aging_context(user_id:int):
                 },
                 "stress":{
                     "stress_score": f"{lifestyle.stress_score}/10" if lifestyle.stress_score is not None else None,
-                    "caffeine_intake": lifestyle.caffeine_intake,
-                    "caffeine_timing": lifestyle.caffeine_timing
                 },
                 "activity":{
                     "aerobic_weekly": lifestyle.aerobic_weekly,
@@ -132,13 +131,13 @@ def fetch_user_aging_context(user_id:int):
             },
             "skin":{
                 "skin_type": lifestyle.skin_type,
-                "skin_concerns": lifestyle.skin_concerns if lifestyle.skin_concerns else None,
                 "skin_satisfaction": f"{lifestyle.skin_satisfaction}/10" if lifestyle.skin_satisfaction is not None else None
             },
-            "target_age": f"{lifestyle.target_years} years after" if lifestyle.target_years else None, #몇년후로 가고 싶은지
+            "target_age": f"{lifestyle.target_years or 30} years after",  # 고정 30
             "images": {
                 "original_image_url": lifestyle.original_image_url,  # 원본 이미지 경로
-                "generated_image_url": lifestyle.generated_image_url  # 생성된 이미지 경로
+                "generated_image_url": lifestyle.generated_image_url,  # 설문 반영 skin-edit 결과
+                "ideal_habits_skin_image_url": lifestyle.ideal_habits_skin_image_url,  # 습관 만점 skin-edit
             }
 
         }

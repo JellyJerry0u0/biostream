@@ -8,6 +8,8 @@ class LoginFormSection extends StatelessWidget {
     required this.isDark,
     required this.emailController,
     required this.passwordController,
+    required this.emailFocusNode,
+    required this.passwordFocusNode,
     required this.obscurePassword,
     required this.onTogglePasswordVisibility,
     required this.onForgotPassword,
@@ -17,6 +19,8 @@ class LoginFormSection extends StatelessWidget {
   final bool isDark;
   final TextEditingController emailController;
   final TextEditingController passwordController;
+  final FocusNode emailFocusNode;
+  final FocusNode passwordFocusNode;
   final bool obscurePassword;
   final VoidCallback onTogglePasswordVisibility;
   final VoidCallback onForgotPassword;
@@ -29,10 +33,19 @@ class LoginFormSection extends StatelessWidget {
         _labeledTextField(
           context: context,
           label: '이메일',
-          child: TextField(
+          child: TextFormField(
             controller: emailController,
-            keyboardType: TextInputType.emailAddress,
-            textAlign: TextAlign.center,
+            focusNode: emailFocusNode,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted: (_) => passwordFocusNode.requestFocus(),
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.none,
+            autofillHints: const [AutofillHints.username, AutofillHints.email],
+            smartDashesType: SmartDashesType.disabled,
+            smartQuotesType: SmartQuotesType.disabled,
+            textAlign: TextAlign.start,
             style: TextStyle(
               fontSize: Responsive.fontSize(context, 16),
               color: isDark ? Colors.white : Colors.black87,
@@ -65,10 +78,19 @@ class LoginFormSection extends StatelessWidget {
         _labeledTextField(
           context: context,
           label: '비밀번호',
-          child: TextField(
+          child: TextFormField(
             controller: passwordController,
+            focusNode: passwordFocusNode,
             obscureText: obscurePassword,
-            textAlign: TextAlign.center,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => onLogin(),
+            enableSuggestions: false,
+            autocorrect: false,
+            autofillHints: const [AutofillHints.password],
+            smartDashesType: SmartDashesType.disabled,
+            smartQuotesType: SmartQuotesType.disabled,
+            textAlign: TextAlign.start,
             style: TextStyle(
               fontSize: Responsive.fontSize(context, 16),
               color: isDark ? Colors.white : Colors.black87,

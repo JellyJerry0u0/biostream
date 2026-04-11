@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../utils/app_snackbar.dart';
 import '../utils/responsive.dart';
 import '../widgets/facescan/facescan_bottom_actions.dart';
 import '../widgets/facescan/facescan_header.dart';
@@ -7,6 +10,7 @@ import '../widgets/facescan/facescan_main_content.dart';
 import '../services/image_service.dart';
 import 'facescan/facescan_controller.dart';
 import 'survey_screen.dart';
+import 'home_screen.dart';
 
 class FaceScanScreen extends StatefulWidget {
   const FaceScanScreen({super.key});
@@ -46,8 +50,10 @@ class _FaceScanScreenState extends State<FaceScanScreen>
   }
 
   void _onSkip() {
-    // TODO: Navigate to main app
-    debugPrint('Skip tapped');
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> _onCamera() async {
@@ -104,12 +110,7 @@ class _FaceScanScreenState extends State<FaceScanScreen>
       debugPrint('[FaceScanScreen] ❌ $sourceLabel 오류 발생: $e');
       debugPrint('[FaceScanScreen] 스택 트레이스: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$errorPrefix: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showErrorSnackBar(context, '$errorPrefix: $e');
       }
     } finally {
       if (mounted) {
@@ -152,12 +153,20 @@ class _FaceScanScreenState extends State<FaceScanScreen>
         debugPrint('[FaceScanScreen] ✅ lifestyle_id: ${result.lifestyleId}');
         debugPrint('[FaceScanScreen] 설문조사 페이지로 이동 중...');
 
+        final lifestyleId = result.lifestyleId;
+        if (lifestyleId != null) {
+          // 리포트 생성 전 단계에서 기본 /generate 요청을 미리 시작합니다.
+          // skin-edit 는 DB에 URL 생길 때까지 대기 후 한 번만 이어서 호출합니다.
+          unawaited(_faceScanController.requestDefaultGenerate(lifestyleId));
+        }
+
         // SurveyScreen으로 이동하며 original_image_url 전달
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => SurveyScreen(
                 originalImageUrl: result.originalImageUrl,
+                lifestyleId: lifestyleId,
                 showHomeButtonOnFirstPage: true,
               ),
             ),
@@ -169,11 +178,9 @@ class _FaceScanScreenState extends State<FaceScanScreen>
       } else {
         debugPrint('[FaceScanScreen] 이미지 업로드 실패: ${result.message}');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.message ?? '이미지 업로드에 실패했습니다.'),
-              backgroundColor: Colors.red,
-            ),
+          showErrorSnackBar(
+            context,
+            result.message ?? '이미지 업로드에 실패했습니다.',
           );
         }
       }
@@ -183,12 +190,7 @@ class _FaceScanScreenState extends State<FaceScanScreen>
 
       if (mounted) {
         Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('이미지 업로드 중 오류가 발생했습니다: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showErrorSnackBar(context, '이미지 업로드 중 오류가 발생했습니다: $e');
       }
     } finally {
       if (mounted) {

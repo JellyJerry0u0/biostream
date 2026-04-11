@@ -10,11 +10,14 @@ class AppSurfaceChip extends StatelessWidget {
     this.borderRadius = 20,
     this.fontSize = 13,
     this.fontWeight = FontWeight.w500,
+    this.darkSurfaceColor,
   });
 
   final String text;
   final VoidCallback onTap;
   final bool isDark;
+  /// 다크 모드 칩 배경 (null이면 기본 녹색 톤)
+  final Color? darkSurfaceColor;
   final EdgeInsetsGeometry padding;
   final double borderRadius;
   final double fontSize;
@@ -30,7 +33,9 @@ class AppSurfaceChip extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1C2E18) : Colors.white,
+            color: isDark
+                ? (darkSurfaceColor ?? const Color(0xFF1C2E18))
+                : Colors.white,
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
               color: isDark

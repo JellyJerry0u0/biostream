@@ -22,6 +22,7 @@ class ResultScreenHelper {
     }
   }
 
+  /// 리포트 결과 슬라이더 왼쪽: 촬영·업로드 원본만 사용.
   static String? extractOriginalImageUrl(
     Map<String, dynamic>? lifestyleData,
     Map<String, dynamic>? reportData,
@@ -46,6 +47,8 @@ class ResultScreenHelper {
     return null;
   }
 
+  /// 리포트 결과 슬라이더 오른쪽: **설문 생활습관 점수 기반** skin-edit(`generated_image_url`)만.
+  /// `ideal_habits_skin_image_url`(습관 만점 skin-edit)은 미래 얼굴 탭에서만 사용한다.
   static String? extractGeneratedImageUrl(
     Map<String, dynamic>? lifestyleData,
     Map<String, dynamic>? reportData,

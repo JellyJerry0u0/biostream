@@ -15,6 +15,8 @@ void main() {
             isDark: false,
             emailController: TextEditingController(),
             passwordController: TextEditingController(),
+            emailFocusNode: FocusNode(),
+            passwordFocusNode: FocusNode(),
             obscurePassword: true,
             onTogglePasswordVisibility: () {
               toggled = true;
@@ -41,6 +43,8 @@ void main() {
             isDark: false,
             emailController: TextEditingController(),
             passwordController: TextEditingController(),
+            emailFocusNode: FocusNode(),
+            passwordFocusNode: FocusNode(),
             obscurePassword: true,
             onTogglePasswordVisibility: () {},
             onForgotPassword: () {

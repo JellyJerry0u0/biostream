@@ -41,6 +41,15 @@
 	<string>건강 리포트 생성을 위해 Health 앱의 걸음 수, 수면, 활동 데이터를 읽습니다.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>건강 데이터 동기화 기능 점검을 위해 HealthKit 접근이 필요합니다.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.biostream.uvprompt.refresh</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

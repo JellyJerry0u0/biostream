@@ -8,23 +8,13 @@ class SurveyStressPage extends StatelessWidget {
     super.key,
     required this.isDark,
     required this.stressScore,
-    required this.caffeineIntake,
-    required this.caffeineTiming,
     required this.onStressScoreChanged,
-    required this.onCaffeineIntakeChanged,
-    required this.onCaffeineTimingChanged,
-    required this.choiceBuilder,
     required this.sliderBuilder,
   });
 
   final bool isDark;
   final double stressScore;
-  final String? caffeineIntake;
-  final String? caffeineTiming;
   final ValueChanged<double> onStressScoreChanged;
-  final ValueChanged<String?> onCaffeineIntakeChanged;
-  final ValueChanged<String?> onCaffeineTimingChanged;
-  final SurveyChoiceBuilder choiceBuilder;
   final SurveySliderBuilder sliderBuilder;
 
   @override
@@ -41,7 +31,7 @@ class SurveyStressPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                '스트레스 및 회복',
+                '스트레스',
                 style: TextStyle(
                   fontSize: Responsive.fontSize(context, 28),
                   fontWeight: FontWeight.bold,
@@ -60,64 +50,9 @@ class SurveyStressPage extends StatelessWidget {
                 onChanged: onStressScoreChanged,
                 isDark: isDark,
               ),
-              SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '카페인 섭취량'),
-              SizedBox(height: Responsive.padding(context, 16)),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: Responsive.padding(context, 12),
-                runSpacing: Responsive.padding(context, 12),
-                children: [
-                  {'value': '0', 'label': '0잔'},
-                  {'value': '1', 'label': '1잔'},
-                  {'value': '2', 'label': '2잔'},
-                  {'value': '3+', 'label': '3잔 이상'},
-                ].map((option) {
-                  return choiceBuilder(
-                    label: option['label']!,
-                    isSelected: caffeineIntake == option['value'],
-                    onTap: () => onCaffeineIntakeChanged(option['value']),
-                    isDark: isDark,
-                  );
-                }).toList(),
-              ),
-              SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '카페인 섭취 시간대'),
-              SizedBox(height: Responsive.padding(context, 16)),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: Responsive.padding(context, 12),
-                runSpacing: Responsive.padding(context, 12),
-                children: [
-                  {'value': 'before_noon', 'label': '오전'},
-                  {'value': 'afternoon', 'label': '오후'},
-                  {'value': 'evening', 'label': '저녁'},
-                ].map((option) {
-                  return choiceBuilder(
-                    label: option['label']!,
-                    isSelected: caffeineTiming == option['value'],
-                    onTap: () => onCaffeineTimingChanged(option['value']),
-                    isDark: isDark,
-                  );
-                }).toList(),
-              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _title(BuildContext context, String text) {
-    return Text(
-      text,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: Responsive.fontSize(context, 16),
-        fontWeight: FontWeight.w600,
-        color: isDark ? Colors.grey[300] : Colors.grey[700],
       ),
     );
   }

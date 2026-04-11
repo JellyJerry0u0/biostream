@@ -8,15 +8,23 @@ class ApiConfig {
   static const String kakaoNativeAppKey = '2a989319843d4d7fa3409daeb094d0ca';
 
   static const String _keyBaseOrigin = 'api_base_origin';
+  static const String _envBaseOrigin = String.fromEnvironment(
+    'API_BASE_ORIGIN',
+    defaultValue: '',
+  );
 
   static const String _releaseOrigin =
       "https://api.biostream.com"; // TODO: 배포 시 실제 도메인으로 교체
 
   // 저장된 오리진 조회 (없으면 기본값)
   static Future<String> getBaseOrigin() async {
+    final injected = _normalizeOrigin(_envBaseOrigin);
+    if (injected.isNotEmpty) return injected;
+
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_keyBaseOrigin);
-    if (saved != null && saved.trim().isNotEmpty) return saved.trim();
+    final normalizedSaved = _normalizeOrigin(saved);
+    if (normalizedSaved.isNotEmpty) return normalizedSaved;
     return _defaultOrigin();
   }
 
@@ -68,12 +76,42 @@ class ApiConfig {
   // 오리진 저장
   static Future<void> setBaseOrigin(String origin) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyBaseOrigin, origin);
+    await prefs.setString(_keyBaseOrigin, _normalizeOrigin(origin));
   }
 
   // 기본값으로 리셋
   static Future<void> resetToDefault() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyBaseOrigin);
+  }
+
+  static String _normalizeOrigin(String? value) {
+    if (value == null) return '';
+    var normalized = value.trim();
+    if (normalized.isEmpty) return '';
+
+    // Paste 실수로 섞이는 래핑 문자 제거
+    normalized = normalized
+        .replaceAll('(', '')
+        .replaceAll(')', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+
+    // scheme 누락 시 기본적으로 http를 붙인다. (예: 192.168.0.10:8080)
+    if (!normalized.startsWith('http://') &&
+        !normalized.startsWith('https://')) {
+      normalized = 'http://$normalized';
+    }
+
+    final parsed = Uri.tryParse(normalized);
+    if (parsed == null || parsed.host.isEmpty) return '';
+
+    // path/query/fragment 없이 origin만 유지
+    final scheme = parsed.scheme.isEmpty ? 'http' : parsed.scheme;
+    final host = parsed.host;
+    final hasPort = parsed.hasPort;
+    final port = parsed.port;
+    final origin = hasPort ? '$scheme://$host:$port' : '$scheme://$host';
+    return origin.endsWith('/') ? origin.substring(0, origin.length - 1) : origin;
   }
 }

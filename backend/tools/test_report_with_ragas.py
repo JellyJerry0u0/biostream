@@ -1,5 +1,5 @@
 """
-LangGraph 리포트 생성 + RAGAS 신뢰도 평가 통합 테스트
+리포트 생성 + RAGAS 신뢰도 평가 통합 테스트
 
 실제 사용자 데이터로 리포트를 생성하고, 생성된 리포트의 신뢰도를 RAGAS로 평가합니다.
 """
@@ -41,38 +41,18 @@ backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(backend_dir)
 
 print("\n" + "="*70)
-print("LangGraph 리포트 생성 + RAGAS 신뢰도 평가 통합 테스트")
+print("리포트 생성 + RAGAS 신뢰도 평가 통합 테스트")
 print("="*70 + "\n")
 
-# 1. LangGraph 리포트 생성
-print("1️⃣ LangGraph로 리포트 생성 중...")
+# 1. 리포트 생성
+print("1️⃣ 리포트 생성 중...")
 print("-" * 70)
 
-from langgraph_modules.report_graph import create_report_graph
-
-# LangGraph app 생성
-app = create_report_graph()
-
-# 테스트용 초기 State
-initial_state = {
-    "user_id": 1,
-    "lifestyle_id": 1,
-    "survey": None,
-    "user_profile": None,
-    "active_sections": [],
-    "available_quant_outcomes": None,
-    "quant_evidence_results": {},
-    "section_queries": {},
-    "narrative_evidence": {},
-    "section_cards": {},
-    "quality_flags": {},
-    "final_report": None
-}
+from report_modules.report_pipeline import run_report_pipeline
 
 try:
-    print("   LangGraph 실행 중... (수 분 소요될 수 있습니다)")
-    config = {"configurable": {"thread_id": "test_user_1"}}
-    final_state = app.invoke(initial_state, config)
+    print("   파이프라인 실행 중... (수 분 소요될 수 있습니다)")
+    final_state = run_report_pipeline(user_id=1, lifestyle_id=1, persist_report=False)
     print("✅ 리포트 생성 완료!\n")
     
     # 생성된 섹션 확인

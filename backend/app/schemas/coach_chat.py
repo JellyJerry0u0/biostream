@@ -20,9 +20,9 @@ class ChatMode(str, Enum):
 
 
 class CoachEngine(str, Enum):
-    """실행 엔진 — Quick(함수 체이닝) vs Deep(LangGraph + tool calling)"""
+    """실행 엔진 — Quick vs Coach(LangGraph 적응형 코치)"""
     QUICK = "quick"
-    DEEP = "deep"
+    COACH = "coach"
 
 
 # ══════════════════════════════════════════════
@@ -114,7 +114,7 @@ class StreamModeInfo(BaseModel):
 
 
 class StreamToolStatus(BaseModel):
-    """Deep 모드에서 도구 실행 상태"""
+    """도구 실행 상태 이벤트 스키마(현재 코치 파이프라인에서는 미사용)."""
     type: str = "tool_status"
     assistant_message_id: Optional[str] = None
     tool: str

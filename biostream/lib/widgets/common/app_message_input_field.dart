@@ -23,6 +23,7 @@ class AppMessageInputField extends StatelessWidget {
     this.disabledSendIcon = Icons.hourglass_top,
     this.sendShadowColor,
     this.onSubmitted,
+    this.darkShellColor,
   });
 
   final bool isDark;
@@ -44,13 +45,17 @@ class AppMessageInputField extends StatelessWidget {
   final IconData disabledSendIcon;
   final Color? sendShadowColor;
   final ValueChanged<String>? onSubmitted;
+  /// 다크 모드 입력 칸 배경 (null이면 기본 녹색 톤)
+  final Color? darkShellColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: containerPadding,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C2E18) : Colors.white,
+        color: isDark
+            ? (darkShellColor ?? const Color(0xFF1C2E18))
+            : Colors.white,
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
           color:

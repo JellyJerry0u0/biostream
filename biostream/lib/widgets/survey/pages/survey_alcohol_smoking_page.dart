@@ -8,32 +8,24 @@ class SurveyAlcoholSmokingPage extends StatelessWidget {
     super.key,
     required this.isDark,
     required this.drinkingDaysPerWeek,
-    required this.drinkingAmountPerSession,
     required this.smokingStatus,
-    required this.smokingAmountUnit,
-    required this.smokingAmountController,
+    required this.smokingDaysPerWeek,
     required this.onDrinkingDaysChanged,
-    required this.onDrinkingAmountChanged,
     required this.onSmokingStatusChanged,
-    required this.onSmokingAmountUnitChanged,
+    required this.onSmokingDaysChanged,
     required this.choiceBuilder,
-    required this.textFieldBuilder,
-    required this.numberFieldBuilder,
+    this.showSmokingSection = true,
   });
 
   final bool isDark;
   final String? drinkingDaysPerWeek;
-  final String? drinkingAmountPerSession;
   final String? smokingStatus;
-  final String? smokingAmountUnit;
-  final TextEditingController smokingAmountController;
+  final String? smokingDaysPerWeek;
   final ValueChanged<String?> onDrinkingDaysChanged;
-  final ValueChanged<String?> onDrinkingAmountChanged;
   final ValueChanged<String?> onSmokingStatusChanged;
-  final ValueChanged<String?> onSmokingAmountUnitChanged;
+  final ValueChanged<String?> onSmokingDaysChanged;
   final SurveyChoiceBuilder choiceBuilder;
-  final SurveyTextFieldBuilder textFieldBuilder;
-  final SurveyNumberFieldBuilder numberFieldBuilder;
+  final bool showSmokingSection;
 
   @override
   Widget build(BuildContext context) {
@@ -79,44 +71,9 @@ class SurveyAlcoholSmokingPage extends StatelessWidget {
                   );
                 }).toList(),
               ),
-              SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '1회 음주량'),
-              SizedBox(height: Responsive.padding(context, 16)),
-              Padding(
-                padding: EdgeInsets.symmetric(
-                    horizontal: Responsive.padding(context, 40)),
-                child: textFieldBuilder(
-                  label: '',
-                  value: drinkingAmountPerSession,
-                  placeholder: '예: 소주 5잔, 맥주 2병',
-                  onChanged: onDrinkingAmountChanged,
-                  isDark: isDark,
-                ),
-              ),
-              SizedBox(height: Responsive.padding(context, 32)),
-              _title(context, '흡연/니코틴'),
-              SizedBox(height: Responsive.padding(context, 16)),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: Responsive.padding(context, 12),
-                runSpacing: Responsive.padding(context, 12),
-                children: [
-                  {'value': 'never', 'label': '안함'},
-                  {'value': 'former', 'label': '과거 흡연'},
-                  {'value': 'current', 'label': '현재 흡연'},
-                ].map((option) {
-                  return choiceBuilder(
-                    label: option['label']!,
-                    isSelected: smokingStatus == option['value'],
-                    onTap: () => onSmokingStatusChanged(option['value']),
-                    isDark: isDark,
-                  );
-                }).toList(),
-              ),
-              if (smokingStatus == 'current') ...[
+              if (showSmokingSection) ...[
                 SizedBox(height: Responsive.padding(context, 32)),
-                _title(context, '흡연량 단위'),
+                _title(context, '흡연/니코틴'),
                 SizedBox(height: Responsive.padding(context, 16)),
                 Wrap(
                   alignment: WrapAlignment.center,
@@ -124,31 +81,41 @@ class SurveyAlcoholSmokingPage extends StatelessWidget {
                   spacing: Responsive.padding(context, 12),
                   runSpacing: Responsive.padding(context, 12),
                   children: [
-                    {'value': '갑', 'label': '갑'},
-                    {'value': '개비', 'label': '개비'},
+                    {'value': 'never', 'label': '안함'},
+                    {'value': 'former', 'label': '과거 흡연'},
+                    {'value': 'current', 'label': '현재 흡연'},
                   ].map((option) {
                     return choiceBuilder(
                       label: option['label']!,
-                      isSelected: smokingAmountUnit == option['value'],
-                      onTap: () => onSmokingAmountUnitChanged(option['value']),
+                      isSelected: smokingStatus == option['value'],
+                      onTap: () => onSmokingStatusChanged(option['value']),
                       isDark: isDark,
                     );
                   }).toList(),
                 ),
-                if (smokingAmountUnit != null) ...[
+                if (smokingStatus == 'current') ...[
                   SizedBox(height: Responsive.padding(context, 32)),
-                  _title(context, '하루 흡연량'),
+                  _title(context, '주당 흡연일수'),
                   SizedBox(height: Responsive.padding(context, 16)),
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: Responsive.padding(context, 40)),
-                    child: numberFieldBuilder(
-                      label: '',
-                      controller: smokingAmountController,
-                      placeholder: '0',
-                      suffix: smokingAmountUnit!,
-                      isDark: isDark,
-                    ),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: Responsive.padding(context, 12),
+                    runSpacing: Responsive.padding(context, 12),
+                    children: [
+                      {'value': '0', 'label': '0일'},
+                      {'value': '1', 'label': '1일'},
+                      {'value': '2-3', 'label': '2-3일'},
+                      {'value': '4-5', 'label': '4-5일'},
+                      {'value': '6-7', 'label': '6-7일'},
+                    ].map((option) {
+                      return choiceBuilder(
+                        label: option['label']!,
+                        isSelected: smokingDaysPerWeek == option['value'],
+                        onTap: () => onSmokingDaysChanged(option['value']),
+                        isDark: isDark,
+                      );
+                    }).toList(),
                   ),
                 ],
               ],

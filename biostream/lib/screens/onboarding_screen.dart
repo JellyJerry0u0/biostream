@@ -6,6 +6,7 @@ import '../utils/responsive.dart';
 import 'signup_screen.dart';
 import 'login_screen.dart';
 import '../services/api_config.dart';
+import '../utils/app_snackbar.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -109,9 +110,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   setState(() {
                     _currentApiOrigin = refreshed;
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('기본값으로 리셋되었습니다.')),
-                  );
                 }
               },
               child: const Text('기본값'),
@@ -132,35 +130,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
 
                 try {
-                  final syncResult = await _devChannel
+                  await _devChannel
                       .invokeMethod<String>('enqueueOneTimeHealthSync');
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          syncResult == 'synced'
-                              ? '동기화 테스트를 완료했습니다.'
-                              : '동기화 테스트 작업을 시작했습니다.',
-                        ),
-                      ),
-                    );
-                  }
                 } on PlatformException catch (e) {
                   if (context.mounted) {
                     final details = e.details?.toString();
                     final msg = details != null && details.isNotEmpty
                         ? '동기화 테스트 실패: ${e.message ?? e.code} ($details)'
                         : '동기화 테스트 실패: ${e.message ?? e.code}';
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(msg)),
-                    );
+                    showErrorSnackBar(context, msg);
                   }
                 } on MissingPluginException catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              '동기화 테스트 경로를 찾을 수 없습니다: ${e.message ?? 'plugin missing'}')),
+                    showErrorSnackBar(
+                      context,
+                      '동기화 테스트 경로를 찾을 수 없습니다: ${e.message ?? 'plugin missing'}',
                     );
                   }
                 }
@@ -176,9 +160,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   setState(() {
                     _currentApiOrigin = refreshed;
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('API URL이 저장되었습니다.')),
-                  );
                 }
               },
               child: const Text('저장'),

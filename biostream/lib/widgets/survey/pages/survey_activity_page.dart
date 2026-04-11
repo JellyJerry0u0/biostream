@@ -17,6 +17,7 @@ class SurveyActivityPage extends StatelessWidget {
     required this.onWeightChanged,
     required this.choiceBuilder,
     required this.integerFieldBuilder,
+    this.prefillHint,
   });
 
   final bool isDark;
@@ -30,6 +31,7 @@ class SurveyActivityPage extends StatelessWidget {
   final ValueChanged<int?> onWeightChanged;
   final SurveyChoiceBuilder choiceBuilder;
   final SurveyIntegerFieldBuilder integerFieldBuilder;
+  final String? prefillHint;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +54,17 @@ class SurveyActivityPage extends StatelessWidget {
                   color: isDark ? Colors.white : Colors.black87,
                 ),
               ),
+              if ((prefillHint ?? '').isNotEmpty) ...[
+                SizedBox(height: Responsive.padding(context, 12)),
+                Text(
+                  prefillHint ?? '',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: Responsive.fontSize(context, 13),
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
               SizedBox(height: Responsive.padding(context, 32)),
               _title(context, '유산소 (주당)'),
               SizedBox(height: Responsive.padding(context, 16)),

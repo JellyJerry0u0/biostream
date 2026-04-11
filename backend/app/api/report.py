@@ -6,13 +6,13 @@ Qdrant 중심 RAG + LangGraph 기반 워크플로우를 사용하여 사용자 �
 
 import sys
 import os
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Body, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Any, Dict
-from datetime import datetime
+from datetime import datetime, timezone, date
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import User, Lifestyle
+from app.models import User, Lifestyle, Report
 from app.auth.security import verify_token
 from app.services.push_service import send_push_to_user
 
@@ -21,8 +21,15 @@ app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 if app_root not in sys.path:
     sys.path.append(app_root)
 from report_modules.report_graph import generate_report as generate_report_new
+from app.api.public_origin import resolve_public_api_origin
 
 router = APIRouter()
+
+
+def _get_report_for_lifestyle(lifestyle: Lifestyle, db: Session) -> Optional[Dict[str, Any]]:
+    """Lifestyle에 연결된 Report를 반환합니다. 없으면 None."""
+    report_row = db.query(Report).filter(Report.lifestyle_id == lifestyle.id).first()
+    return report_row.report if report_row else None
 
 
 class GenerateReportBody(BaseModel):
@@ -31,7 +38,7 @@ class GenerateReportBody(BaseModel):
 
 
 class QuestProgressBody(BaseModel):
-    """홈 퀘스트(맞춤 솔루션) 실천 체크 상태"""
+    """홈 생활습관(맞춤 솔루션) 실천 체크 상태"""
     completed_action_ids: list[str] = []
 
 
@@ -89,6 +96,7 @@ def _sanitize_cards_for_storage(raw_cards: Any) -> list[dict[str, Any]]:
 
 
 def _sanitize_report_for_storage(report_data: Dict[str, Any]) -> Dict[str, Any]:
+    """리포트 저장 전 cards 정규화 (subsections 제거됨, 모든 섹션 동일 구조)"""
     if not isinstance(report_data, dict):
         return {}
 
@@ -105,18 +113,6 @@ def _sanitize_report_for_storage(report_data: Dict[str, Any]) -> Dict[str, Any]:
         sanitized_section = dict(section_value)
         if isinstance(section_value.get("cards"), list):
             sanitized_section["cards"] = _sanitize_cards_for_storage(section_value.get("cards"))
-
-        subsections = section_value.get("subsections")
-        if isinstance(subsections, list):
-            normalized_subsections: list[dict[str, Any]] = []
-            for subsection in subsections:
-                if not isinstance(subsection, dict):
-                    continue
-                sub_out = dict(subsection)
-                sub_out["cards"] = _sanitize_cards_for_storage(subsection.get("cards"))
-                normalized_subsections.append(sub_out)
-            sanitized_section["subsections"] = normalized_subsections
-
         sanitized_sections[section_key] = sanitized_section
 
     report["sections"] = sanitized_sections
@@ -162,6 +158,7 @@ def get_current_user(authorization: Optional[str] = Header(None, alias="Authoriz
 def generate_report(
     lifestyle_id: int,
     force: bool = Query(False, description="기존 리포트가 있어도 강제로 재생성"),
+    skip_image: bool = Query(False, description="True면 이미지 생성 생략 (응답 5~30초 단축)"),
     body: Optional[GenerateReportBody] = Body(None),
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
@@ -202,32 +199,34 @@ def generate_report(
     print(f"[리포트 생성] body={'있음' if body else '없음'}, situation_text 수신: {repr(situation_text)[:100] if situation_text else 'None/빈값'} | skip_cache={skip_cache}")
 
     # 이미 리포트가 생성되어 있는지 확인 (force=False일 때만, situation_text 없을 때만)
-    if not force and not skip_cache and lifestyle.health_report:
+    existing_report = _get_report_for_lifestyle(lifestyle, db)
+    if not force and not skip_cache and existing_report:
         # 리포트 유효성 검사: 신규 리포트 구조 확인
-        report_data = lifestyle.health_report
-        # 신규 리포트는 final_report 또는 sections 키를 가짐
+        report_data = existing_report
         has_valid_report = (
-            isinstance(report_data, dict) and 
-            (report_data.get("final_report") or report_data.get("sections") or report_data.get("report"))
+            isinstance(report_data, dict)
+            and (
+                report_data.get("final_report")
+                or report_data.get("sections")
+                or report_data.get("report")
+            )
         )
-        
+
         if has_valid_report:
+            report_row = db.query(Report).filter(Report.lifestyle_id == lifestyle_id).first()
             print(f"[리포트 생성] 이미 생성된 리포트가 있습니다. lifestyle_id: {lifestyle_id}")
-            # 기존 클라이언트 호환성을 위해 응답 구조 유지
             return {
                 "success": True,
                 "message": "이미 생성된 리포트를 반환합니다.",
-                "report": lifestyle.health_report,
+                "report": existing_report,
                 "lifestyle_id": lifestyle_id,
                 "user_id": current_user.id,
-                "generated_at": lifestyle.health_report_generated_at.isoformat() if lifestyle.health_report_generated_at else None,
-                "already_exists": True
+                "generated_at": report_row.generated_at.isoformat() if report_row and report_row.generated_at else None,
+                "already_exists": True,
             }
         else:
             print(f"[리포트 생성] 저장된 리포트가 유효하지 않습니다. 재생성합니다. lifestyle_id: {lifestyle_id}")
-            # 유효하지 않은 리포트는 삭제하고 재생성
-            lifestyle.health_report = None
-            lifestyle.health_report_generated_at = None
+            db.query(Report).filter(Report.lifestyle_id == lifestyle_id).delete()
             db.commit()
     
     try:
@@ -240,6 +239,7 @@ def generate_report(
             lifestyle_id=lifestyle_id,
             situation_text=situation_text,
             persist_report=False,
+            skip_image=skip_image,
         )
         
         if not report_result.get("success"):
@@ -368,9 +368,23 @@ def save_report_explicit(
         raise HTTPException(status_code=400, detail="저장할 리포트 데이터가 비어 있습니다.")
     report_data = _sanitize_report_for_storage(report_data)
 
-    lifestyle.health_report = report_data
-    lifestyle.health_report_generated_at = datetime.utcnow()
+    generated_at = datetime.now(timezone.utc)
 
+    # health_reports 테이블에 저장 (upsert)
+    report_row = db.query(Report).filter(Report.lifestyle_id == lifestyle_id).first()
+    if report_row:
+        report_row.report = report_data
+        report_row.generated_at = generated_at
+    else:
+        report_row = Report(
+            lifestyle_id=lifestyle_id,
+            report=report_data,
+            generated_at=generated_at,
+        )
+        db.add(report_row)
+        db.flush()
+
+    # Lifestyle denormalized 필드 업데이트
     generated_image_url = (
         report_data.get("generated_image_url")
         or report_data.get("image_url")
@@ -378,7 +392,6 @@ def save_report_explicit(
     )
     if isinstance(generated_image_url, str) and generated_image_url.strip():
         lifestyle.generated_image_url = generated_image_url.strip()
-
     if report_data.get("notion_page_id"):
         lifestyle.notion_page_id = report_data.get("notion_page_id")
     if report_data.get("notion_url"):
@@ -403,17 +416,16 @@ def save_report_explicit(
         "success": True,
         "message": "리포트가 저장되었습니다.",
         "lifestyle_id": lifestyle.id,
-        "generated_at": lifestyle.health_report_generated_at.isoformat()
-        if lifestyle.health_report_generated_at
-        else None,
+        "generated_at": report_row.generated_at.isoformat() if report_row.generated_at else None,
     }
 
 
 @router.get("/report/{lifestyle_id}")
 def get_report(
+    request: Request,
     lifestyle_id: int,
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     생성된 건강 리포트 조회
@@ -440,14 +452,15 @@ def get_report(
             detail="해당 설문조사 데이터를 찾을 수 없습니다."
         )
     
-    if not lifestyle.health_report:
+    report_row = db.query(Report).filter(Report.lifestyle_id == lifestyle_id).first()
+    if not report_row:
         raise HTTPException(
             status_code=404,
-            detail="생성된 리포트가 없습니다. /generate-report 엔드포인트를 사용하여 리포트를 생성해주세요."
+            detail="생성된 리포트가 없습니다. /generate-report 엔드포인트를 사용하여 리포트를 생성해주세요.",
         )
-    
-    report_data = lifestyle.health_report
-    
+
+    report_data = report_row.report
+
     # cards가 이미 있으면 그대로 사용
     cards = report_data.get("cards", []) if isinstance(report_data, dict) else []
     
@@ -458,6 +471,9 @@ def get_report(
             "goals": {"title": "주요 목표 분석 및 개선 방안", "icon": "🎯"},
             "sleep": {"title": "수면 및 리듬", "icon": "😴"},
             "uv": {"title": "자외선 및 노화 관리", "icon": "☀️"},
+            "smoking": {"title": "흡연", "icon": "🌱"},
+            "drinking": {"title": "음주", "icon": "🌱"},
+            "stress": {"title": "스트레스", "icon": "🌱"},
             "lifestyle": {"title": "생활습관 관리", "icon": "🌱"},
             "activity": {"title": "활동 및 대사", "icon": "💪"},
         }
@@ -471,47 +487,52 @@ def get_report(
                 "content": section_content if isinstance(section_content, str) else str(section_content),
                 "has_visualization": False,
             })
-    
+
+    origin = resolve_public_api_origin(request)
+    lifestyle_data = _build_lifestyle_data_for_report_view(
+        current_user, lifestyle, origin
+    )
+
     return {
         "success": True,
-        "report": lifestyle.health_report,
+        "report": report_data,
         "cards": cards,
-        "generated_at": lifestyle.health_report_generated_at.isoformat() if lifestyle.health_report_generated_at else None,
+        "generated_at": report_row.generated_at.isoformat() if report_row.generated_at else None,
         "notion_url": lifestyle.notion_url,
-        "notion_page_id": lifestyle.notion_page_id
+        "notion_page_id": lifestyle.notion_page_id,
+        "lifestyle_data": lifestyle_data,
     }
 
 
 @router.get("/report-archives")
 def get_report_archives(
+    request: Request,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ):
     """현재 사용자의 리포트 아카이브 목록(생성일 + 생성 이미지 URL) 조회"""
     current_user = get_current_user(authorization, db)
 
-    lifestyles = (
-        db.query(Lifestyle)
-        .filter(
-            Lifestyle.user_id == current_user.id,
-            Lifestyle.health_report_generated_at.isnot(None),
-            Lifestyle.health_report.isnot(None),
-        )
-        .order_by(Lifestyle.health_report_generated_at.desc())
+    # Report가 있는 Lifestyle만 조회
+    report_lifestyles = (
+        db.query(Lifestyle, Report)
+        .join(Report, Report.lifestyle_id == Lifestyle.id)
+        .filter(Lifestyle.user_id == current_user.id)
+        .order_by(Report.generated_at.desc())
         .all()
     )
 
-    origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+    origin = resolve_public_api_origin(request)
     items = []
 
-    for lifestyle in lifestyles:
+    for lifestyle, report_row in report_lifestyles:
         image_url = lifestyle.generated_image_url
-
-        if not image_url and isinstance(lifestyle.health_report, dict):
+        report_dict = report_row.report if report_row else None
+        if not image_url and isinstance(report_dict, dict):
             image_url = (
-                lifestyle.health_report.get("generated_image_url")
-                or lifestyle.health_report.get("image_url")
-                or lifestyle.health_report.get("future_image_url")
+                report_dict.get("generated_image_url")
+                or report_dict.get("image_url")
+                or report_dict.get("future_image_url")
             )
 
         if image_url and os.path.exists(image_url) and "uploads" in image_url:
@@ -527,10 +548,8 @@ def get_report_archives(
         items.append(
             {
                 "lifestyle_id": lifestyle.id,
-                "target_years": lifestyle.target_years,
-                "generated_at": lifestyle.health_report_generated_at.isoformat()
-                if lifestyle.health_report_generated_at
-                else None,
+                "target_years": lifestyle.target_years if lifestyle.target_years is not None else 30,
+                "generated_at": report_row.generated_at.isoformat() if report_row and report_row.generated_at else None,
                 "image_url": image_url,
             }
         )
@@ -561,6 +580,11 @@ def _extract_report_summary_text(report: object) -> str:
                 return section.strip()
             if isinstance(section, dict):
                 cards = section.get("cards")
+                if not isinstance(cards, list) and section.get("subsections"):
+                    cards = []
+                    for sub in section["subsections"] or []:
+                        if isinstance(sub, dict):
+                            cards.extend(sub.get("cards") or [])
                 if isinstance(cards, list):
                     for card in cards:
                         if not isinstance(card, dict):
@@ -595,6 +619,11 @@ def _extract_simulation_text(report: object) -> str:
         if not isinstance(section, dict):
             continue
         cards = section.get("cards")
+        if not isinstance(cards, list) and section.get("subsections"):
+            cards = []
+            for sub in section.get("subsections") or []:
+                if isinstance(sub, dict):
+                    cards.extend(sub.get("cards") or [])
         if not isinstance(cards, list):
             continue
         for card in cards:
@@ -626,35 +655,119 @@ def _normalize_image_url(path_or_url: Optional[str], origin: str) -> Optional[st
     return value
 
 
+def _user_age_display_years(user: User) -> Optional[str]:
+    if not user.birthdate:
+        return None
+    today = date.today()
+    bd = user.birthdate
+    years = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+    return f"{years} years"
+
+
+def _build_lifestyle_data_for_report_view(
+    user: User, lifestyle: Lifestyle, origin: str
+) -> Dict[str, Any]:
+    """
+    해당 lifestyle 행 기준 aging context (/data/lifestyle 최신과 동일 스키마).
+    과거 리포트를 Result 화면에서 AI 재호출 없이 렌더할 때 사용.
+    """
+    def norm(p: Optional[str]) -> Optional[str]:
+        return _normalize_image_url(p, origin)
+
+    return {
+        "lifestyle_id": lifestyle.id,
+        "profile": {
+            "age": _user_age_display_years(user),
+            "gender": user.gender,
+        },
+        "lifestyle": {
+            "outcomes": lifestyle.outcomes if lifestyle.outcomes else None,
+            "smoking": {
+                "smoking_status": lifestyle.smoking_status,
+                "smoking_amount_per_day": lifestyle.smoking_amount_per_day,
+                "smoking_days_per_week": lifestyle.smoking_days_per_week,
+            },
+            "sleep": {
+                "sleep_hours_weekday": f"{lifestyle.sleep_hours_weekday} hours"
+                if lifestyle.sleep_hours_weekday is not None
+                else None,
+                "sleep_hours_weekend": f"{lifestyle.sleep_hours_weekend} hours"
+                if lifestyle.sleep_hours_weekend is not None
+                else None,
+                "sleep_quality_score": f"{lifestyle.sleep_quality_score}/10"
+                if lifestyle.sleep_quality_score is not None
+                else None,
+            },
+            "uv": {
+                "uv_exposure_10to16": lifestyle.uv_exposure_10to16,
+                "sunscreen_frequency": lifestyle.sunscreen_frequency,
+                "sunscreen_reapply": lifestyle.sunscreen_reapply,
+                "outdoor_sports_uv": lifestyle.outdoor_sports_uv,
+            },
+            "drinking": {
+                "drinking_days_per_week": lifestyle.drinking_days_per_week,
+                "drinking_amount_per_session": lifestyle.drinking_amount_per_session,
+            },
+            "stress": {
+                "stress_score": f"{lifestyle.stress_score}/10"
+                if lifestyle.stress_score is not None
+                else None,
+            },
+            "activity": {
+                "aerobic_weekly": lifestyle.aerobic_weekly,
+                "resistance_weekly": lifestyle.resistance_weekly,
+            },
+        },
+        "bodystate": {
+            "weight_kg": f"{lifestyle.weight}kg" if lifestyle.weight is not None else None,
+            "height_cm": f"{lifestyle.height}cm" if lifestyle.height is not None else None,
+        },
+        "skin": {
+            "skin_type": lifestyle.skin_type,
+            "skin_satisfaction": f"{lifestyle.skin_satisfaction}/10"
+            if lifestyle.skin_satisfaction is not None
+            else None,
+        },
+        "target_age": f"{lifestyle.target_years or 30} years after",
+        "images": {
+            "original_image_url": norm(lifestyle.original_image_url),
+            "generated_image_url": norm(lifestyle.generated_image_url),
+            "ideal_habits_skin_image_url": norm(lifestyle.ideal_habits_skin_image_url),
+        },
+    }
+
+
 @router.get("/report-latest-future-face")
 def get_latest_future_face(
+    request: Request,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    """최근 생성 리포트의 원본/생성 이미지와 12주 변화 텍스트를 반환"""
+    """최근 리포트의 이미지 URL(미래 얼굴 탭용).
+    original_image_url=촬영 원본, ideal_habits_skin_image_url=만점 skin-edit,
+    generated_image_url=설문 기반 skin-edit."""
     current_user = get_current_user(authorization, db)
-    origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+    origin = resolve_public_api_origin(request)
 
-    lifestyle = (
-        db.query(Lifestyle)
-        .filter(
-            Lifestyle.user_id == current_user.id,
-            Lifestyle.health_report_generated_at.isnot(None),
-            Lifestyle.health_report.isnot(None),
-        )
-        .order_by(Lifestyle.health_report_generated_at.desc())
+    result = (
+        db.query(Lifestyle, Report)
+        .join(Report, Report.lifestyle_id == Lifestyle.id)
+        .filter(Lifestyle.user_id == current_user.id)
+        .order_by(Report.generated_at.desc())
         .first()
     )
-    if not lifestyle:
+    if not result:
         raise HTTPException(status_code=404, detail="생성된 최근 리포트를 찾을 수 없습니다.")
 
-    report = lifestyle.health_report if isinstance(lifestyle.health_report, dict) else {}
+    lifestyle, report_row = result
+    report = report_row.report if isinstance(report_row.report, dict) else {}
     generated_raw = (
         lifestyle.generated_image_url
         or report.get("generated_image_url")
         or report.get("image_url")
         or report.get("future_image_url")
     )
+    ideal_habits_raw = (lifestyle.ideal_habits_skin_image_url or "").strip()
     original_raw = (
         lifestyle.original_image_url
         or report.get("original_image_url")
@@ -664,11 +777,12 @@ def get_latest_future_face(
     return {
         "success": True,
         "lifestyle_id": lifestyle.id,
-        "generated_at": lifestyle.health_report_generated_at.isoformat()
-        if lifestyle.health_report_generated_at
-        else None,
+        "generated_at": report_row.generated_at.isoformat() if report_row.generated_at else None,
         "original_image_url": _normalize_image_url(original_raw, origin),
         "generated_image_url": _normalize_image_url(generated_raw, origin),
+        "ideal_habits_skin_image_url": _normalize_image_url(ideal_habits_raw, origin)
+        if ideal_habits_raw
+        else None,
         "simulation_prompt_text": _extract_simulation_text(report),
     }
 
@@ -681,30 +795,25 @@ def get_report_history(
     """현재 사용자의 과거 리포트 목록(생성일/요약/타겟 연차) 조회"""
     current_user = get_current_user(authorization, db)
 
-    lifestyles = (
-        db.query(Lifestyle)
-        .filter(
-            Lifestyle.user_id == current_user.id,
-            Lifestyle.health_report_generated_at.isnot(None),
-            Lifestyle.health_report.isnot(None),
-        )
-        .order_by(Lifestyle.health_report_generated_at.desc())
+    report_lifestyles = (
+        db.query(Lifestyle, Report)
+        .join(Report, Report.lifestyle_id == Lifestyle.id)
+        .filter(Lifestyle.user_id == current_user.id)
+        .order_by(Report.generated_at.desc())
         .all()
     )
 
     items = []
-    for lifestyle in lifestyles:
-        summary_text = _extract_report_summary_text(lifestyle.health_report)
+    for lifestyle, report_row in report_lifestyles:
+        summary_text = _extract_report_summary_text(report_row.report)
         if len(summary_text) > 180:
             summary_text = f"{summary_text[:180].rstrip()}..."
 
         items.append(
             {
                 "lifestyle_id": lifestyle.id,
-                "target_years": lifestyle.target_years,
-                "generated_at": lifestyle.health_report_generated_at.isoformat()
-                if lifestyle.health_report_generated_at
-                else None,
+                "target_years": lifestyle.target_years if lifestyle.target_years is not None else 30,
+                "generated_at": report_row.generated_at.isoformat() if report_row.generated_at else None,
                 "summary": summary_text,
                 "notion_url": lifestyle.notion_url,
             }
@@ -724,7 +833,7 @@ def update_quest_progress(
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ):
-    """홈 화면 퀘스트 진행 상태를 리포트 JSON에 저장합니다."""
+    """홈 화면 생활습관 진행 상태를 리포트 JSON에 저장합니다."""
     current_user = get_current_user(authorization, db)
 
     lifestyle = db.query(Lifestyle).filter(
@@ -735,13 +844,14 @@ def update_quest_progress(
     if not lifestyle:
         raise HTTPException(
             status_code=404,
-            detail="해당 설문조사 데이터를 찾을 수 없습니다."
+            detail="해당 설문조사 데이터를 찾을 수 없습니다.",
         )
 
-    if not isinstance(lifestyle.health_report, dict):
+    report_row = db.query(Report).filter(Report.lifestyle_id == lifestyle_id).first()
+    if not report_row or not isinstance(report_row.report, dict):
         raise HTTPException(
             status_code=404,
-            detail="생성된 리포트가 없습니다. 먼저 리포트를 생성해주세요."
+            detail="생성된 리포트가 없습니다. 먼저 리포트를 생성해주세요.",
         )
 
     normalized_ids: list[str] = []
@@ -753,17 +863,17 @@ def update_quest_progress(
         normalized_ids.append(value)
         seen.add(value)
 
-    report_data = dict(lifestyle.health_report)
+    report_data = dict(report_row.report)
     report_data["quest_progress"] = {
         "completed_action_ids": normalized_ids,
         "updated_at": datetime.utcnow().isoformat(),
     }
 
-    lifestyle.health_report = report_data
+    report_row.report = report_data
     db.commit()
 
     return {
         "success": True,
-        "message": "퀘스트 진행 상황이 저장되었습니다.",
+        "message": "생활습관 진행 상황이 저장되었습니다.",
         "quest_progress": report_data["quest_progress"],
     }

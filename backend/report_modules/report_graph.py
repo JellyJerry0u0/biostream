@@ -13,7 +13,7 @@
 6. WriteSectionCards
 6.5. ValidateCards → (재시도 시 WriteSectionCards / 아니면 AssembleReport)
 7. AssembleReport
-8. GenerateAgingImage
+8. GenerateAgingImage (DB의 /generate→skin-edit 결과만 연결, GPU 미호출)
 9. SaveReport
 10. ExportToNotion (Notion으로 리포트 전송)
 """
@@ -27,9 +27,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple, TypedDict
 from collections import defaultdict, OrderedDict
 
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-
 # Tools import
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(backend_dir)
@@ -39,8 +36,8 @@ from tools.report_store import save_report
 from tools.schemas import QdrantSearchInput, EvidenceItem
 from tools.notion_integration import export_report_to_notion
 #from tools.notion_integration_mcp import export_report_to_notion
-from app.database import get_db
-from app.models import User
+from app.database import SessionLocal
+from app import models
 from datetime import date
 
 # 정량 근거 검색 모듈 import
@@ -48,14 +45,9 @@ services_dir = os.path.join(backend_dir, "app", "services")
 if services_dir not in sys.path:
     sys.path.append(services_dir)
 from quant_evidence_retriever import (
-    search_by_outcomes, get_grouped_stats, get_grouped_stats_multi,
+    search_by_outcomes,
     QuantEvidenceCard
 )
-from app.services.quant_evidence_retriever import (
-    get_grouped_stats, get_grouped_stats_multi,
-)
-from app.services.image_service import image_gen_service
-
 # ── 서브모듈 import ──
 from .report_constants import (
     ReportState,
@@ -66,6 +58,9 @@ from .report_constants import (
     SECTION_PRIMARY_OUTCOME,
     SECTION_CARD_TYPE_KEYWORDS,
     SECTION_TITLES,
+    SECTION_SURVEY_EXTRACT,
+    SECTION_INJECT_SUFFIX,
+    LIFESTYLE_SECTIONS,
 )
 from .report_llm import get_llm_call_count
 from .report_formatters import (
@@ -73,17 +68,16 @@ from .report_formatters import (
     timeframe_days_to_label,
     calculate_user_profile_derived,
     format_user_profile_for_prompt,
-    score_outcome_for_selection,
-    select_top_timeframes,
-    calculate_estimated_stats,
+    normalize_survey_value,
+    simulation_effect_phrase,
     strip_markdown,
+    visual_simulation_chart_values,
 )
+from .report_quant import preload_quant_evidence
 from .report_llm import REPORT_DEBUG
 from .report_cards import (
     generate_section_cards,
     generate_lifestyle_cards,
-    get_lifestyle_subsection_keys,
-    create_template_based_subsection_cards,
     build_dual_queries,
     extract_keyword_based_sentences,
     validate_section_cards,
@@ -437,7 +431,7 @@ OUTCOME_POLARITY = {
     "elasticity": "increase_is_improvement",
     "pigmentation": "decrease_is_improvement",
     "hydration": "increase_is_improvement",
-    "hydration_barrier": "increase_is_improvement",
+    "hydration_barrier": "decrease_is_improvement",  # TEWL 감소=개선
     "acne": "decrease_is_improvement",
     "redness": "decrease_is_improvement",
     "general_aging": "mixed",
@@ -476,270 +470,9 @@ SECTION_OUTCOME_CANDIDATES = {
     "activity": ["elasticity", "wrinkle", "general_skin"],
 }
 
-# 표준 timeframe (일 단위)
-STANDARD_TIMEFRAMES = {
-    "4w": 28.0,
-    "12w": 84.0,
-    "6m": 182.5,
-}
-
-
-def map_outcomes_to_topics(outcomes: List[str], include_fallback: bool = True) -> List[str]:
-    """UI outcomes를 narrative 코퍼스 topics로 변환
-    
-    Args:
-        outcomes: UI outcome 리스트 (예: ["wrinkle", "hydration_barrier"])
-        include_fallback: 매핑이 없는 outcome을 그대로 포함할지 여부
-    
-    Returns:
-        narrative topics 리스트 (중복 제거, 순서 유지)
-    """
-    topics = []
-    seen = set()
-    
-    for outcome in outcomes:
-        mapped_topics = OUTCOME_TO_NARRATIVE_TOPICS.get(outcome, [])
-        for topic in mapped_topics:
-            if topic not in seen:
-                topics.append(topic)
-                seen.add(topic)
-        
-        # fallback: 매핑이 없으면 outcome 자체를 포함
-        if include_fallback and not mapped_topics and outcome not in seen:
-            topics.append(outcome)
-            seen.add(outcome)
-    
-    return topics
-
-
-def timeframe_days_to_label(days: float) -> str:
-    """timeframe_days를 사람이 읽기 쉬운 레이블로 변환"""
-    if days <= 35:
-        return "4주"
-    elif days <= 100:
-        return "12주"
-    elif days <= 200:
-        return "6개월"
-    else:
-        weeks = round(days / 7)
-        return f"{weeks}주"
-
-
-# ==================== 사용자 기본 정보 파생 지표 계산 ====================
-
-def calculate_user_profile_derived(user_id: int, survey: dict) -> Dict[str, Any]:
-    """사용자 기본 정보로부터 파생 지표 계산 (BMI, age_bucket, gender_label 등)"""
-    profile = {
-        "user_id": user_id,
-        "nickname": None,
-        "gender": None,
-        "age": None,
-        "age_bucket": None,
-        "height": survey.get("height"),
-        "weight": survey.get("weight"),
-        "bmi": None,
-        "bmi_category": None,
-    }
-    
-    # User 정보 조회
-    try:
-        db_gen = get_db()
-        db = next(db_gen)
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            profile["nickname"] = user.nickname
-            profile["gender"] = user.gender
-            if user.birthdate:
-                today = date.today()
-                age = today.year - user.birthdate.year - ((today.month, today.day) < (user.birthdate.month, user.birthdate.day))
-                profile["age"] = age
-                # 연령대 bucket
-                if age < 20:
-                    profile["age_bucket"] = "10대"
-                elif age < 30:
-                    profile["age_bucket"] = "20대"
-                elif age < 40:
-                    profile["age_bucket"] = "30대"
-                elif age < 50:
-                    profile["age_bucket"] = "40대"
-                elif age < 60:
-                    profile["age_bucket"] = "50대"
-                else:
-                    profile["age_bucket"] = "60대 이상"
-        db.close()
-    except Exception as e:
-        print(f"⚠️ 사용자 정보 조회 실패: {e}")
-    
-    # BMI 계산
-    height = profile.get("height")
-    weight = profile.get("weight")
-    if height and weight and height > 0:
-        height_m = height / 100  # cm -> m
-        bmi = weight / (height_m ** 2)
-        profile["bmi"] = round(bmi, 1)
-        
-        # BMI 카테고리
-        if bmi < 18.5:
-            profile["bmi_category"] = "저체중"
-        elif bmi < 23:
-            profile["bmi_category"] = "정상"
-        elif bmi < 25:
-            profile["bmi_category"] = "과체중"
-        else:
-            profile["bmi_category"] = "비만"
-    
-    return profile
-
-
-def format_user_profile_for_prompt(profile: Dict[str, Any]) -> str:
-    """프롬프트에 사용할 사용자 프로필 텍스트 포맷팅"""
-    parts = []
-    
-    if profile.get("gender"):
-        gender_label = "남성" if profile["gender"].lower() in ["male", "m", "남성", "남"] else "여성"
-        parts.append(f"성별: {gender_label}")
-    
-    if profile.get("age_bucket"):
-        parts.append(f"연령대: {profile['age_bucket']}")
-    
-    if profile.get("bmi") and profile.get("bmi_category"):
-        parts.append(f"BMI: {profile['bmi']} ({profile['bmi_category']})")
-    
-    if not parts:
-        return "사용자 기본 정보 없음"
-    
-    return ", ".join(parts)
-
-
-def score_outcome_for_selection(stats: Dict[str, Any]) -> float:
-    """outcome 선택을 위한 점수 계산"""
-    if not stats or not stats.get("timeframe_groups"):
-        return 0.0
-    
-    timeframe_groups = stats["timeframe_groups"]
-    max_score = 0.0
-    
-    for tf_days, group in timeframe_groups.items():
-        n_cards = group.get("count", 0)
-        if n_cards == 0:
-            continue
-        
-        # p_label 가중치
-        p_label_weights = {"strong": 3, "moderate": 2, "weak": 1}
-        # 카드들의 p_label 확인 (첫 번째 카드 기준, 실제로는 전체 평균이 더 정확하지만 간단히)
-        cards = group.get("cards", [])
-        if cards:
-            p_label = cards[0].get("p_label", "weak")
-            p_weight = p_label_weights.get(p_label, 1)
-        else:
-            p_weight = 1
-        
-        # effect_signed_value 극단치 페널티
-        median_abs = abs(group.get("median", 0))
-        if median_abs > 50:
-            continue  # 극단치는 제외
-        
-        # 점수 = n_cards * p_weight
-        score = n_cards * p_weight
-        max_score = max(max_score, score)
-    
-    return max_score
-
-
-def select_top_timeframes(timeframe_groups: Dict[float, Dict], max_count: int = 2) -> List[float]:
-    """대표 timeframe 1-2개 선택 (표준 라벨 우선)"""
-    if not timeframe_groups:
-        return []
-    
-    # 표준 timeframe 우선 매핑
-    selected = []
-    for tf_label, tf_days_std in STANDARD_TIMEFRAMES.items():
-        for tf_days in timeframe_groups.keys():
-            if abs(tf_days - tf_days_std) < 7:  # 7일 이내 차이
-                if tf_days not in selected:
-                    selected.append(tf_days)
-                    if len(selected) >= max_count:
-                        return selected
-    
-    # 표준 매핑이 부족하면 카드 수 기준으로 추가
-    remaining = sorted(
-        [d for d in timeframe_groups.keys() if d not in selected],
-        key=lambda d: timeframe_groups[d].get("count", 0),
-        reverse=True
-    )
-    
-    for tf_days in remaining:
-        if len(selected) >= max_count:
-            break
-        selected.append(tf_days)
-    
-    return selected[:max_count]
-
-
-def calculate_estimated_stats(outcome_list: List[str]) -> Optional[Dict[str, Any]]:
-    """전체 코퍼스에서 추정치 계산 (fallback) - 안전장치 강화"""
-    try:
-        # SECTION_OUTCOME_CANDIDATES만 사용 (전체 outcome 무제한 사용 금지)
-        stats = get_grouped_stats_multi(outcome_list, exclude_suspicious=True)
-        if not stats or not stats.get("timeframe_groups"):
-            return None
-        
-        timeframe_groups = stats["timeframe_groups"]
-        
-        # 표준 timeframe 우선 선택
-        selected_timeframes = select_top_timeframes(timeframe_groups, max_count=1)
-        if not selected_timeframes:
-            return None
-        
-        selected_timeframe = selected_timeframes[0]
-        group = timeframe_groups[selected_timeframe]
-        
-        # effect_unit "%"만 사용 (다른 단위 제외)
-        cards = group.get("cards", [])
-        if not cards:
-            return None
-        
-        # 극단치 클리핑 및 winsorize
-        values = [abs(c.get("effect_signed_value", 0)) for c in cards if c.get("effect_unit_filled") == "%"]
-        if not values:
-            return None
-        
-        # 절대값 > 50% 제외
-        values = [v for v in values if v <= 50]
-        if not values:
-            return None
-        
-        # 중앙값 및 범위 계산
-        sorted_values = sorted(values)
-        n = len(sorted_values)
-        median = sorted_values[n // 2] if n % 2 == 1 else (sorted_values[n // 2 - 1] + sorted_values[n // 2]) / 2
-        
-        # q25, q75 계산
-        q25_idx = n // 4
-        q75_idx = (3 * n) // 4
-        q25 = sorted_values[q25_idx] if q25_idx < n else sorted_values[0]
-        q75 = sorted_values[q75_idx] if q75_idx < n else sorted_values[-1]
-        
-        # 보수적 범위 (클리핑)
-        min_val = max(-30, -q75)  # -30% 이하 제외
-        max_val = min(30, q75)    # 30% 이상 제외
-        
-        return {
-            "timeframe_days": selected_timeframe,
-            "timeframe_label": timeframe_days_to_label(selected_timeframe),
-            "median": median,
-            "min": min_val,
-            "max": max_val,
-            "count": len(values),
-        }
-    except Exception as e:
-        print(f"  ⚠️ 추정치 계산 실패: {e}")
-        return None
-
-
 # 노드 1: LoadSurvey
 def load_survey(state: ReportState) -> ReportState:
-    """설문 데이터 로드"""
+    """Lifestyle(DB) 설문만 로드. 리포트 전 구간(요약·본문 카드·RAG)이 동일 설문을 쓴다."""
     user_id = state["user_id"]
     lifestyle_id = state.get("lifestyle_id")
     
@@ -750,7 +483,9 @@ def load_survey(state: ReportState) -> ReportState:
         if "error" in survey:
             print(f"⚠️ [LoadSurvey] 오류: {survey['error']}")
             return {**state, "survey": None}
-        print(f"✅ [LoadSurvey] 설문 데이터 로드 완료")
+        # 일별 스냅샷·HealthData 병합은 하지 않음 (사용자 설문과 리포트 불일치 방지)
+        survey = dict(survey)
+        print(f"✅ [LoadSurvey] Lifestyle 설문 로드 완료 (lifestyle_id={survey.get('lifestyle_id')})")
         return {**state, "survey": survey}
     except Exception as e:
         print(f"❌ [LoadSurvey] 실패: {e}")
@@ -759,23 +494,24 @@ def load_survey(state: ReportState) -> ReportState:
 
 # 노드 2: PlanSections
 def plan_sections(state: ReportState) -> ReportState:
-    """생성할 섹션 계획"""
+    """생성할 섹션 계획 (lifestyle → smoking/drinking/stress 평탄화)"""
     print("[PlanSections] 섹션 계획 시작")
     survey = state.get("survey")
     if not survey:
         return {**state, "active_sections": []}
-    
-    sections = ["goals"]  # goals는 항상 포함
-    
+
+    sections = ["summary"]  # 요약 탭은 항상 첫 번째 (플로팅 목표, 피부 타입, 5각형 그래프, 상황 솔루션)
+
     if survey.get("sleep_hours_weekday") is not None or survey.get("sleep_quality_score") is not None:
         sections.append("sleep")
     if survey.get("uv_exposure_10to16") or survey.get("sunscreen_frequency"):
         sections.append("uv")
-    if survey.get("drinking_days_per_week") or survey.get("smoking_status") or survey.get("stress_score"):
-        sections.append("lifestyle")
+    # lifestyle → smoking, drinking, stress를 최상위 섹션으로 (subsections 제거)
+    lifestyle_subs = _get_lifestyle_subsection_keys(survey)
+    sections.extend(lifestyle_subs)
     if survey.get("aerobic_weekly") or survey.get("resistance_weekly"):
         sections.append("activity")
-    
+
     print(f"✅ [PlanSections] 섹션 계획 완료: {sections}")
     return {**state, "active_sections": sections}
 
@@ -801,444 +537,6 @@ def derive_user_profile(state: ReportState) -> ReportState:
         return {**state, "user_profile": {}}
 
 
-# ════════════════════════════════════════════════════════════════
-#  노드 3: PreloadQuantEvidence (헬퍼)
-# ════════════════════════════════════════════════════════════════
-
-class _QuantHelper:
-    """PreloadQuantEvidence 내부 로직을 깔끔하게 분리하기 위한 네임스페이스"""
-
-    @staticmethod
-    def _collect_outcome_scores(outcome_list, search_fn, used_outcomes):
-        """outcome 후보들의 점수를 수집"""
-        scores = []
-        for outcome in outcome_list:
-            try:
-                stats = search_fn(outcome)
-                if stats and stats.get("timeframe_groups"):
-                    score = score_outcome_for_selection(stats)
-                    if score > 0:
-                        scores.append((outcome, stats, score))
-            except Exception:
-                continue
-        return scores
-
-    @staticmethod
-    def _select_timeframes_with_dedup(
-        timeframe_groups, used_timeframe_labels, max_count=2,
-    ):
-        """겹침을 최소화하며 timeframe 선택"""
-        tf_scores = {}
-        for tf_days, group in timeframe_groups.items():
-            tf_label = timeframe_days_to_label(tf_days)
-            usage = used_timeframe_labels.get(tf_label, 0)
-            if usage >= 2:
-                continue
-            card_count = len(group.get("cards", []))
-            tf_scores[tf_days] = card_count / (1 + usage)
-
-        if tf_scores:
-            sorted_tfs = sorted(tf_scores.items(), key=lambda x: x[1], reverse=True)
-            return [tf for tf, _ in sorted_tfs[:max_count]]
-        return select_top_timeframes(timeframe_groups, max_count=max_count)
-
-    @staticmethod
-    def _store_outcome_data(
-        outcome, stats, section_quant, used_outcomes,
-        used_timeframe_labels,
-    ):
-        """outcome 데이터를 section_quant에 저장"""
-        timeframe_groups = stats.get("timeframe_groups", {})
-        selected_tfs = _QuantHelper._select_timeframes_with_dedup(
-            timeframe_groups, used_timeframe_labels,
-        )
-
-        used_outcomes.add(outcome)
-        for tf_days in selected_tfs:
-            tf_label = timeframe_days_to_label(tf_days)
-            used_timeframe_labels[tf_label] = used_timeframe_labels.get(tf_label, 0) + 1
-
-        filtered_groups = {tf: timeframe_groups[tf] for tf in selected_tfs if tf in timeframe_groups}
-        section_quant["stats_by_outcome"][outcome] = {**stats, "timeframe_groups": filtered_groups}
-
-        for tf_days in selected_tfs:
-            if tf_days in timeframe_groups:
-                for card_dict in timeframe_groups[tf_days].get("cards", []):
-                    section_quant["quant_refs"].append({
-                        "point_id": f"{card_dict.get('chunk_id', '')}__{card_dict.get('row_uid', '')}",
-                        "paper_id": card_dict.get("paper_id", ""),
-                        "chunk_id": card_dict.get("chunk_id", ""),
-                        "outcome_mapped": card_dict.get("outcome_mapped", ""),
-                        "timeframe_days": tf_days,
-                        "effect_signed_value": card_dict.get("effect_signed_value"),
-                        "effect_unit": card_dict.get("effect_unit_filled", "%"),
-                        "p_value": card_dict.get("p_value_num"),
-                        "p_label": card_dict.get("p_label", ""),
-                        "source_snippet": card_dict.get("source_snippet", ""),
-                    })
-
-        return len(selected_tfs)
-
-
-def _preload_goals_quant(survey, section_quant, used_outcomes, used_timeframe_labels):
-    """goals 섹션 정량 근거"""
-    outcomes = survey.get("outcomes", [])
-    outcome_scores = []
-
-    for ui_outcome in outcomes:
-        quant_list = UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, [])
-        if not quant_list:
-            continue
-        try:
-            stats = get_grouped_stats_multi(quant_list, exclude_suspicious=True)
-            if stats and stats.get("timeframe_groups"):
-                score = score_outcome_for_selection(stats)
-                if score > 0:
-                    outcome_scores.append((ui_outcome, stats, score))
-        except Exception as e:
-            print(f"    ⚠️ {ui_outcome} 검색 실패: {e}")
-
-    outcome_scores.sort(key=lambda x: x[2], reverse=True)
-    selected = outcome_scores[:2]
-
-    if selected:
-        section_quant["mode"] = "grounded"
-        section_quant["selected_outcomes"] = [o for o, _, _ in selected]
-
-        for ui_outcome, _, _ in selected:
-            for qo in UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, []):
-                used_outcomes.add(qo)
-
-        total_tf = 0
-        for ui_outcome, stats, _ in selected:
-            total_tf += _QuantHelper._store_outcome_data(
-                ui_outcome, stats, section_quant, used_outcomes, used_timeframe_labels,
-            )
-        print(f"    ✅ {len(selected)}개 outcome 선택 → grounded (총 {total_tf}개 timeframe)")
-
-
-def _preload_section_quant(
-    section, survey, section_quant,
-    used_outcomes, used_timeframe_labels, available_quant_outcomes,
-):
-    """일반 섹션 정량 근거"""
-    candidates = SECTION_OUTCOME_CANDIDATES.get(section, [])
-    outcome_scores = []
-
-    for outcome in candidates:
-        try:
-            stats = get_grouped_stats(outcome, exclude_suspicious=True)
-            if stats and stats.get("timeframe_groups"):
-                score = score_outcome_for_selection(stats)
-                if score > 0:
-                    outcome_scores.append((outcome, stats, score))
-        except Exception:
-            continue
-
-    # 예상경로 다양화: 섹션 고유 outcome 우선 + 재사용 강한 페널티
-    primary = SECTION_PRIMARY_OUTCOME.get(section)
-    filtered = []
-    for outcome, stats, score in outcome_scores:
-        adj = score
-        if outcome == primary:
-            adj *= 1.4  # 섹션별 1순위 outcome 부스트 (수면→수분, UV→색소 등)
-        if outcome in used_outcomes:
-            adj *= 0.5  # 다른 섹션에서 이미 사용된 outcome 억제
-        filtered.append((outcome, stats, adj))
-    filtered.sort(key=lambda x: x[2], reverse=True)
-    selected = filtered[:3]  # 예상경로 다양화: 2→3개 outcome 사용
-
-    if selected:
-        section_quant["mode"] = "grounded"
-        section_quant["selected_outcomes"] = [o for o, _, _ in selected]
-
-        total_tf = 0
-        for outcome, stats, _ in selected:
-            total_tf += _QuantHelper._store_outcome_data(
-                outcome, stats, section_quant, used_outcomes, used_timeframe_labels,
-            )
-        print(f"    ✅ {len(selected)}개 outcome 선택 → grounded (총 {total_tf}개 timeframe)")
-    else:
-        # estimated fallback
-        outcomes = survey.get("outcomes", [])
-        all_quant = []
-        for ui_outcome in outcomes:
-            all_quant.extend(UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, []))
-        filtered_candidates = [c for c in all_quant if c in available_quant_outcomes]
-        if filtered_candidates:
-            estimated = calculate_estimated_stats(filtered_candidates)
-            if estimated:
-                section_quant["mode"] = "estimated"
-                section_quant["selected_outcomes"] = filtered_candidates[:2]
-                section_quant["stats_by_outcome"]["estimated"] = estimated
-                print(f"    ⚠️ grounded 없음 → estimated ({estimated['timeframe_label']}, {estimated['median']:.1f}%)")
-            else:
-                print("    ⚠️ 정량 근거 없음 (estimated 실패)")
-        else:
-            print("    ⚠️ 정량 근거 없음 (available outcomes 없음)")
-
-
-def preload_quant_evidence(state: ReportState) -> ReportState:
-    """섹션별 정량 근거 먼저 확보 (grounded 또는 estimated)"""
-    print("[PreloadQuantEvidence] 정량 근거 확보 시작")
-    sections = state.get("active_sections", [])
-    survey = state.get("survey", {})
-    
-    quant_results = {}
-    
-    # D. Quant fallback 안정화: available outcomes 수집
-    available_quant_outcomes = set()
-    all_candidate_outcomes = set()
-    for section in sections:
-        if section == "goals":
-            outcomes = survey.get("outcomes", [])
-            for ui_outcome in outcomes:
-                quant_outcomes = UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, [])
-                all_candidate_outcomes.update(quant_outcomes)
-        else:
-            candidates = SECTION_OUTCOME_CANDIDATES.get(section, [])
-            all_candidate_outcomes.update(candidates)
-    
-    # 실제 존재하는 outcome 확인 (샘플링으로 빠르게 체크)
-    for outcome in all_candidate_outcomes:
-        try:
-            stats = get_grouped_stats(outcome, exclude_suspicious=True)
-            if stats and stats.get("timeframe_groups"):
-                available_quant_outcomes.add(outcome)
-        except:
-            pass
-    
-    print(f"  📊 Available quant outcomes: {len(available_quant_outcomes)}개 ({sorted(list(available_quant_outcomes))[:10]})")
-    
-    # outcome/timeframe 겹침 완화를 위한 추적
-    used_outcomes = set()  # 이미 사용된 outcome_mapped
-    used_timeframe_labels = {}  # timeframe_label별 사용 횟수
-    
-    for section in sections:
-        print(f"\n  [{section}] 정량 근거 검색 시작")
-        section_quant = {
-            "mode": "estimated",  # 기본값
-            "selected_outcomes": [],
-            "stats_by_outcome": {},
-            "quant_refs": [],
-        }
-        
-        if section == "goals":
-            # goals: 사용자 outcomes 기반 (최대 2개만 선택)
-            outcomes = survey.get("outcomes", [])
-            outcome_scores = []
-            
-            for ui_outcome in outcomes:
-                quant_outcome_list = UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, [])
-                if not quant_outcome_list:
-                    continue
-                
-                try:
-                    stats = get_grouped_stats_multi(quant_outcome_list, exclude_suspicious=True)
-                    if stats and stats.get("timeframe_groups"):
-                        score = score_outcome_for_selection(stats)
-                        if score > 0:
-                            outcome_scores.append((ui_outcome, stats, score))
-                except Exception as e:
-                    print(f"    ⚠️ {ui_outcome} 검색 실패: {e}")
-                    continue
-            
-            # 점수 기준 정렬하여 상위 2개만 선택
-            outcome_scores.sort(key=lambda x: x[2], reverse=True)
-            selected_outcomes_data = outcome_scores[:2]  # 최대 2개
-            
-            if selected_outcomes_data:
-                section_quant["mode"] = "grounded"
-                section_quant["selected_outcomes"] = [outcome for outcome, _, _ in selected_outcomes_data]
-                
-                # 선택된 outcome들을 used_outcomes에 반영 (outcome 겹침 완화)
-                for ui_outcome, _, _ in selected_outcomes_data:
-                    # UI outcome을 quant outcome으로 매핑하여 used_outcomes에 추가
-                    quant_outcome_list = UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, [])
-                    for quant_outcome in quant_outcome_list:
-                        used_outcomes.add(quant_outcome)
-                
-                # 선택된 outcome들의 stats 저장 및 timeframe 필터링
-                for ui_outcome, stats, score in selected_outcomes_data:
-                    # timeframe 1-2개만 선택
-                    timeframe_groups = stats.get("timeframe_groups", {})
-                    
-                    # timeframe 겹침 완화
-                    timeframe_scores = {}
-                    for tf_days, group in timeframe_groups.items():
-                        tf_label = timeframe_days_to_label(tf_days)
-                        usage_count = used_timeframe_labels.get(tf_label, 0)
-                        if usage_count >= 2:
-                            continue
-                        card_count = len(group.get("cards", []))
-                        timeframe_scores[tf_days] = card_count / (1 + usage_count)
-                    
-                    if timeframe_scores:
-                        sorted_timeframes = sorted(timeframe_scores.items(), key=lambda x: x[1], reverse=True)
-                        selected_timeframes = [tf for tf, _ in sorted_timeframes[:2]]
-                    else:
-                        selected_timeframes = select_top_timeframes(timeframe_groups, max_count=2)
-                    
-                    # 사용된 timeframe 추적
-                    for tf_days in selected_timeframes:
-                        tf_label = timeframe_days_to_label(tf_days)
-                        used_timeframe_labels[tf_label] = used_timeframe_labels.get(tf_label, 0) + 1
-                    
-                    # 선택된 timeframe만 필터링
-                    filtered_groups = {tf: timeframe_groups[tf] for tf in selected_timeframes if tf in timeframe_groups}
-                    
-                    # 필터링된 stats 저장
-                    filtered_stats = {
-                        **stats,
-                        "timeframe_groups": filtered_groups
-                    }
-                    section_quant["stats_by_outcome"][ui_outcome] = filtered_stats
-                    
-                    # quant_refs 수집 (선택된 timeframe만)
-                    for tf_days in selected_timeframes:
-                        if tf_days in timeframe_groups:
-                            group = timeframe_groups[tf_days]
-                            for card_dict in group.get("cards", []):
-                                section_quant["quant_refs"].append({
-                                    "point_id": f"{card_dict.get('chunk_id', '')}__{card_dict.get('row_uid', '')}",
-                                    "paper_id": card_dict.get("paper_id", ""),
-                                    "chunk_id": card_dict.get("chunk_id", ""),
-                                    "outcome_mapped": card_dict.get("outcome_mapped", ""),
-                                    "timeframe_days": tf_days,
-                                    "effect_signed_value": card_dict.get("effect_signed_value"),
-                                    "effect_unit": card_dict.get("effect_unit_filled", "%"),
-                                    "p_value": card_dict.get("p_value_num"),
-                                    "p_label": card_dict.get("p_label", ""),
-                                    "source_snippet": card_dict.get("source_snippet", ""),
-                                })
-                
-                total_timeframes = sum(len(select_top_timeframes(s.get("timeframe_groups", {}), max_count=2)) for _, s, _ in selected_outcomes_data)
-                print(f"    ✅ {len(selected_outcomes_data)}개 outcome 선택 → grounded (총 {total_timeframes}개 timeframe)")
-        else:
-            # 일반 섹션: 후보 리스트 순회하여 최대 2개 outcome 선택
-            candidates = SECTION_OUTCOME_CANDIDATES.get(section, [])
-            outcome_scores = []
-            
-            for outcome in candidates:
-                try:
-                    stats = get_grouped_stats(outcome, exclude_suspicious=True)
-                    if stats and stats.get("timeframe_groups"):
-                        score = score_outcome_for_selection(stats)
-                        if score > 0:
-                            outcome_scores.append((outcome, stats, score))
-                except Exception as e:
-                    continue
-            
-            # 점수 기준 정렬하여 상위 1-2개 선택
-            outcome_scores.sort(key=lambda x: x[2], reverse=True)
-            
-            # 겹침 완화: 이미 사용된 outcome은 페널티 적용
-            filtered_outcomes = []
-            for outcome, stats, score in outcome_scores:
-                # 이미 사용된 outcome이면 점수 10% 감소
-                if outcome in used_outcomes:
-                    adjusted_score = score * 0.9
-                    filtered_outcomes.append((outcome, stats, adjusted_score))
-                else:
-                    filtered_outcomes.append((outcome, stats, score))
-            
-            # 재정렬
-            filtered_outcomes.sort(key=lambda x: x[2], reverse=True)
-            selected_outcomes_data = filtered_outcomes[:2]  # 최대 2개
-            
-            if selected_outcomes_data:
-                section_quant["mode"] = "grounded"
-                section_quant["selected_outcomes"] = [outcome for outcome, _, _ in selected_outcomes_data]
-                
-                total_timeframes = 0
-                # 선택된 outcome들의 stats 저장 및 timeframe 필터링
-                for outcome, stats, score in selected_outcomes_data:
-                    # timeframe 1-2개만 선택
-                    timeframe_groups = stats.get("timeframe_groups", {})
-                    
-                    # timeframe 겹침 완화: 이미 많이 사용된 timeframe은 피함
-                    timeframe_scores = {}
-                    for tf_days, group in timeframe_groups.items():
-                        tf_label = timeframe_days_to_label(tf_days)
-                        # 이미 사용된 timeframe이면 우선순위 낮춤
-                        usage_count = used_timeframe_labels.get(tf_label, 0)
-                        if usage_count >= 2:  # 2번 이상 사용되면 피함
-                            continue
-                        # 카드 수가 많을수록, 사용 횟수가 적을수록 높은 점수
-                        card_count = len(group.get("cards", []))
-                        timeframe_scores[tf_days] = card_count / (1 + usage_count)
-                    
-                    if timeframe_scores:
-                        # 점수 기준으로 정렬하여 상위 1-2개 선택
-                        sorted_timeframes = sorted(timeframe_scores.items(), key=lambda x: x[1], reverse=True)
-                        selected_timeframes = [tf for tf, _ in sorted_timeframes[:2]]
-                    else:
-                        # 겹침이 많아도 최소 1개는 선택
-                        selected_timeframes = select_top_timeframes(timeframe_groups, max_count=2)
-                    
-                    total_timeframes += len(selected_timeframes)
-                    
-                    # 사용된 outcome과 timeframe 추적
-                    used_outcomes.add(outcome)
-                    for tf_days in selected_timeframes:
-                        tf_label = timeframe_days_to_label(tf_days)
-                        used_timeframe_labels[tf_label] = used_timeframe_labels.get(tf_label, 0) + 1
-                    
-                    # 선택된 timeframe만 필터링
-                    filtered_groups = {tf: timeframe_groups[tf] for tf in selected_timeframes if tf in timeframe_groups}
-                    
-                    # 필터링된 stats 저장
-                    filtered_stats = {
-                        **stats,
-                        "timeframe_groups": filtered_groups
-                    }
-                    section_quant["stats_by_outcome"][outcome] = filtered_stats
-                    
-                    # quant_refs 수집 (선택된 timeframe만)
-                    for tf_days in selected_timeframes:
-                        if tf_days in timeframe_groups:
-                            group = timeframe_groups[tf_days]
-                            for card_dict in group.get("cards", []):
-                                section_quant["quant_refs"].append({
-                                    "point_id": f"{card_dict.get('chunk_id', '')}__{card_dict.get('row_uid', '')}",
-                                    "paper_id": card_dict.get("paper_id", ""),
-                                    "chunk_id": card_dict.get("chunk_id", ""),
-                                    "outcome_mapped": card_dict.get("outcome_mapped", ""),
-                                    "timeframe_days": tf_days,
-                                    "effect_signed_value": card_dict.get("effect_signed_value"),
-                                    "effect_unit": card_dict.get("effect_unit_filled", "%"),
-                                    "p_value": card_dict.get("p_value_num"),
-                                    "p_label": card_dict.get("p_label", ""),
-                                    "source_snippet": card_dict.get("source_snippet", ""),
-                                })
-                
-                print(f"    ✅ {len(selected_outcomes_data)}개 outcome 선택 → grounded (총 {total_timeframes}개 timeframe)")
-            else:
-                # D. Quant fallback 안정화: available outcomes만 사용
-                outcomes = survey.get("outcomes", [])
-                all_quant_candidates = []
-                for ui_outcome in outcomes:
-                    quant_outcomes = UI_OUTCOME_TO_QUANT_MAPPED.get(ui_outcome, [])
-                    all_quant_candidates.extend(quant_outcomes)
-                filtered_candidates = [c for c in all_quant_candidates if c in available_quant_outcomes]
-                if filtered_candidates:
-                    estimated = calculate_estimated_stats(filtered_candidates)
-                    if estimated:
-                        section_quant["mode"] = "estimated"
-                        section_quant["selected_outcomes"] = filtered_candidates[:2]  # 상위 2개만
-                        section_quant["stats_by_outcome"]["estimated"] = estimated
-                        print(f"    ⚠️ grounded 없음 → estimated ({estimated['timeframe_label']}, {estimated['median']:.1f}%)")
-                    else:
-                        print(f"    ⚠️ 정량 근거 없음 (estimated 실패, narrative만 사용)")
-                else:
-                    print(f"    ⚠️ 정량 근거 없음 (available outcomes 없음, narrative만 사용)")
-        
-        quant_results[section] = section_quant
-    
-    print(f"\n✅ [PreloadQuantEvidence] 완료 - {len(quant_results)}개 섹션")
-    return {**state, "quant_evidence_results": quant_results}
-
-
 # 노드 4: BuildQueries (카드별 쿼리 생성)
 def build_queries(state: ReportState) -> ReportState:
     """섹션별 카드 타입별 검색 쿼리 생성 (quant 결과 + 사용자 정보 반영)"""
@@ -1251,6 +549,8 @@ def build_queries(state: ReportState) -> ReportState:
     section_queries = {}
     
     for section in sections:
+        if section == "summary":
+            continue  # summary는 검색 쿼리 없음
         section_quant = quant_results.get(section, {})
         selected_outcomes = section_quant.get("selected_outcomes", [])
         
@@ -1295,7 +595,7 @@ def build_queries(state: ReportState) -> ReportState:
             queries_by_card["problem"] = f"자외선 노출 사진노화 색소 주름 {' '.join(outcome_keywords)}"
             queries_by_card["cause"] = f"UV 자외선 멜라닌 콜라겐 분해 {' '.join(outcome_keywords)}"
             queries_by_card["action"] = f"선크림 자외선 차단 개입 {' '.join(outcome_keywords)} {tf_label if tf_label else ''}"
-        elif section == "lifestyle":
+        elif section == "lifestyle" or section in LIFESTYLE_SECTIONS:
             queries_by_card["problem"] = f"음주 흡연 스트레스 피부 염증 {' '.join(outcome_keywords)}"
             queries_by_card["cause"] = f"알코올 니코틴 코르티솔 염증 신호 피부 {' '.join(outcome_keywords)}"
             queries_by_card["action"] = f"생활습관 개선 개입 피부 {' '.join(outcome_keywords)} {tf_label if tf_label else ''}"
@@ -1405,168 +705,183 @@ def build_dual_queries(section: str, card_type: str, survey: dict, user_profile:
     return queries
 
 
-# 노드 5: RetrieveNarrativeEvidence (카드별 검색 + fallback + 관측 가능성)
-def retrieve_narrative_evidence(state: ReportState) -> ReportState:
-    """카드 타입별 원문 근거 검색 (narrative only) + fallback 검색 + 상세 로그"""
-    print("[RetrieveNarrativeEvidence] 카드별 원문 근거 검색 시작")
-    sections = state.get("active_sections", [])
+def _qdrant_narrative_items_for_card_type(
+    english_query: str,
+    korean_query: str,
+    topics: Optional[List[str]],
+) -> List[Any]:
+    """problem/cause/action 한 타입에 대한 Qdrant 검색 체인 (스레드 안전하게 독립 실행)."""
+    items: List[Any] = []
+    seen_chunk_ids = set()
+    try:
+        search_input = QdrantSearchInput(
+            query=english_query,
+            top_k=5,
+            topics=topics,
+            section_norm=None,
+            candidate_k=50,
+            min_score=0.2,
+        )
+        result = qdrant_search(search_input)
+        for item in result.items:
+            if item.chunk_id not in seen_chunk_ids:
+                items.append(item)
+                seen_chunk_ids.add(item.chunk_id)
+    except Exception:
+        pass
+
+    if len(items) == 0 and topics:
+        try:
+            no_topics = QdrantSearchInput(
+                query=english_query,
+                top_k=5,
+                topics=None,
+                section_norm=None,
+                candidate_k=50,
+                min_score=0.2,
+            )
+            r2 = qdrant_search(no_topics)
+            for item in r2.items:
+                if item.chunk_id not in seen_chunk_ids:
+                    items.append(item)
+                    seen_chunk_ids.add(item.chunk_id)
+        except Exception:
+            pass
+
+    if len(items) < 3:
+        try:
+            korean_input = QdrantSearchInput(
+                query=korean_query,
+                top_k=5,
+                topics=topics,
+                section_norm=None,
+                candidate_k=50,
+                min_score=0.2,
+            )
+            kr = qdrant_search(korean_input)
+            for item in kr.items:
+                if item.chunk_id not in seen_chunk_ids and len(items) < 5:
+                    items.append(item)
+                    seen_chunk_ids.add(item.chunk_id)
+        except Exception:
+            pass
+
+    if len(items) == 0:
+        try:
+            fallback = QdrantSearchInput(
+                query=english_query,
+                top_k=10,
+                topics=topics,
+                section_norm=None,
+                candidate_k=80,
+                min_score=0.12,
+            )
+            fb = qdrant_search(fallback)
+            for item in fb.items:
+                if item.chunk_id not in seen_chunk_ids and len(items) < 5:
+                    items.append(item)
+                    seen_chunk_ids.add(item.chunk_id)
+        except Exception:
+            pass
+
+    return items
+
+
+def _retrieve_section_narrative(section: str, state: ReportState) -> Tuple[str, Dict[str, List]]:
+    """단일 섹션 narrative 검색 (병렬 워커용). Returns (section, {problem:[], cause:[], action:[]})."""
     section_queries = state.get("section_queries", {})
     survey = state.get("survey", {})
-    
-    narrative_results = {}
-    
-    for section in sections:
-        queries_by_card = section_queries.get(section, {})
-        if not queries_by_card:
-            narrative_results[section] = {"problem": [], "cause": [], "action": []}
+    queries_by_card = section_queries.get(section, {})
+    if not queries_by_card:
+        return section, {"problem": [], "cause": [], "action": []}
+
+    # topics 결정
+    topics = None
+    if section == "goals":
+        topics = map_outcomes_to_topics(survey.get("outcomes", []), include_fallback=True)
+    elif section == "sleep":
+        topics = map_outcomes_to_topics(SECTION_OUTCOME_CANDIDATES.get("sleep", []), include_fallback=True)
+    elif section == "uv":
+        topics = map_outcomes_to_topics(SECTION_OUTCOME_CANDIDATES.get("uv", []), include_fallback=True)
+    elif section in LIFESTYLE_SECTIONS or section == "lifestyle":
+        topics = map_outcomes_to_topics(SECTION_OUTCOME_CANDIDATES.get("lifestyle", []), include_fallback=True)
+    elif section == "activity":
+        topics = ["exercise"]
+
+    section_quant = state.get("quant_evidence_results", {}).get(section, {})
+    selected_outcomes = section_quant.get("selected_outcomes", [])
+    outcome_keywords = [OUTCOME_LABELS.get(o, o) for o in selected_outcomes] if selected_outcomes else []
+    user_profile = state.get("user_profile", {})
+
+    section_results: Dict[str, List] = {
+        "problem": [],
+        "cause": [],
+        "action": [],
+    }
+    jobs: List[Tuple[str, str, str]] = []
+    for card_type in ["problem", "cause", "action"]:
+        korean_query = queries_by_card.get(card_type, "")
+        if not korean_query:
             continue
-        
-        section_results = {}
-        
-        # B. Outcome -> Narrative Topics 매핑
-        topics = None
-        if section == "goals":
-            outcomes = survey.get("outcomes", [])
-            topics = map_outcomes_to_topics(outcomes, include_fallback=True)
-            print(f"  [{section}] UI outcomes {outcomes} → narrative topics {topics}")
-        elif section == "sleep":
-            # 수면 섹션: outcome 후보 → narrative topics 매핑 (검색 품질 개선)
-            section_outcomes = SECTION_OUTCOME_CANDIDATES.get("sleep", [])
-            topics = map_outcomes_to_topics(section_outcomes, include_fallback=True)
-            print(f"  [{section}] section outcomes {section_outcomes} → narrative topics {topics}")
-        elif section == "uv":
-            section_outcomes = SECTION_OUTCOME_CANDIDATES.get("uv", [])
-            topics = map_outcomes_to_topics(section_outcomes, include_fallback=True)
-            print(f"  [{section}] section outcomes {section_outcomes} → narrative topics {topics}")
-        elif section == "lifestyle":
-            section_outcomes = SECTION_OUTCOME_CANDIDATES.get("lifestyle", [])
-            topics = map_outcomes_to_topics(section_outcomes, include_fallback=True)
-            print(f"  [{section}] section outcomes {section_outcomes} → narrative topics {topics}")
-        elif section == "activity":
-            topics = ["exercise"]
-        
-        # 각 카드 타입별로 검색
-        for card_type in ["problem", "cause", "action"]:
-            korean_query = queries_by_card.get(card_type, "")
-            if not korean_query:
-                section_results[card_type] = []
-                continue
-            
-            # C. 듀얼 쿼리: 영어 쿼리 먼저 시도
-            section_quant = state.get("quant_evidence_results", {}).get(section, {})
-            selected_outcomes = section_quant.get("selected_outcomes", [])
-            outcome_keywords = [OUTCOME_LABELS.get(o, o) for o in selected_outcomes] if selected_outcomes else []
-            user_profile = state.get("user_profile", {})
-            
-            dual_queries = build_dual_queries(section, card_type, survey, user_profile, outcome_keywords)
-            english_query = dual_queries[0] if dual_queries else korean_query
-            
-            items = []
-            seen_chunk_ids = set()  # 중복 제거
-            
-            # 1차: 영어 쿼리 + topics로 검색
+        dual_queries = build_dual_queries(
+            section, card_type, survey, user_profile, outcome_keywords
+        )
+        english_query = dual_queries[0] if dual_queries else korean_query
+        jobs.append((card_type, korean_query, english_query))
+
+    if jobs:
+        max_w = min(3, len(jobs))
+        with ThreadPoolExecutor(max_workers=max_w) as pool:
+            future_map = {
+                pool.submit(
+                    _qdrant_narrative_items_for_card_type,
+                    eq,
+                    kq,
+                    topics,
+                ): ct
+                for ct, kq, eq in jobs
+            }
+            for fut in as_completed(future_map):
+                ct = future_map[fut]
+                try:
+                    section_results[ct] = fut.result()
+                except Exception:
+                    section_results[ct] = []
+
+    return section, section_results
+
+
+# 노드 5: RetrieveNarrativeEvidence (카드별 검색 + fallback + 관측 가능성)
+def retrieve_narrative_evidence(state: ReportState) -> ReportState:
+    """카드 타입별 원문 근거 검색 — 섹션 간 병렬 + 섹션 내 problem/cause/action 병렬."""
+    print("[RetrieveNarrativeEvidence] 카드별 원문 근거 검색 시작 (섹션·카드타입 병렬)")
+    sections = state.get("active_sections", [])
+
+    narrative_results = {}
+    sections_to_search = [s for s in sections if s != "summary"]
+    for s in sections:
+        if s == "summary":
+            narrative_results[s] = {"problem": [], "cause": [], "action": []}
+
+    if not sections_to_search:
+        print("✅ [RetrieveNarrativeEvidence] 완료")
+        return {**state, "narrative_evidence": narrative_results}
+
+    max_workers = min(5, len(sections_to_search))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_section = {executor.submit(_retrieve_section_narrative, sec, state): sec for sec in sections_to_search}
+        for future in as_completed(future_to_section):
             try:
-                search_input = QdrantSearchInput(
-                    query=english_query,
-                    top_k=5,
-                    topics=topics,
-                    section_norm=None,
-                    candidate_k=50,
-                    min_score=0.2
-                )
-                result = qdrant_search(search_input)
-                for item in result.items:
-                    if item.chunk_id not in seen_chunk_ids:
-                        items.append(item)
-                        seen_chunk_ids.add(item.chunk_id)
-                
-                if items:
-                    top_score = items[0].score if hasattr(items[0], 'score') else None
-                    chunk_ids = [item.chunk_id[:20] + "..." if len(item.chunk_id) > 20 else item.chunk_id for item in items[:3]]
-                    score_str = f"{top_score:.3f}" if top_score is not None else "N/A"
-                    print(f"  [{section}.{card_type}] 1차 영어 검색 (topics 포함): {len(items)}개 (top_score={score_str})")
-                    if REPORT_DEBUG:
-                        print(f"    📝 영어 쿼리: {english_query[:120]}")
+                sec, section_results = future.result()
+                narrative_results[sec] = section_results
+                n = sum(len(v) for v in section_results.values() if isinstance(v, list))
+                print(f"  ✅ [{sec}] 검색 완료 (총 {n}개)")
             except Exception as e:
-                print(f"  ⚠️ [{section}.{card_type}] 1차 영어 검색 실패: {e}")
-            
-            # 1.5차: 영어쿼리+topics로 0개일 때, topics=None으로 재시도
-            if len(items) == 0 and topics:
-                try:
-                    search_input_no_topics = QdrantSearchInput(
-                        query=english_query,
-                        top_k=5,
-                        topics=None,  # topic filter 제거
-                        section_norm=None,
-                        candidate_k=50,
-                        min_score=0.2
-                    )
-                    result_no_topics = qdrant_search(search_input_no_topics)
-                    for item in result_no_topics.items:
-                        if item.chunk_id not in seen_chunk_ids:
-                            items.append(item)
-                            seen_chunk_ids.add(item.chunk_id)
-                    
-                    if items:
-                        top_score = items[0].score if hasattr(items[0], 'score') else None
-                        score_str = f"{top_score:.3f}" if top_score is not None else "N/A"
-                        print(f"  [{section}.{card_type}] 1.5차 영어 검색 (topics=None): {len(items)}개 (top_score={score_str})")
-                except Exception as e:
-                    print(f"  ⚠️ [{section}.{card_type}] 1.5차 영어 검색 (topics=None) 실패: {e}")
-            
-            # 2차: 부족하면 한국어 쿼리로 보충
-            if len(items) < 3:
-                try:
-                    korean_input = QdrantSearchInput(
-                        query=korean_query,
-                        top_k=5,
-                        topics=topics,
-                        section_norm=None,
-                        candidate_k=50,
-                        min_score=0.2
-                    )
-                    korean_result = qdrant_search(korean_input)
-                    for item in korean_result.items:
-                        if item.chunk_id not in seen_chunk_ids and len(items) < 5:
-                            items.append(item)
-                            seen_chunk_ids.add(item.chunk_id)
-                    
-                    if len(items) > 0:
-                        print(f"  [{section}.{card_type}] 2차 한국어 보충: 총 {len(items)}개")
-                except Exception as e:
-                    print(f"  ⚠️ [{section}.{card_type}] 2차 한국어 검색 실패: {e}")
-            
-            # 3차: 여전히 부족하면 min_score 낮춰 재검색
-            if len(items) == 0:
-                try:
-                    fallback_input = QdrantSearchInput(
-                        query=english_query,
-                        top_k=10,
-                        topics=topics,
-                        section_norm=None,
-                        candidate_k=80,
-                        min_score=0.12  # 0.2 -> 0.12로 완화
-                    )
-                    fallback_result = qdrant_search(fallback_input)
-                    for item in fallback_result.items:
-                        if item.chunk_id not in seen_chunk_ids and len(items) < 5:
-                            items.append(item)
-                            seen_chunk_ids.add(item.chunk_id)
-                    
-                    if items:
-                        top_score = items[0].score if hasattr(items[0], 'score') else None
-                        score_str = f"{top_score:.3f}" if top_score is not None else "N/A"
-                        print(f"  [{section}.{card_type}] 3차 fallback (min_score=0.12): {len(items)}개 (top_score={score_str})")
-                    else:
-                        print(f"  [{section}.{card_type}] 모든 검색 실패: 0개")
-                except Exception as e:
-                    print(f"  ⚠️ [{section}.{card_type}] 3차 fallback 검색 실패: {e}")
-            
-            section_results[card_type] = items
-        
-        narrative_results[section] = section_results
-    
-    print(f"✅ [RetrieveNarrativeEvidence] 완료")
+                sec = future_to_section[future]
+                narrative_results[sec] = {"problem": [], "cause": [], "action": []}
+                print(f"  ⚠️ [{sec}] 검색 실패: {e}")
+
+    print("✅ [RetrieveNarrativeEvidence] 완료")
     return {**state, "narrative_evidence": narrative_results}
 
 
@@ -1660,8 +975,9 @@ def extract_claims(state: ReportState) -> ReportState:
                 section_claims[card_type] = []
                 continue
             
-            # 섹션별 카드 타입 키워드 가져오기
-            keywords = SECTION_CARD_TYPE_KEYWORDS.get(section, {}).get(card_type, [])
+            # 섹션별 카드 타입 키워드 가져오기 (smoking/drinking/stress → lifestyle)
+            kw_section = "lifestyle" if section in LIFESTYLE_SECTIONS else section
+            keywords = SECTION_CARD_TYPE_KEYWORDS.get(kw_section, {}).get(card_type, [])
             
             # 키워드 기반 claims 생성
             claims = []
@@ -1743,55 +1059,54 @@ def _generate_cards_for_section(
     """
     단일 섹션 카드 생성 (병렬 실행용 워커).
     Returns: (section, {key: cards}).
+    smoking/drinking/stress는 write_section_cards에서 별도 배치 처리 (generate_lifestyle_cards).
     """
     survey = state.get("survey", {})
     quant_results = state.get("quant_evidence_results", {})
     extracted_claims = state.get("extracted_claims", {})
     user_profile = state.get("user_profile", {})
-    if section == "lifestyle":
-        subsections = get_lifestyle_subsection_keys(survey)
-        if subsections:
-            lifestyle_result = generate_lifestyle_cards(
-                survey, quant_results, extracted_claims, user_profile, state,
-            )
-            result: Dict[str, List[Dict[str, Any]]] = {}
-            for sub_key in subsections:
-                result[f"{section}.{sub_key}"] = lifestyle_result.get(sub_key, [])
-            result[section] = result.get(f"{section}.{subsections[0]}", [])
-            return section, result
-        else:
-            cards = generate_section_cards(
-                section, survey, quant_results, extracted_claims, user_profile, state,
-            )
-            return section, {section: cards}
-    else:
-        cards = generate_section_cards(
-            section, survey, quant_results, extracted_claims, user_profile, state,
-        )
-        return section, {section: cards}
+    cards = generate_section_cards(
+        section, survey, quant_results, extracted_claims, user_profile, state,
+    )
+    return section, {section: cards}
 
 
 def write_section_cards(state: ReportState) -> ReportState:
-    """섹션별 4카드 JSON 생성 (병렬 호출)"""
+    """섹션별 4카드 JSON 생성 (병렬 호출). smoking/drinking/stress는 배치 처리."""
     print("[WriteSectionCards] 카드 생성 시작 (병렬)")
     sections = state.get("active_sections", [])
     survey = state.get("survey", {})
     retry_sections = state.get("retry_sections", [])
     existing_cards = state.get("section_cards", {})
-    
+
     if retry_sections:
         print(f"  🔄 재시도 섹션: {retry_sections}")
         sections_to_process = retry_sections
-        section_cards = existing_cards.copy()  # 기존 카드 유지
+        section_cards = existing_cards.copy()
     else:
         sections_to_process = sections
         section_cards: Dict[str, list] = {}
 
-    max_workers = max(1, min(len(sections_to_process), 5))  # 최대 5개 동시 실행
+    # smoking/drinking/stress: generate_lifestyle_cards 1회 호출로 배치 생성
+    lifestyle_in_sections = [s for s in sections_to_process if s in LIFESTYLE_SECTIONS]
+    if lifestyle_in_sections:
+        quant_results = state.get("quant_evidence_results", {})
+        extracted_claims = state.get("extracted_claims", {})
+        user_profile = state.get("user_profile", {})
+        lifestyle_result = generate_lifestyle_cards(
+            survey, quant_results, extracted_claims, user_profile, state,
+        )
+        for sub_key in lifestyle_in_sections:
+            section_cards[sub_key] = lifestyle_result.get(sub_key, [])
+            print(f"  ✅ [{sub_key}] 카드 생성 완료")
+
+    # 나머지 섹션: 병렬 처리 (summary 제외 - assemble_report에서 별도 생성)
+    other_sections = [s for s in sections_to_process if s not in LIFESTYLE_SECTIONS and s != "summary"]
+    max_workers = max(1, min(len(other_sections), 5))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_section = {
             executor.submit(_generate_cards_for_section, section, state): section
-            for section in sections_to_process
+            for section in other_sections
         }
         for future in as_completed(future_to_section):
             section = future_to_section[future]
@@ -1803,7 +1118,6 @@ def write_section_cards(state: ReportState) -> ReportState:
             except Exception as e:
                 print(f"  ❌ [{section}] 카드 생성 실패: {e}")
                 traceback.print_exc()
-                # 실패 시 동기 재시도 (fallback)
                 try:
                     _, result = _generate_cards_for_section(section, state)
                     for key, cards in result.items():
@@ -1844,606 +1158,14 @@ def _get_lifestyle_subsection_keys(survey: dict) -> List[str]:
     return subsections
 
 
-def _generate_section_cards(
-    section: str, 
-    survey: dict, 
-    quant_results: dict, 
-    extracted_claims: dict, 
-    user_profile: dict,
-    state: ReportState
-) -> List[Dict[str, Any]]:
-    """일반 섹션의 카드 생성"""
-    section_quant = quant_results.get(section, {})
-    section_claims = extracted_claims.get(section, {}) if extracted_claims else {}
-    
-    # 관측 가능성: 로그
-    has_claims = any(section_claims.get(card_type) for card_type in ["problem", "cause", "action"]) if section_claims else False
-    print(f"  [{section}] has_claims={has_claims}")
-    
-    if has_claims:
-        # 프롬프트 구성 (근거 기반 강화)
-        try:
-            prompt = _build_card_prompt_enhanced(section, survey, section_quant, section_claims, user_profile)
-            if REPORT_DEBUG:
-                print(f"    📝 [{section}] enhanced 프롬프트 길이: {len(prompt)}자")
-        except Exception as e:
-            print(f"    ⚠️ [{section}] enhanced 프롬프트 생성 실패, 기본 프롬프트 사용: {e}")
-            has_claims = False  # fallback으로 전환
-    
-    if not has_claims:
-        # claims가 없으면 기존 방식으로 fallback
-        print(f"    ⚠️ [{section}] claims가 없어 기본 프롬프트 사용")
-        narrative_items_flat = []
-        section_evidence = state.get("narrative_evidence", {}).get(section, {})
-        if isinstance(section_evidence, dict):
-            for card_type in ["problem", "cause", "action"]:
-                items = section_evidence.get(card_type, [])
-                narrative_items_flat.extend(items[:2])  # 각 카드 타입당 2개씩
-        elif isinstance(section_evidence, list):
-            narrative_items_flat = section_evidence[:5]
-        prompt = _build_card_prompt(section, survey, section_quant, narrative_items_flat)
-        if REPORT_DEBUG:
-            print(f"    📝 [{section}] 기본 프롬프트 길이: {len(prompt)}자")
-    
-    system_prompt = """당신은 피부과 전문의입니다. 사용자의 설문 데이터, 정량 근거, 구조화된 주장(claims)을 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
-
-⚠️ 중요: 설명 문장 없이 JSON만 출력하세요. 다른 텍스트는 절대 포함하지 마세요.
-
-반드시 아래 JSON 구조를 따르세요:
-{
-  "cards": [
-    {"type": "problem", "title": "현재 상태", "text": "정확히 2-3문장만"},
-    {"type": "cause", "title": "왜 이런 상태인가", "text": "정확히 2-3문장만"},
-    {"type": "action", "title": "당신에게 필요한 행동 3가지", "items": [
-      {"title": "Action 1 (1문장)", "detail": "1문장 설명"},
-      {"title": "Action 2 (1문장)", "detail": "1문장 설명"},
-      {"title": "Action 3 (1문장)", "detail": "1문장 설명"}
-    ]},
-    {"type": "simulation", "title": "12주 후 예상 경로", "text": "정확히 2-4문장만", "meta": {
-      "mode": "grounded" 또는 "estimated",
-      "disclaimer_small": "estimated일 때만 필수"
-    }}
-  ]
-}
-
-규칙:
-- problem/cause: 각 2-3문장까지만 (더 길면 잘라서 3문장)
-- simulation: 4문장 초과 금지
-- action items: 정확히 3개, title/detail 각 1문장. action은 problem(현재 상태)과 cause(원인)에 연계되어, 그 원인을 해결하는 구체적 행동이어야 함
-- 전문용어는 1회만 (괄호로 쉬운 설명)
-- 한국어만 사용
-- 카드 본문에 **, *, # 같은 마크다운 문법을 절대 사용하지 마세요. 일반 텍스트만 사용하세요.
-- PMC, PMID, p=, CI 같은 논문 정보는 본문에 절대 포함하지 마세요."""
-    
-    try:
-        context = f"write_section_cards.{section}"
-        cards_json = invoke_llm_json(prompt, system_prompt, retry=True, context=context)
-        
-        if cards_json is None:
-            print(f"    ❌ [{section}] 카드 생성 실패 (원인 B: LLM 호출 실패), 기본 카드 생성")
-            default_cards = _create_default_cards(section, survey)
-            processed_cards, _ = _postprocess_cards(default_cards, section_quant, section, survey, user_profile)
-            return processed_cards
-        elif "cards" not in cards_json:
-            print(f"    ❌ [{section}] 카드 생성 실패 (원인 C: JSON 파싱 실패 - 'cards' 키 없음), 기본 카드 생성")
-            if REPORT_DEBUG:
-                print(f"    📝 cards_json: {str(cards_json)[:200]}")
-            default_cards = _create_default_cards(section, survey)
-            processed_cards, _ = _postprocess_cards(default_cards, section_quant, section, survey, user_profile)
-            return processed_cards
-        else:
-            raw_cards = cards_json["cards"]
-            if not raw_cards or len(raw_cards) == 0:
-                print(f"    ❌ [{section}] 카드 생성 실패 (원인 C: JSON 파싱 실패 - 빈 cards 리스트), 기본 카드 생성")
-                default_cards = _create_default_cards(section, survey)
-                processed_cards, _ = _postprocess_cards(default_cards, section_quant, section, survey, user_profile)
-                return processed_cards
-            else:
-                # 성공: 후처리
-                processed_cards, quality_flags = _postprocess_cards(raw_cards, section_quant, section, survey, user_profile)
-                
-                if quality_flags.get("leaked_citation"):
-                    print(f"    ⚠️ PMC/논문ID 노출 발견 및 제거됨")
-                
-                print(f"    ✅ [{section}] {len(processed_cards)}개 카드 생성 완료")
-                return processed_cards
-    except Exception as e:
-        import traceback
-        print(f"    ❌ [{section}] 카드 생성 실패 (원인 B: 예외 발생): {e}")
-        if REPORT_DEBUG:
-            print(f"    📝 에러 상세:\n{traceback.format_exc()}")
-        default_cards = _create_default_cards(section, survey)
-        processed_cards, _ = _postprocess_cards(default_cards, section_quant, section, survey, user_profile)
-        return processed_cards
-
-
-def _generate_subsection_cards(
-    section: str,
-    subsection_key: str,
-    survey: dict,
-    quant_results: dict,
-    extracted_claims: dict,
-    user_profile: dict,
-    state: ReportState
-) -> List[Dict[str, Any]]:
-    """하위 섹션별 카드 생성 (lifestyle의 흡연/음주/스트레스)"""
-    section_quant = quant_results.get(section, {})
-    section_claims = extracted_claims.get(section, {}) if extracted_claims else {}
-    
-    # 하위 섹션별 프롬프트 생성
-    prompt = _build_subsection_card_prompt(section, subsection_key, survey, section_quant, section_claims, user_profile)
-    
-    system_prompt = """당신은 피부과 전문의입니다. 사용자의 설문 데이터, 정량 근거, 구조화된 주장(claims)을 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
-
-⚠️ 중요: 설명 문장 없이 JSON만 출력하세요. 다른 텍스트는 절대 포함하지 마세요.
-
-반드시 아래 JSON 구조를 따르세요:
-{
-  "cards": [
-    {"type": "problem", "title": "현재 상태", "text": "정확히 2-3문장만"},
-    {"type": "cause", "title": "왜 이런 상태인가", "text": "정확히 2-3문장만"},
-    {"type": "action", "title": "당신에게 필요한 행동 3가지", "items": [
-      {"title": "Action 1 (1문장)", "detail": "1문장 설명"},
-      {"title": "Action 2 (1문장)", "detail": "1문장 설명"},
-      {"title": "Action 3 (1문장)", "detail": "1문장 설명"}
-    ]},
-    {"type": "simulation", "title": "12주 후 예상 경로", "text": "정확히 2-4문장만", "meta": {
-      "mode": "grounded" 또는 "estimated",
-      "disclaimer_small": "estimated일 때만 필수"
-    }}
-  ]
-}
-
-규칙:
-- problem/cause: 각 2-3문장까지만 (더 길면 잘라서 3문장)
-- simulation: 4문장 초과 금지
-- action items: 정확히 3개, title/detail 각 1문장. action은 problem(현재 상태)과 cause(원인)에 연계되어, 그 원인을 해결하는 구체적 행동이어야 함
-- 전문용어는 1회만 (괄호로 쉬운 설명)
-- 한국어만 사용
-- 카드 본문에 **, *, # 같은 마크다운 문법을 절대 사용하지 마세요. 일반 텍스트만 사용하세요.
-- PMC, PMID, p=, CI 같은 논문 정보는 본문에 절대 포함하지 마세요."""
-    
-    try:
-        context = f"write_section_cards.{section}.{subsection_key}"
-        cards_json = invoke_llm_json(prompt, system_prompt, retry=True, context=context)
-        
-        if cards_json is None or "cards" not in cards_json or not cards_json.get("cards"):
-            print(f"    ❌ [{section}.{subsection_key}] 카드 생성 실패, 기본 카드 생성")
-            default_cards = _create_default_subsection_cards(section, subsection_key, survey)
-            processed_cards, _ = _postprocess_cards(default_cards, section_quant, section, survey, user_profile)
-            return processed_cards
-        else:
-            raw_cards = cards_json["cards"]
-            processed_cards, quality_flags = _postprocess_cards(raw_cards, section_quant, section, survey, user_profile)
-            
-            if quality_flags.get("leaked_citation"):
-                print(f"    ⚠️ PMC/논문ID 노출 발견 및 제거됨")
-            
-            print(f"    ✅ [{section}.{subsection_key}] {len(processed_cards)}개 카드 생성 완료")
-            return processed_cards
-    except Exception as e:
-        import traceback
-        print(f"    ❌ [{section}.{subsection_key}] 카드 생성 실패: {e}")
-        if REPORT_DEBUG:
-            print(f"    📝 에러 상세:\n{traceback.format_exc()}")
-        default_cards = _create_default_subsection_cards(section, subsection_key, survey)
-        processed_cards, _ = _postprocess_cards(default_cards, section_quant, section, survey, user_profile)
-        return processed_cards
-
-
-def _build_subsection_card_prompt(
-    section: str,
-    subsection_key: str,
-    survey: dict,
-    section_quant: dict,
-    section_claims: dict,
-    user_profile: dict
-) -> str:
-    """하위 섹션별 카드 생성 프롬프트"""
-    # 하위 섹션별 설문 데이터 추출
-    if subsection_key == "smoking":
-        smoking = survey.get('smoking_status', 'N/A')
-        survey_text = f"""흡연 상태: {smoking}
-⚠️ 반드시 흡연 상태를 직접 인용하여 개인화된 리포트를 작성하세요."""
-    elif subsection_key == "drinking":
-        drinking = survey.get('drinking_days_per_week', 'N/A')
-        survey_text = f"""주당 음주 일수: {drinking}일
-⚠️ 반드시 음주 빈도를 직접 인용하여 개인화된 리포트를 작성하세요."""
-    elif subsection_key == "stress":
-        stress = survey.get('stress_score', 'N/A')
-        survey_text = f"""스트레스 점수: {stress}/10점
-⚠️ 반드시 스트레스 점수를 직접 인용하여 개인화된 리포트를 작성하세요."""
-    else:
-        survey_text = _format_survey_data(section, survey)
-    
-    # 사용자 프로필 요약
-    profile_text = format_user_profile_for_prompt(user_profile)
-    
-    # 정량 근거 요약
-    quant_text = _format_quant_data(section_quant)
-    
-    # 하위 섹션별 claims 필터링
-    subsection_claims = {}
-    for card_type in ["problem", "cause", "action"]:
-        claims = section_claims.get(card_type, [])
-        # 하위 섹션과 관련된 claims만 필터링 (간단히 키워드로)
-        filtered_claims = []
-        keywords = {
-            "smoking": ["흡연", "담배", "니코틴", "smoking"],
-            "drinking": ["음주", "알코올", "술", "drinking", "alcohol"],
-            "stress": ["스트레스", "코르티솔", "stress"]
-        }
-        section_keywords = keywords.get(subsection_key, [])
-        for claim in claims:
-            claim_text = claim.get("claim", "").lower()
-            if any(kw.lower() in claim_text for kw in section_keywords):
-                filtered_claims.append(claim)
-        subsection_claims[card_type] = filtered_claims
-    
-    # 구조화된 claims 요약
-    claims_texts = []
-    for card_type in ["problem", "cause", "action"]:
-        claims = subsection_claims.get(card_type, [])
-        if claims:
-            card_claims = []
-            for claim_data in claims[:2]:  # 최대 2개만
-                claim_str = claim_data.get("claim", "")
-                support_list = claim_data.get("support", [])
-                support_texts = [s.get("support_text", "") for s in support_list[:1]]
-                card_claims.append(f"- {claim_str}\n  근거: {'; '.join(support_texts)}")
-            if card_claims:
-                claims_texts.append(f"[{card_type} 카드용 주장]\n" + "\n".join(card_claims))
-    
-    claims_text = "\n\n".join(claims_texts) if claims_texts else "구조화된 주장 없음"
-    
-    subsection_titles = {
-        "smoking": "흡연",
-        "drinking": "음주",
-        "stress": "스트레스"
-    }
-    subsection_title = subsection_titles.get(subsection_key, subsection_key)
-    
-    return f"""섹션: {section} - {subsection_title}
-
-⚠️ 중요: 반드시 사용자 설문 데이터와 구조화된 주장(claims)을 바탕으로 개인화된 리포트를 작성하세요.
-이 하위 섹션은 "{subsection_title}"에만 집중하세요.
-일반론적 표현은 절대 사용하지 마세요.
-"당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
-
-[사용자 설문 데이터 - 반드시 이 값들을 자연스럽게 요약해 반영하세요]
-{survey_text}
-
-[사용자 기본 정보 - 의학적으로 자연스럽게 반영하세요]
-{profile_text}
-
-[정량 근거]
-{quant_text}
-
-[구조화된 주장(claims) - 이 주장들을 바탕으로 카드 텍스트를 작성하세요]
-{claims_text}
-
-⚠️ 각 카드 작성 규칙:
-- problem/cause: 위 claims의 "claim"과 "support_text"를 바탕으로 작성하되, 설문 수치를 자연스럽게 요약해 반영
-- action: 이 사용자의 {subsection_title} 관련 습관에서 가장 큰 레버에 집중
-- 각 카드에 evidence 기반 키워드(근거 support_text에서 추출한 키워드) 최소 1개 포함
-- 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
-- 근거에서 말하는 메커니즘/방향성을 1번 이상 언급
-
-위 정보를 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
-각 카드는 사용자 설문 데이터와 구조화된 주장을 바탕으로 개인화되게 작성하세요."""
-
-
-def _create_template_based_subsection_cards(
-    section: str, 
-    subsection_key: str, 
-    survey: dict, 
-    quant_results: dict,
-    user_profile: dict
-) -> List[Dict[str, Any]]:
-    """하위 섹션별 템플릿 기반 카드 생성 (LLM 호출 없음)"""
-    section_quant = quant_results.get(section, {})
-    cards = _create_default_subsection_cards(section, subsection_key, survey)
-    # 후처리 적용
-    processed_cards, _ = _postprocess_cards(cards, section_quant, section, survey, user_profile)
-    return processed_cards
-
-
-def _create_default_subsection_cards(section: str, subsection_key: str, survey: dict) -> List[Dict[str, Any]]:
-    """하위 섹션별 기본 카드 생성"""
-    if subsection_key == "smoking":
-        smoking = survey.get('smoking_status', 'N/A')
-        problem_text = f"흡연 상태를 보면 {smoking}인 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
-        cause_text = "흡연으로 인한 피부 노화 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
-        action_items = [
-            {"title": "흡연량 줄이기", "detail": "하루 흡연량을 절반으로 줄여보세요."},
-            {"title": "금연 계획 세우기", "detail": "단계적으로 금연을 시작하세요."},
-            {"title": "흡연 후 피부 관리", "detail": "흡연 후 세안과 보습을 철저히 하세요."}
-        ]
-    elif subsection_key == "drinking":
-        drinking = survey.get('drinking_days_per_week', 0)
-        problem_text = f"주당 음주 빈도가 {drinking}일인 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
-        cause_text = "과도한 음주로 인한 피부 염증 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
-        action_items = [
-            {"title": "음주 빈도 줄이기", "detail": "주당 음주 일수를 줄여보세요."},
-            {"title": "음주량 조절하기", "detail": "한 번에 마시는 양을 줄이세요."},
-            {"title": "음주 후 수분 보충", "detail": "음주 후 충분한 물을 마시세요."}
-        ]
-    elif subsection_key == "stress":
-        stress = survey.get('stress_score', 0)
-        problem_text = f"스트레스 수준이 {stress}/10점으로 높은 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
-        cause_text = "높은 스트레스로 인한 피부 염증 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
-        action_items = [
-            {"title": "스트레스 관리 방법 찾기", "detail": "명상, 운동, 취미 등으로 스트레스를 줄이세요."},
-            {"title": "충분한 휴식 시간 확보", "detail": "하루 중 휴식 시간을 의도적으로 만드세요."},
-            {"title": "수면의 질 개선", "detail": "규칙적인 수면 패턴을 유지하세요."}
-        ]
-    else:
-        problem_text = "현재 확보된 근거 범위 내에서 분석 중입니다."
-        cause_text = "근거가 부족해 보수적으로 제안합니다."
-        action_items = [
-            {"title": "행동 1", "detail": "근거 확보 후 제안하겠습니다."},
-            {"title": "행동 2", "detail": "근거 확보 후 제안하겠습니다."},
-            {"title": "행동 3", "detail": "근거 확보 후 제안하겠습니다."}
-        ]
-    
-    return [
-        {"type": "problem", "title": "현재 상태", "text": problem_text},
-        {"type": "cause", "title": "왜 이런 상태인가", "text": cause_text},
-        {"type": "action", "title": "당신에게 필요한 행동 3가지", "items": action_items},
-        {"type": "simulation", "title": "12주 후 예상 경로", "text": "정량 근거가 부족해 보수적으로 추정한 값입니다.", "meta": {
-            "mode": "estimated",
-            "disclaimer_small": "정량 근거가 부족해 논문 전반을 바탕으로 AI가 보수적으로 추정한 값입니다. 개인차가 큽니다."
-        }}
-    ]
-
-
-def _build_card_prompt_enhanced(section: str, survey: dict, section_quant: dict, section_claims: dict, user_profile: dict) -> str:
-    """카드 생성 프롬프트 구성 (근거 기반 강화 버전)"""
-    # 설문 데이터 요약
-    survey_text = _format_survey_data(section, survey)
-    
-    # 사용자 프로필 요약
-    profile_text = format_user_profile_for_prompt(user_profile)
-    
-    # 정량 근거 요약
-    quant_text = _format_quant_data(section_quant)
-    
-    # 구조화된 claims 요약
-    claims_texts = []
-    for card_type in ["problem", "cause", "action"]:
-        claims = section_claims.get(card_type, [])
-        if claims:
-            card_claims = []
-            for claim_data in claims[:2]:  # 최대 2개만
-                claim_str = claim_data.get("claim", "")
-                support_list = claim_data.get("support", [])
-                support_texts = [s.get("support_text", "") for s in support_list[:1]]
-                card_claims.append(f"- {claim_str}\n  근거: {'; '.join(support_texts)}")
-            if card_claims:
-                claims_texts.append(f"[{card_type} 카드용 주장]\n" + "\n".join(card_claims))
-    
-    claims_text = "\n\n".join(claims_texts) if claims_texts else "구조화된 주장 없음"
-    
-    # 섹션별 개인화 강조
-    personalization_note = _get_personalization_note(section, survey)
-    
-    # 프로필 정보가 없을 때 LLM이 예시를 그대로 복사하지 않도록 명시적 지시
-    profile_guidance = (
-        '예: "30대 중반 남성에서", "BMI가 높은 편이라", "연령대 특성상..."'
-        if profile_text != "사용자 기본 정보 없음"
-        else '⚠️ 성별·연령 정보가 없습니다. "30대 남성", "여성" 등 추측하지 말고, 연령/성별을 특정하는 표현을 사용하지 마세요. 중립적 표현으로 작성하세요.'
-    )
-    
-    return f"""섹션: {section}
-
-⚠️ 중요: 반드시 사용자 설문 데이터와 구조화된 주장(claims)을 바탕으로 개인화된 리포트를 작성하세요.
-일반론적 표현("수면이 부족하면", "자외선에 노출되면")은 절대 사용하지 마세요.
-"당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
-
-{personalization_note}
-
-[사용자 설문 데이터 - 반드시 이 값들을 자연스럽게 요약해 반영하세요]
-{survey_text}
-
-[사용자 기본 정보 - 의학적으로 자연스럽게 반영하세요]
-{profile_text}
-{profile_guidance}
-
-[정량 근거]
-{quant_text}
-
-[구조화된 주장(claims) - 이 주장들을 바탕으로 카드 텍스트를 작성하세요]
-{claims_text}
-
-⚠️ 각 카드 작성 규칙:
-- 논리적·유기적 연결: [현재 상태]→[왜 이런 상태인가]→[행동 3가지]가 하나의 흐름. 사용자 설문·참고 상황·논문 근거를 세 카드 모두에 골고루 반영하고, 각 섹션이 서로를 인용·반영하세요.
-- problem/cause: 위 claims의 "claim"과 "support_text"를 바탕으로 작성하되, 설문 수치를 자연스럽게 요약해 반영
-- action: 반드시 앞선 [현재 상태]+[왜 이런 상태인가]와 연계. action 3개 각각이 위에서 말한 원인(cause)을 해결하는 구체적 행동이어야 함. 설문+신체정보에서 가장 큰 레버 1~2개에 집중 (BMI 높으면 체중·대사 쪽, 수면 짧으면 수면 쪽)
-- 각 카드에 evidence 기반 키워드(근거 support_text에서 추출한 키워드) 최소 1개 포함
-- 불확실하면 약하게('가능성이 큽니다/경향이 있습니다') 표현
-- 근거에서 말하는 메커니즘/방향성(예: 장벽/염증/멜라닌/콜라겐)을 1번 이상 언급
-
-위 정보를 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
-각 카드는 사용자 설문 데이터와 구조화된 주장을 바탕으로 개인화되게 작성하세요."""
-
-
-def _build_card_prompt(section: str, survey: dict, section_quant: dict, narrative_items: list) -> str:
-    """카드 생성 프롬프트 구성"""
-    # 설문 데이터 요약 (더 상세하게)
-    survey_text = _format_survey_data(section, survey)
-    
-    # 정량 근거 요약
-    quant_text = _format_quant_data(section_quant)
-    
-    # 원문 근거 요약
-    narrative_text = "\n\n".join([item.text[:200] for item in narrative_items[:3]]) if narrative_items else "관련 근거 없음"
-    
-    # 섹션별 개인화 강조
-    personalization_note = _get_personalization_note(section, survey)
-    
-    return f"""섹션: {section}
-
-⚠️ 중요: 반드시 사용자 설문 데이터를 직접 인용하여 개인화된 리포트를 작성하세요.
-일반론적 표현("수면이 부족하면", "자외선에 노출되면")은 절대 사용하지 마세요.
-"당신의", "당신은" 같은 2인칭을 반드시 사용하세요.
-
-{personalization_note}
-
-[사용자 설문 데이터 - 반드시 이 값들을 직접 인용하세요]
-{survey_text}
-
-[정량 근거]
-{quant_text}
-
-[원문 근거 (참고용)]
-{narrative_text}
-
-위 정보를 바탕으로 4개의 카드를 JSON 형식으로 생성하세요.
-각 카드는 사용자 설문 데이터를 직접 인용하여 개인화되게 작성하세요."""
-
-
-def _normalize_survey_value(value: Any, field: str) -> str:
-    """설문 값을 한국어로 자연스럽게 변환"""
-    if value is None or value == 'N/A':
-        return "정보 없음"
-    
-    value_str = str(value).lower().strip()
-    
-    # 선크림 사용 빈도 변환
-    if field == "sunscreen_frequency":
-        if any(kw in value_str for kw in ["never", "안", "거의", "드문", "안함", "안 씀", "거의 안"]):
-            return "거의 사용하지 않음"
-        elif any(kw in value_str for kw in ["가끔", "sometimes", "외출 시"]):
-            return "가끔 사용"
-        elif any(kw in value_str for kw in ["매일", "daily", "항상", "always"]):
-            return "매일 사용"
-        elif any(kw in value_str for kw in ["자주", "often", "주 3회"]):
-            return "자주 사용"
-        else:
-            return value_str  # 원본 반환 (이미 한국어일 수 있음)
-    
-    # 흡연 상태 변환
-    elif field == "smoking_status":
-        if any(kw in value_str for kw in ["never", "안", "비흡연", "never smoked"]):
-            return "비흡연"
-        elif any(kw in value_str for kw in ["current", "현재", "흡연", "smoking"]):
-            return "현재 흡연"
-        elif any(kw in value_str for kw in ["former", "과거", "ex-smoker"]):
-            return "과거 흡연"
-        else:
-            return value_str
-    
-    # 자외선 노출 변환
-    elif field == "uv_exposure_10to16":
-        if any(kw in value_str for kw in ["never", "안", "거의", "드문"]):
-            return "거의 없음"
-        elif any(kw in value_str for kw in ["가끔", "sometimes"]):
-            return "가끔"
-        elif any(kw in value_str for kw in ["자주", "often", "매일", "daily"]):
-            return "자주"
-        else:
-            return value_str
-    
-    return str(value)
-
-
-def _format_survey_data(section: str, survey: dict) -> str:
-    """섹션별 설문 데이터 포맷팅 (개인화 강조, 한국어 변환)"""
-    if section == "goals":
-        outcomes = survey.get("outcomes", [])
-        return f"""피부 고민: {', '.join([OUTCOME_LABELS.get(o, o) for o in outcomes])}
-⚠️ 이 고민들을 "당신의 {', '.join([OUTCOME_LABELS.get(o, o) for o in outcomes])} 문제"로 직접 언급하세요."""
-    elif section == "sleep":
-        hours = survey.get('sleep_hours_weekday', 'N/A')
-        quality = survey.get('sleep_quality_score', 'N/A')
-        return f"""평일 수면 시간: {hours}시간
-수면의 질 점수: {quality}/10점
-⚠️ 반드시 "당신의 평일 수면은 {hours}시간이며, 수면의 질은 {quality}/10점입니다"로 직접 인용하세요."""
-    elif section == "uv":
-        exposure = survey.get('uv_exposure_10to16', 'N/A')
-        sunscreen = survey.get('sunscreen_frequency', 'N/A')
-        exposure_kr = _normalize_survey_value(exposure, "uv_exposure_10to16")
-        sunscreen_kr = _normalize_survey_value(sunscreen, "sunscreen_frequency")
-        return f"""자외선 노출 (10-16시): {exposure_kr}
-선크림 사용 빈도: {sunscreen_kr}
-⚠️ 반드시 "자외선 노출이 {exposure_kr}이고, 선크림 사용이 {sunscreen_kr}인 편입니다"처럼 자연스럽게 요약하세요."""
-    elif section == "lifestyle":
-        smoking = survey.get('smoking_status', 'N/A')
-        drinking = survey.get('drinking_days_per_week', 'N/A')
-        stress = survey.get('stress_score', 'N/A')
-        smoking_kr = _normalize_survey_value(smoking, "smoking_status")
-        return f"""흡연 상태: {smoking_kr}
-주당 음주 일수: {drinking}일
-스트레스 점수: {stress}/10점
-⚠️ 반드시 "생활습관을 보면 {smoking_kr}이고, 주당 {drinking}일 음주하며, 스트레스는 {stress}/10점입니다"처럼 자연스럽게 요약하세요."""
-    elif section == "activity":
-        aerobic = survey.get('aerobic_weekly', 'N/A')
-        resistance = survey.get('resistance_weekly', 'N/A')
-        return f"""유산소 운동: {aerobic}회/주
-근력 운동: {resistance}회/주
-⚠️ 반드시 "당신은 유산소 운동을 주 {aerobic}회, 근력 운동을 주 {resistance}회 합니다"로 직접 인용하세요."""
-    return ""
-
-
-def _get_personalization_note(section: str, survey: dict) -> str:
-    """섹션별 개인화 강조 노트 (의사가 자연스럽게 요약한 톤)"""
-    if section == "sleep":
-        hours = survey.get('sleep_hours_weekday', 'N/A')
-        return f"""⚠️ 개인화 필수 (의사가 자연스럽게 요약한 톤):
-- 설문 데이터({hours}시간)를 반영하되, "의사가 요약한 것처럼" 자연스럽게 표현하세요
-- 예: "수면 패턴을 보면 평일 평균 {hours}시간 정도로 부족한 편입니다" (자연스러운 요약)
-- X: "당신의 평일 수면은 {hours}시간입니다" (직설적 나열)
-- 일반론("수면이 부족하면") 금지"""
-    elif section == "uv":
-        exposure = survey.get('uv_exposure_10to16', 'N/A')
-        sunscreen = survey.get('sunscreen_frequency', 'N/A')
-        exposure_kr = _normalize_survey_value(exposure, "uv_exposure_10to16")
-        sunscreen_kr = _normalize_survey_value(sunscreen, "sunscreen_frequency")
-        return f"""⚠️ 개인화 필수 (의사가 자연스럽게 요약한 톤):
-- 설문 데이터를 반영하되, "의사가 요약한 것처럼" 자연스럽게 표현하세요
-- 예: "자외선 노출이 {exposure_kr}이고, 선크림 사용이 {sunscreen_kr}인 편입니다" (자연스러운 요약)
-- X: "당신은 {exposure}에 자외선에 노출되며, 선크림을 {sunscreen} 사용합니다" (직설적 나열, 영어 단어 사용 금지)
-- "never", "안 씀" 같은 영어/직설적 표현 금지, 반드시 한국어로 자연스럽게 요약
-- 일반론("자외선에 노출되면") 금지"""
-    elif section == "lifestyle":
-        smoking = survey.get('smoking_status', 'N/A')
-        smoking_kr = _normalize_survey_value(smoking, "smoking_status")
-        return f"""⚠️ 개인화 필수 (의사가 자연스럽게 요약한 톤):
-- 흡연/음주/스트레스 상태를 반영하되, "의사가 요약한 것처럼" 자연스럽게 표현하세요
-- 예: "생활습관을 보면 {smoking_kr}이고, 주당 음주 빈도가 높은 편입니다" (자연스러운 요약)
-- X: "당신의 흡연 상태는 {smoking}이며, 주당 5일 음주합니다" (직설적 나열, 영어 단어 사용 금지)
-- "never", "안 함" 같은 영어/직설적 표현 금지, 반드시 한국어로 자연스럽게 요약
-- 일반론("흡연하면", "음주하면") 금지"""
-    elif section == "activity":
-        return """⚠️ 개인화 필수 (의사가 자연스럽게 요약한 톤):
-- 운동 빈도를 반영하되, "의사가 요약한 것처럼" 자연스럽게 표현하세요
-- 예: "운동 패턴을 보면 유산소는 주 1회, 근력은 거의 하지 않는 편입니다" (자연스러운 요약)
-- X: "당신은 유산소 운동을 주 1회, 근력 운동을 주 0회 합니다" (직설적 나열)
-- 일반론("운동이 중요합니다") 금지"""
-    return ""
-
-
-def _format_quant_data(section_quant: dict) -> str:
-    """정량 근거 데이터 포맷팅 (simulation 템플릿용)"""
-    mode = section_quant.get("mode", "estimated")
-    stats_by_outcome = section_quant.get("stats_by_outcome", {})
-    
-    if mode == "grounded" and stats_by_outcome:
-        lines = []
-        for outcome, stats in stats_by_outcome.items():
-            if isinstance(stats, dict) and "timeframe_groups" in stats:
-                for tf_days, group in stats["timeframe_groups"].items():
-                    tf_label = timeframe_days_to_label(tf_days)
-                    outcome_label = OUTCOME_LABELS.get(outcome, outcome)
-                    median = group.get("median", group.get("mean", 0))
-                    min_val = group.get("min", 0)
-                    max_val = group.get("max", 0)
-                    lines.append(f"{outcome_label}: {tf_label} 유지 시, 연구에서 {outcome_label}이(가) 중앙값 {median:.1f}% 변화(범위 {min_val:.1f}~{max_val:.1f}%)")
-        return "\n".join(lines) if lines else "정량 근거 없음"
-    elif mode == "estimated" and "estimated" in stats_by_outcome:
-        est = stats_by_outcome["estimated"]
-        return f"추정치: 정량 근거가 부족해 논문 전반을 바탕으로 보수적으로 추정하면, {est['timeframe_label']}에 {est['min']:.0f}~{est['max']:.0f}% 정도 변화 가능"
-    return "정량 근거 없음"
+def _clean_card_text(text: str) -> tuple[str, bool]:
+    """카드 텍스트 공통 후처리: 마크다운 제거 → citation 제거 → 과확신 완화. (text, leaked) 반환."""
+    if not text:
+        return "", False
+    text = strip_markdown(text)
+    text, leaked = _remove_citation_leaks(text)
+    text = _soften_overconfident_language(text)
+    return text, leaked
 
 
 def _limit_sentences(text: str, max_sentences: int) -> str:
@@ -2646,14 +1368,14 @@ def _format_simulation_text(
     meta = {"mode": mode}
     
     if mode == "grounded" and stats_by_outcome:
-        # 첫 번째 outcome/timeframe만 사용 (1-2개 숫자만)
+        parts: List[str] = []
+        visual_list: List[dict] = []
+        tf_label = "12주"
         for outcome, stats in stats_by_outcome.items():
             if isinstance(stats, dict) and "timeframe_groups" in stats:
                 timeframe_groups = stats["timeframe_groups"]
                 if not timeframe_groups:
                     continue
-                
-                # 첫 번째 timeframe 선택
                 tf_days = list(timeframe_groups.keys())[0]
                 group = timeframe_groups[tf_days]
                 tf_label = timeframe_days_to_label(tf_days)
@@ -2661,14 +1383,25 @@ def _format_simulation_text(
                 median = group.get("median", group.get("mean", 0))
                 min_val = group.get("min", 0)
                 max_val = group.get("max", 0)
-                
-                text = f"{condition} {tf_label} 뒤에는, 연구에서 {outcome_label}이(가) 중앙값 {median:.1f}% 변화(범위 {min_val:.1f}~{max_val:.1f}%)하는 경향이 관찰되었습니다."
-                
-                # 로그 출력
+                phrase = simulation_effect_phrase(
+                    median, min_val, max_val, outcome, quant_mode="grounded"
+                )
+                parts.append(f"{outcome_label}이(가) {phrase}")
+                vm, vl, vh = visual_simulation_chart_values(
+                    outcome, median, min_val, max_val, quant_mode="grounded"
+                )
+                visual_list.append({
+                    "outcome_label": outcome_label,
+                    "median": round(vm, 1),
+                    "min_val": round(vl, 1),
+                    "max_val": round(vh, 1),
+                    "timeframe_label": tf_label,
+                })
                 print(f"    📊 [{section_key}] condition=\"{condition}\", tf={tf_label}, outcome={outcome_label}")
-                
-                return text, meta
-        
+        if parts:
+            meta["visual_data"] = visual_list
+            text = f"{condition} {tf_label} 뒤에는, 연구에서 " + ", ".join(parts) + " 하는 경향이 관찰되었습니다."
+            return text, meta
         text = f"{condition} 정량 근거를 바탕으로 예상되는 변화입니다."
         return text, meta
     
@@ -2695,10 +1428,22 @@ def _format_simulation_text(
         median = est.get("median", 0)
         min_val = est.get("min", 0)
         max_val = est.get("max", 0)
-        
-        text = f"{condition} {tf_label} 뒤에는, 정량 근거가 부족해 논문 전반을 바탕으로 보수적으로 보면 {outcome_label}이(가) 대략 {median:.1f}% 안팎(범위 {min_val:.1f}~{max_val:.1f}%) 변화할 수 있습니다."
+        outcome_for_polarity = selected_outcomes[0] if selected_outcomes else section_key
+        phrase = simulation_effect_phrase(
+            median, min_val, max_val, outcome_for_polarity, quant_mode="estimated"
+        )
+        text = f"{condition} {tf_label} 뒤에는, 정량 근거가 부족해 논문 전반을 바탕으로 보수적으로 보면 {outcome_label}이(가) 대략 {phrase} 경향이 있을 수 있습니다."
         meta["disclaimer_small"] = "이 수치는 개별 연구를 평균낸 값이 아니라, 논문 전반을 바탕으로 한 AI 추정치입니다."
-        
+        vm, vl, vh = visual_simulation_chart_values(
+            outcome_for_polarity, median, min_val, max_val, quant_mode="estimated"
+        )
+        meta["visual_data"] = {
+            "outcome_label": outcome_label,
+            "median": round(vm, 1),
+            "min_val": round(vl, 1),
+            "max_val": round(vh, 1),
+            "timeframe_label": tf_label,
+        }
         print(f"    📊 [{section_key}] condition=\"{condition}\", tf={tf_label}, outcome={outcome_label} (estimated)")
         
         return text, meta
@@ -2708,44 +1453,18 @@ def _format_simulation_text(
 
 
 def _extract_required_survey_values(section: str, survey: dict) -> List[str]:
-    """섹션별 필수 설문 값 추출"""
+    """섹션별 필수 설문 값 추출 (SECTION_SURVEY_EXTRACT 기반)"""
     values = []
-    if section == "sleep":
-        hours = survey.get("sleep_hours_weekday")
-        quality = survey.get("sleep_quality_score")
-        if hours is not None:
-            values.append(f"{hours}시간")
-        if quality is not None:
-            values.append(f"{quality}/10점")
-    elif section == "uv":
-        exposure = survey.get("uv_exposure_10to16", "")
-        sunscreen = survey.get("sunscreen_frequency", "")
-        if exposure:
-            values.append(str(exposure))
-        if sunscreen:
-            values.append(str(sunscreen))
-    elif section == "lifestyle":
-        stress = survey.get("stress_score")
-        drinking = survey.get("drinking_days_per_week")
-        smoking = survey.get("smoking_status", "")
-        if stress is not None:
-            values.append(f"{stress}/10점")
-        if drinking is not None:
-            values.append(f"{drinking}일")
-        if smoking:
-            values.append(str(smoking))
-    elif section == "activity":
-        aerobic = survey.get("aerobic_weekly")
-        resistance = survey.get("resistance_weekly")
-        if aerobic is not None:
-            values.append(f"{aerobic}회")
-        if resistance is not None:
-            values.append(f"{resistance}회")
-    elif section == "goals":
+    if section == "goals":
         outcomes = survey.get("outcomes", [])
         if outcomes:
-            outcome_labels = [OUTCOME_LABELS.get(o, o) for o in outcomes]
-            values.extend(outcome_labels)
+            values.extend(OUTCOME_LABELS.get(o, o) for o in outcomes)
+        return values
+    for key, fmt in SECTION_SURVEY_EXTRACT.get(section, []):
+        val = survey.get(key)
+        if val is None or val == "":
+            continue
+        values.append(fmt.format(val) if fmt else str(val))
     return values
 
 
@@ -2774,32 +1493,14 @@ def _extract_evidence_keywords_from_quant(quant_results: dict, section: str) -> 
 
 
 def _force_inject_survey_values(text: str, required_values: List[str], section: str) -> str:
-    """설문 값이 없으면 강제 삽입"""
+    """설문 값이 없으면 강제 삽입 (SECTION_INJECT_SUFFIX 기반)"""
     if not required_values:
         return text
-    
-    # 이미 포함되어 있는지 확인
     for value in required_values:
         if value in text:
             return text
-    
-    # 없으면 끝에 추가
-    if section == "sleep":
-        value_str = ", ".join(required_values)
-        text += f" (현재 평일 수면 {value_str})"
-    elif section == "uv":
-        value_str = ", ".join(required_values)
-        text += f" (선크림 사용: {value_str})"
-    elif section == "lifestyle":
-        value_str = ", ".join(required_values)
-        text += f" (스트레스/음주/흡연: {value_str})"
-    elif section == "activity":
-        value_str = ", ".join(required_values)
-        text += f" (운동 빈도: {value_str})"
-    elif section == "goals":
-        value_str = ", ".join(required_values)
-        text += f" (피부 고민: {value_str})"
-    
+    suffix_tpl = SECTION_INJECT_SUFFIX.get(section, " ({0})")
+    text += suffix_tpl.format(", ".join(required_values))
     return text
 
 
@@ -2860,24 +1561,19 @@ def _postprocess_cards(
         card_type = card.get("type")
         processed_card = {**card}
         
-        # problem/cause: 문장 수 제한 + 과확신 표현 완화
+        # problem/cause: 공통 텍스트 후처리 + 문장 수 제한
         if card_type in ["problem", "cause"]:
-            text = strip_markdown(card.get("text", ""))
-            text, leaked = _remove_citation_leaks(text)
+            text, leaked = _clean_card_text(card.get("text", ""))
             if leaked:
                 quality_flags["leaked_citation"] = True
-            text = _soften_overconfident_language(text)  # F. 과확신 표현 완화
             processed_card["text"] = _limit_sentences(text, max_sentences=3)
         
-        # simulation: 템플릿 강제 + 문장 수 제한
+        # simulation: 템플릿 강제 + 공통 후처리 + 문장 수 제한
         elif card_type == "simulation":
-            # 템플릿으로 강제 생성 (section_key, survey 전달)
             template_text, sim_meta = _format_simulation_text(section_key, survey, section_quant)
-            template_text = strip_markdown(template_text)
-            template_text, leaked = _remove_citation_leaks(template_text)
+            template_text, leaked = _clean_card_text(template_text)
             if leaked:
                 quality_flags["leaked_citation"] = True
-            template_text = _soften_overconfident_language(template_text)  # F. 과확신 표현 완화
             processed_card["text"] = _limit_sentences(template_text, max_sentences=4)
             
             # meta 설정
@@ -2898,41 +1594,28 @@ def _postprocess_cards(
                     items.append({"title": "행동", "detail": "분석 중입니다."})
                 items = items[:3]
             
-            # 각 item의 title/detail 길이 제한 및 PMC 제거
+            # 각 item의 title/detail: 공통 후처리 → (detail만) 강제 반영 → 문장 제한
             processed_items = []
             for item in items:
-                title = strip_markdown(item.get("title", ""))
-                detail = strip_markdown(item.get("detail", ""))
+                title = item.get("title", "") or "행동"
+                detail = item.get("detail", "") or "설명 없음"
 
-                # 빈 값 체크
-                if not title:
-                    title = "행동"
-                if not detail:
-                    detail = "설명 없음"
-                
-                title, leaked1 = _remove_citation_leaks(title)
-                detail, leaked2 = _remove_citation_leaks(detail)
+                title, leaked1 = _clean_card_text(title)
+                detail, leaked2 = _clean_card_text(detail)
                 if leaked1 or leaked2:
                     quality_flags["leaked_citation"] = True
-                
-                # F. 과확신 표현 완화
-                title = _soften_overconfident_language(title)
-                detail = _soften_overconfident_language(detail)
-                
-                # 설문 수치/키워드/프로필 강제 반영 (action은 detail에만)
+
+                # 설문 수치/키워드/프로필 강제 반영 (action detail에만)
                 detail = _force_inject_survey_values(detail, required_survey_values, section_key)
-                if section_key == "activity":  # activity는 프로필도 반영
+                if section_key == "activity":
                     detail = _force_inject_profile_values(detail, required_profile_values, section_key)
                 detail = _force_inject_evidence_keywords(detail, required_evidence_keywords)
-                
-                # title/detail은 1문장으로 제한하되, 문장 구분자가 없으면 전체 반환
+
                 title = _limit_sentences(title, max_sentences=1)
                 detail = _limit_sentences(detail, max_sentences=1)
-                
-                # detail이 비어있거나 너무 짧으면 원본 detail 사용 (잘리지 않게)
+
                 if not detail or len(detail) < 5:
-                    detail = item.get("detail", "설명 없음")
-                    detail, _ = _remove_citation_leaks(detail)
+                    detail, _ = _clean_card_text(item.get("detail", "설명 없음"))
                 
                 processed_items.append({"title": title, "detail": detail})
             
@@ -2966,27 +1649,27 @@ def _create_default_cards(section: str, survey: dict = None) -> List[Dict[str, A
                     problem_text = f"수면 패턴을 보면 평일 평균 {hours_float:.1f}시간 정도로 부족한 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
                     cause_text = f"수면 시간 부족으로 인한 피부 회복 저하 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
                     action_items = [
-                        {"title": "수면 시간을 7시간 이상으로 늘리기", "detail": "평일 수면 시간을 조금씩 늘려보세요."},
-                        {"title": "수면 전 카페인 섭취 줄이기", "detail": "오후 2시 이후 카페인 섭취를 피하세요."},
-                        {"title": "수면 환경 개선", "detail": "어두운 방, 적정 온도 유지하세요."}
+                        {"title": "평일 수면 7시간 맞추기", "detail": "취침 시각을 15~30분씩 앞당기며 누적 시간을 늘리면 회복에 유리합니다."},
+                        {"title": "오후 2시 이후 카페인 끊기", "detail": "늦은 카페인은 숙면을 깨기 쉬워 피부 재생 시간이 줄어듭니다."},
+                        {"title": "침실 어둡게·서늘하게 유지하기", "detail": "멜라토닌 분비와 숙면에 도움이 되는 환경입니다."}
                     ]
             except (ValueError, TypeError):
                 pass
     elif section == "uv":
         sunscreen = survey.get("sunscreen_frequency", "")
-        sunscreen_kr = _normalize_survey_value(sunscreen, "sunscreen_frequency") if sunscreen else "정보 없음"
+        sunscreen_kr = normalize_survey_value(sunscreen, "sunscreen_frequency") if sunscreen else "정보 없음"
         if sunscreen and any(kw in str(sunscreen).lower() for kw in ["never", "안", "거의", "드문"]):
             problem_text = f"선크림 사용이 {sunscreen_kr}인 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
             cause_text = "자외선 노출로 인한 피부 노화 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
             action_items = [
-                {"title": "외출 시 선크림 사용하기", "detail": "매일 외출 전 선크림을 바르세요."},
-                {"title": "자외선 강한 시간대 피하기", "detail": "오전 10시~오후 4시 야외 활동을 줄이세요."},
-                {"title": "선크림 재도포하기", "detail": "2~3시간마다 선크림을 다시 바르세요."}
+                {"title": "아침 외출 전 선크림 바르기", "detail": "매일 SPF를 바르면 기본 광노화 차단이 유지되기 쉽습니다."},
+                {"title": "10~16시 야외 시간 줄이기", "detail": "강한 자외선 시간대는 노출 자체를 줄이면 효과가 큽니다."},
+                {"title": "2~3시간마다 차단제 덧바르기", "detail": "땀·마찰로 지워지기 쉬워 재도포가 효과 유지에 필요합니다."}
             ]
     elif section == "lifestyle":
         stress = survey.get("stress_score")
         smoking = survey.get("smoking_status", "")
-        smoking_kr = _normalize_survey_value(smoking, "smoking_status") if smoking else "정보 없음"
+        smoking_kr = normalize_survey_value(smoking, "smoking_status") if smoking else "정보 없음"
         if stress is not None:
             try:
                 stress_float = float(stress)
@@ -2994,9 +1677,9 @@ def _create_default_cards(section: str, survey: dict = None) -> List[Dict[str, A
                     problem_text = f"스트레스 수준이 높은 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
                     cause_text = "높은 스트레스로 인한 피부 염증 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
                     action_items = [
-                        {"title": "스트레스 관리 방법 찾기", "detail": "명상, 운동, 취미 등으로 스트레스를 줄이세요."},
-                        {"title": "충분한 휴식 시간 확보", "detail": "하루 중 휴식 시간을 의도적으로 만드세요."},
-                        {"title": "수면의 질 개선", "detail": "규칙적인 수면 패턴을 유지하세요."}
+                        {"title": "하루 10분 명상·취미 블록", "detail": "짧은 루틴만으로도 스트레스 호르몬을 낮추는 보고가 있습니다."},
+                        {"title": "의도적 휴식 타임 가지기", "detail": "캘린더에 비워 둔 구간이 뇌·피부 회복에 도움이 됩니다."},
+                        {"title": "취침·기상 시각 고정하기", "detail": "리듬이 잡히면 장벽 회복과 염증 조절에 유리합니다."}
                     ]
             except (ValueError, TypeError):
                 pass
@@ -3004,9 +1687,9 @@ def _create_default_cards(section: str, survey: dict = None) -> List[Dict[str, A
             problem_text = f"생활습관을 보면 {smoking_kr}인 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
             cause_text = "흡연으로 인한 피부 노화 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
             action_items = [
-                {"title": "흡연량 줄이기", "detail": "하루 흡연량을 절반으로 줄여보세요."},
-                {"title": "금연 계획 세우기", "detail": "단계적으로 금연을 시작하세요."},
-                {"title": "흡연 후 피부 관리", "detail": "흡연 후 세안과 보습을 철저히 하세요."}
+                {"title": "하루 흡연량 절반 줄이기", "detail": "양을 줄이면 혈류·산화 스트레스 부담이 함께 줄어드는 경향이 있습니다."},
+                {"title": "단계적 금연 일정 잡기", "detail": "작은 목표부터면 지속하기 쉽고 피부에도 변화가 누적되기 쉽습니다."},
+                {"title": "흡연 직후 세안·보습하기", "detail": "연기 입자를 빨리 닦아내고 장벽을 덮어 두면 자극 완화에 도움이 됩니다."}
             ]
     elif section == "activity":
         aerobic = survey.get("aerobic_weekly")
@@ -3017,9 +1700,9 @@ def _create_default_cards(section: str, survey: dict = None) -> List[Dict[str, A
                     problem_text = "운동 빈도가 낮은 편입니다. 현재 확보된 근거 범위 내에서 분석 중입니다."
                     cause_text = "운동 부족으로 인한 대사 저하 가능성이 있습니다. 근거가 부족해 보수적으로 제안합니다."
                     action_items = [
-                        {"title": "주 3회 이상 유산소 운동", "detail": "걷기, 조깅, 자전거 등 주 3회 이상 하세요."},
-                        {"title": "근력 운동 추가하기", "detail": "주 2회 이상 근력 운동을 추가하세요."},
-                        {"title": "일상 활동량 늘리기", "detail": "계단 이용, 짧은 산책 등으로 활동량을 늘리세요."}
+                        {"title": "주 3회 걷기·조깅 30분", "detail": "가벼운 유산소만으로도 피부 혈류가 좋아진다는 보고가 있습니다."},
+                        {"title": "주 2회 근력 운동 넣기", "detail": "근육량·대사에 긍정적이어서 회복력에도 이롭습니다."},
+                        {"title": "계단·산책으로 NEAT 늘리기", "detail": "짧은 움직임을 모으면 하루 총 활동량이 누적됩니다."}
                     ]
             except (ValueError, TypeError):
                 pass
@@ -3037,25 +1720,57 @@ def _create_default_cards(section: str, survey: dict = None) -> List[Dict[str, A
 
 # 노드 7: AssembleReport
 def assemble_report(state: ReportState) -> ReportState:
-    """최종 리포트 조립 (카드 기반)"""
+    """최종 리포트 조립 (카드 기반). summary는 별도 구조로 생성."""
     print("[AssembleReport] 리포트 조립 시작")
-    survey = state.get("survey", {})
+    survey = state.get("survey") or {}
     sections = state.get("active_sections", [])
     section_cards = state.get("section_cards", {})
     quant_results = state.get("quant_evidence_results", {})
     narrative_evidence = state.get("narrative_evidence", {})
-    
+    situation_text = state.get("situation_text") or ""
+
     section_titles = {
+        "summary": "요약",
         "goals": "주요 목표 분석 및 개선 방안",
         "sleep": "수면 및 리듬",
         "uv": "자외선 및 노화 관리",
-        "lifestyle": "생활습관 관리",
+        "smoking": "흡연",
+        "drinking": "음주",
+        "stress": "스트레스",
         "activity": "활동 및 대사",
     }
-    
-    # 섹션별 리포트 구조 생성
+
+    # 리포트 텍스트 수집 (situation_solution LLM용, summary 제외)
+    report_sections_parts = []
+    for sec in sections:
+        if sec == "summary":
+            continue
+        cards = section_cards.get(sec, [])
+        for c in cards if isinstance(cards, list) else []:
+            if isinstance(c, dict):
+                if c.get("text"):
+                    report_sections_parts.append(str(c["text"]))
+                for item in c.get("items", []) or []:
+                    if isinstance(item, dict) and item.get("detail"):
+                        report_sections_parts.append(str(item["detail"]))
+    report_sections_text = "\n".join(report_sections_parts)
+
+    # summary 섹션: 별도 구조 (플로팅 목표, 피부 타입, 5각형 그래프, 상황 솔루션)
+    from .report_summary import build_summary_data
+
+    summary_data = build_summary_data(survey, situation_text, report_sections_text)
     sections_dict = {}
+    sections_dict["summary"] = {
+        "title": "요약",
+        "is_summary": True,
+        "summary_data": summary_data,
+        "evidence_refs": {"narrative": [], "quant": []},
+    }
+
+    # 섹션별 리포트 구조 생성 (summary 제외)
     for section in sections:
+        if section == "summary":
+            continue
         cards = _normalize_cards_for_storage(section_cards.get(section, []))
         if not cards:
             continue
@@ -3098,64 +1813,16 @@ def assemble_report(state: ReportState) -> ReportState:
         
         # quant refs는 이미 quant_results에 있음
         quant_refs = quant_results.get(section, {}).get("quant_refs", [])
-        
-        # lifestyle 섹션은 하위 섹션으로 분리
-        if section == "lifestyle":
-            # 하위 섹션별 카드 가져오기 (예: "lifestyle.smoking", "lifestyle.drinking")
-            lifestyle_subsection_keys = _get_lifestyle_subsection_keys(survey)
-            subsections = []
-            
-            for subsection_key in lifestyle_subsection_keys:
-                subsection_cards_key = f"{section}.{subsection_key}"
-                subsection_cards = _normalize_cards_for_storage(
-                    section_cards.get(subsection_cards_key, [])
-                )
-                
-                if subsection_cards:
-                    subsection_titles = {
-                        "smoking": "흡연",
-                        "drinking": "음주",
-                        "stress": "스트레스"
-                    }
-                    subsections.append({
-                        "key": subsection_key,
-                        "title": subsection_titles.get(subsection_key, subsection_key),
-                        "cards": subsection_cards,
-                        "evidence_refs": {
-                            "narrative": narrative_refs,
-                            "quant": quant_refs,
-                        }
-                    })
-            
-            # 하위 섹션이 없으면 일반 섹션으로 처리
-            if subsections:
-                sections_dict[section] = {
-                    "title": section_titles.get(section, section),
-                    "subsections": subsections,
-                    "evidence_refs": {
-                        "narrative": narrative_refs,
-                        "quant": quant_refs,
-                    }
-                }
-            else:
-                # 하위 섹션이 없으면 일반 카드 사용
-                sections_dict[section] = {
-                    "title": section_titles.get(section, section),
-                    "cards": cards,
-                    "evidence_refs": {
-                        "narrative": narrative_refs,
-                        "quant": quant_refs,
-                    }
-                }
-        else:
-            sections_dict[section] = {
-                "title": section_titles.get(section, section),
-                "cards": cards,
-                "evidence_refs": {
-                    "narrative": narrative_refs,
-                    "quant": quant_refs,
-                }
-            }
+
+        # 모든 섹션 동일 구조 (subsections 제거, 평탄화)
+        sections_dict[section] = {
+            "title": section_titles.get(section, section),
+            "cards": cards,
+            "evidence_refs": {
+                "narrative": narrative_refs,
+                "quant": quant_refs,
+            },
+        }
     
     final_report = {
         "user_id": state.get("user_id"),
@@ -3164,7 +1831,7 @@ def assemble_report(state: ReportState) -> ReportState:
         "sections": sections_dict,
         "survey_summary": {
             "outcomes": survey.get("outcomes", []),
-            "target_years": survey.get("target_years", 30),
+            "target_years": 30,
         },
         "generated_at": None,
         # 이미지 생성 정보 포함 (이후 노드에서 채워짐)
@@ -3275,68 +1942,65 @@ def _collect_narrative_refs(section_evidence) -> List[Dict[str, Any]]:
 
 def generate_aging_image_node(state: ReportState) -> ReportState:
     """
-    사용자의 습관 데이터를 바탕으로 미래 이미지를 생성하는 노드
+    GPU skin-edit 은 설문 제출 시 /data/skin-edit 에서 수행(/generate 결과를 입력).
+    DB Lifestyle.generated_image_url = 설문 기반 skin-edit(리포트 결과 슬라이더 오른쪽·미래얼굴 오른쪽).
+    ideal_habits_skin_image_url 은 만점 skin-edit(미래얼굴 왼쪽)이며 리포트 파이프라인·저장에는 넣지 않는다.
     """
-    print("---미래 모습 시뮬레이션 생성 시작---")
-    
-    # 1. 서비스 호출에 필요한 데이터 추출
+    print("---미래 모습 시뮬레이션: DB의 생성 이미지(/generate→skin-edit) 연결---")
+
     lifestyle_id = state.get("lifestyle_id")
-    survey = state.get("survey", {})
-    user_profile = state.get("user_profile", {})
-    
-    # survey에서 성별과 목표 년수 추출
-    gender = user_profile.get("gender") or survey.get("gender", "unknown")
-    target_years = survey.get("target_years", 30)
-    
-    # 습관 데이터 추출 (survey 전체를 habits로 전달)
-    habits = {
-        "smoking_status": survey.get("smoking_status"),
-        "uv_exposure_10to16": survey.get("uv_exposure_10to16"),
-        "drinking_days_per_week": survey.get("drinking_days_per_week"),
-        "sleep_hours_weekday": survey.get("sleep_hours_weekday"),
-        "stress_score": survey.get("stress_score"),
-    }
-    # 2. 이미지 생성 서비스 호출 (async 함수를 sync 환경에서 실행)
-    import asyncio
-    try:
-        # 이벤트 루프가 없는 경우 새로 생성
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    try:
-        result = loop.run_until_complete(
-            image_gen_service.request_aging_simulation(
-                lifestyle_id=lifestyle_id,
-                gender=gender,
-                target_years=target_years,
-                habits=habits
-            )
-        )
-
-        print(f"✅ [GenerateAgingImage] 이미지 생성 완료: {result['image_url']}")
-
-        # 3. 결과 반환하여 State 업데이트
-        return {
-            **state,
-            "generated_image_url": result["image_url"],
-            "generation_status": result["status"],
-            "image_gen_params": result["params"]
-        }
-    except Exception as e:
-        # 이미지 생성 실패는 리포트 본문 생성 실패로 전파하지 않음
-        print(f"⚠️ [GenerateAgingImage] 이미지 생성 실패 (리포트는 계속 진행): {e}")
+    if not lifestyle_id:
+        print("⚠️ [GenerateAgingImage] lifestyle_id 없음")
         return {
             **state,
             "generated_image_url": None,
-            "generation_status": "failed",
+            "generation_status": "skipped",
+            "image_gen_params": {"reason": "no_lifestyle_id"},
+        }
+
+    db = SessionLocal()
+    try:
+        lifestyle = (
+            db.query(models.Lifestyle)
+            .filter(models.Lifestyle.id == lifestyle_id)
+            .first()
+        )
+        if not lifestyle:
+            print("⚠️ [GenerateAgingImage] Lifestyle 레코드 없음")
+            return {
+                **state,
+                "generated_image_url": None,
+                "generation_status": "failed",
+                "image_gen_params": {"reason": "lifestyle_not_found"},
+            }
+
+        url = (lifestyle.generated_image_url or "").strip()
+        if url:
+            print(f"✅ [GenerateAgingImage] 설문 후 skin-edit 결과 사용 (GPU 재호출 없음): {url}")
+            return {
+                **state,
+                "generated_image_url": url,
+                "generation_status": "completed",
+                "image_gen_params": {
+                    "source": "lifestyle.generated_image_url",
+                    "note": "/generate 후 /data/skin-edit 에서만 GPU skin-edit 호출",
+                },
+            }
+
+        print(
+            "⚠️ [GenerateAgingImage] DB에 generated_image_url 없음 "
+            "(설문 제출·skin-edit 전에 리포트만 호출했을 수 있음)"
+        )
+        return {
+            **state,
+            "generated_image_url": None,
+            "generation_status": "pending",
             "image_gen_params": {
-                "error": str(e),
-                "gender": gender,
-                "target_years": target_years,
+                "reason": "no_generated_image_url_in_db",
             },
         }
+    finally:
+        db.close()
 
 
 # ════════════════════════════════════════════════════════════════
@@ -3459,35 +2123,11 @@ def validate_cards(state: ReportState) -> ReportState:
     failed_sections = []
     
     for section in sections:
-        # lifestyle 섹션은 하위 섹션 키들을 확인
-        if section == "lifestyle":
-            lifestyle_subsection_keys = _get_lifestyle_subsection_keys(survey)
-            # lifestyle.* 키들에서 카드 수집
-            all_lifestyle_cards = []
-            for subsection_key in lifestyle_subsection_keys:
-                subsection_cards = section_cards.get(f"{section}.{subsection_key}", [])
-                all_lifestyle_cards.extend(subsection_cards)
-            
-            # lifestyle 섹션 자체에도 카드가 있는지 확인
-            main_cards = section_cards.get(section, [])
-            if main_cards:
-                cards = main_cards
-            elif all_lifestyle_cards:
-                # 하위 섹션 카드가 있으면 대표 4장 사용
-                cards = all_lifestyle_cards[:4]
-            else:
-                cards = []
-            
-            if len(cards) == 0:
-                print(f"  ⚠️ [{section}] 카드 수 부족 (0개) - 하위 섹션: {lifestyle_subsection_keys}")
-                failed_sections.append(section)
-                continue
-        else:
-            cards = section_cards.get(section, [])
-            if len(cards) != 4:
-                print(f"  ⚠️ [{section}] 카드 수 부족 ({len(cards)}개)")
-                failed_sections.append(section)
-                continue
+        cards = section_cards.get(section, [])
+        if len(cards) != 4:
+            print(f"  ⚠️ [{section}] 카드 수 부족 ({len(cards)}개)")
+            failed_sections.append(section)
+            continue
         
         # 품질 검증
         validation_result = _validate_section_cards(
@@ -3707,99 +2347,5 @@ def _check_overconfident_language(text: str) -> bool:
     return False
 
 
-# ════════════════════════════════════════════════════════════════
-#  LangGraph 워크플로우
-# ════════════════════════════════════════════════════════════════
-
-def create_report_graph():
-    """리포트 생성 LangGraph 워크플로우 생성"""
-    workflow = StateGraph(ReportState)
-    
-    workflow.add_node("load_survey", load_survey)
-    workflow.add_node("plan_sections", plan_sections)
-    workflow.add_node("derive_user_profile", derive_user_profile)
-    workflow.add_node("preload_quant_evidence", preload_quant_evidence)
-    workflow.add_node("build_queries", build_queries)
-    workflow.add_node("retrieve_narrative_evidence", retrieve_narrative_evidence)
-    workflow.add_node("extract_claims", extract_claims)
-    workflow.add_node("write_section_cards", write_section_cards)
-    workflow.add_node("validate_cards", validate_cards)
-    workflow.add_node("assemble_report", assemble_report)
-    workflow.add_node("generate_aging_image", generate_aging_image_node)
-    workflow.add_node("save_report", save_report_node)
-    workflow.add_node("export_to_notion", export_to_notion_node)  # 신규 노드 추가
-    
-    workflow.set_entry_point("load_survey")
-    workflow.add_edge("load_survey", "plan_sections")
-    workflow.add_edge("plan_sections", "derive_user_profile")  # A. 개인화 복구: user_profile 생성
-    workflow.add_edge("derive_user_profile", "preload_quant_evidence")
-    workflow.add_edge("preload_quant_evidence", "build_queries")
-    workflow.add_edge("build_queries", "retrieve_narrative_evidence")
-    workflow.add_edge("retrieve_narrative_evidence", "extract_claims")
-    workflow.add_edge("extract_claims", "write_section_cards")  # ExtractClaims는 rule-based로 LLM 호출 없음
-    workflow.add_edge("write_section_cards", "validate_cards")
-    def _should_retry(state: dict) -> str:
-        if state.get("retry_needed") and state.get("retry_sections"):
-            rc = state.get("retry_count", {}).get("validate_cards", {})
-            for sec in state.get("retry_sections", []):
-                if rc.get(sec, 0) <= 1:
-                    return "retry"
-        return "continue"
-    
-    workflow.add_conditional_edges(
-        "validate_cards",
-        _should_retry,
-        {"retry": "write_section_cards", "continue": "assemble_report"},
-    )
-    workflow.add_edge("assemble_report", "generate_aging_image")
-    workflow.add_edge("generate_aging_image", "save_report")
-    workflow.add_edge("save_report", "export_to_notion")
-    workflow.add_edge("export_to_notion", END)
-
-    memory = MemorySaver()
-    return workflow.compile(checkpointer=memory)
-
-
-def generate_report(
-    user_id: int,
-    lifestyle_id: Optional[int] = None,
-    situation_text: Optional[str] = None,
-    persist_report: bool = True,
-) -> Dict[str, Any]:
-    """리포트 생성 메인 함수 (LangGraph 워크플로우)"""
-    try:
-        initial_state: ReportState = {
-            "user_id": user_id,
-            "lifestyle_id": lifestyle_id,
-            "survey": None,
-            "user_profile": None,
-            "active_sections": [],
-            "available_quant_outcomes": None,
-            "quant_evidence_results": {},
-            "section_queries": {},
-            "narrative_evidence": {},
-            "extracted_claims": {},
-            "section_cards": {},
-            "quality_flags": {},
-            "final_report": None,
-            "situation_text": situation_text,
-            "persist_report": persist_report,
-        }
-        if situation_text:
-            print(f"[ReportGraph] initial_state에 situation_text 반영: {situation_text[:50]}...")
-        
-        app = create_report_graph()
-        config = {"configurable": {"thread_id": f"report_user_{user_id}"}}
-
-        final_state = app.invoke(initial_state, config=config)
-
-        final_report = final_state.get("final_report")
-        if final_report:
-            return {"success": True, "report": final_report}
-
-        return {"success": False, "error": "리포트 생성 실패"}
-    except Exception as e:
-        print(f"[오류] 리포트 생성 실패: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+# ── 하위 호환 re-export (report_pipeline에서 파이프라인/진입점 분리) ──
+from .report_pipeline import generate_report

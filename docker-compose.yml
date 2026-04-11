@@ -59,8 +59,19 @@ services:
       - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-gemini-embedding-001}  # 임베딩 모델명
       - EMBED_DIM=${EMBED_DIM:-768}
       - REPORT_DEBUG=${REPORT_DEBUG:-0}  # 리포트 생성 디버그 모드 (1로 설정 시 상세 로그)
+      - MAX_ACTIVE_COMMITTED_HABITS=${MAX_ACTIVE_COMMITTED_HABITS:-12}  # 사용자당 동시 생활습관 최대 개수
+      - IMAGE_GENERATION_BASE_URL=${IMAGE_GENERATION_BASE_URL:-}
       - IMAGE_GENERATION_API_URL=${IMAGE_GENERATION_API_URL:-}
       - IMAGE_GENERATION_API_KEY=${IMAGE_GENERATION_API_KEY:-}
+      - IMAGE_GENERATION_PATH_GENERATE=${IMAGE_GENERATION_PATH_GENERATE:-}
+      - IMAGE_GENERATION_PATH_SKIN_EDIT=${IMAGE_GENERATION_PATH_SKIN_EDIT:-}
+      - IMAGE_GENERATION_SKIN_EDIT_MAX_SIDE=${IMAGE_GENERATION_SKIN_EDIT_MAX_SIDE:-}
+      - IMAGE_PREPROCESS_MODE=${IMAGE_PREPROCESS_MODE:-}
+      - IMAGE_PREPROCESS_FADING_SIZE=${IMAGE_PREPROCESS_FADING_SIZE:-}
+      - IMAGE_PREPROCESS_SDXL_CANVAS=${IMAGE_PREPROCESS_SDXL_CANVAS:-}
+      - IMAGE_PREPROCESS_MAX_SIDE=${IMAGE_PREPROCESS_MAX_SIDE:-}
+      - IMAGE_PREPROCESS_VAE_SCALE=${IMAGE_PREPROCESS_VAE_SCALE:-}
+      - IMAGE_COMPARE_CENTER_ZOOM=${IMAGE_COMPARE_CENTER_ZOOM:-}
       # Notion 설정
       - ENABLE_NOTION_EXPORT=${ENABLE_NOTION_EXPORT:-true}
       - NOTION_TOKEN=${NOTION_TOKEN:-}
@@ -87,6 +98,7 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/app:/app/app  # 코드 변경 시 자동 반영 (개발 환경)
+      - ./backend/alembic:/app/alembic  # 마이그레이션 파일 반영
       - ./backend/report_modules:/app/report_modules  # 리포트 생성 파이프라인 모듈
       - ./backend/tools:/app/tools  # tools 모듈 마운트
       - ./backend/mcp_server:/app/mcp_server  # MCP 서버 코드도 반영

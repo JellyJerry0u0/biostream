@@ -292,3 +292,44 @@ def invoke_llm_json(
     print(f"  ❌ [{context}] JSON 파싱 최종 실패: {failure_reason or '알 수 없음'}")
     _llm_cache_set(cache_key, None)
     return None
+
+
+# ──────────────────────────── invoke_llm_text ────────────────────────────
+
+def invoke_llm_text(
+    prompt: str,
+    system_prompt: str = "",
+    context: str = "",
+) -> Optional[str]:
+    """LLM 호출하여 일반 텍스트 반환 (JSON 파싱 없음)."""
+    global _llm_call_count
+
+    if not GOOGLE_API_KEY:
+        print(f"  ❌ [{context}] LLM 호출 실패: GEMINI_API_KEY 없음")
+        return None
+
+    cache_key = "text:" + hashlib.md5((system_prompt + prompt).encode()).hexdigest()
+    cached = _llm_cache_get(cache_key)
+    if cached is not None:
+        return cached if isinstance(cached, str) else None
+
+    _llm_call_count += 1
+    current_models = [genai_model_name] if genai_model_name else []
+    current_models.extend([m for m in fallback_models if m != genai_model_name])
+
+    for attempt_idx, model_name in enumerate(current_models):
+        try:
+            if attempt_idx > 0:
+                time.sleep(min(2 ** attempt_idx, 8))
+            model = genai.GenerativeModel(model_name)
+            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            response = model.generate_content(full_prompt)
+            raw_text = (response.text or "").strip()
+            if raw_text:
+                _llm_cache_set(cache_key, raw_text)
+                return raw_text
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e).upper():
+                continue
+            print(f"  ⚠️ [{context}] LLM 호출 실패: {e}")
+    return None

@@ -21,23 +21,17 @@ class ResultHealthReportSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.medical_services,
-                size: Responsive.iconSize(context, 24),
-                color: const Color(0xFF37EC13),
+          SizedBox(
+            width: double.infinity,
+            child: Text(
+              'AI Skin Health Report',
+              style: TextStyle(
+                fontSize: Responsive.fontSize(context, 24),
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : const Color(0xFF101B0D),
               ),
-              SizedBox(width: Responsive.padding(context, 8)),
-              Text(
-                'AI 건강 리포트',
-                style: TextStyle(
-                  fontSize: Responsive.fontSize(context, 18),
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-            ],
+              textAlign: TextAlign.center,
+            ),
           ),
           SizedBox(height: Responsive.padding(context, 16)),
           if (isGenerating)

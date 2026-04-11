@@ -9,4 +9,9 @@ interface ChronoLensService {
     suspend fun syncHealthData(
         @Body data: HealthDataDto
     ): Response<Unit>
+
+    @POST("api/v1/outdoor-check-response")
+    suspend fun submitOutdoorCheckResponse(
+        @Body data: OutdoorCheckResponseDto
+    ): Response<Unit>
 }

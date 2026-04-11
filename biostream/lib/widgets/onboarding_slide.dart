@@ -87,7 +87,7 @@ class _Slide1 extends StatelessWidget {
                     ),
                     SizedBox(width: Responsive.padding(context, 6)),
                     Text(
-                      '+10 Years',
+                      '+30 Years',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: Responsive.fontSize(context, 12),
@@ -115,61 +115,77 @@ class _Slide1 extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxHeight < 170;
+
+        final textBlock = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: isCompact
+                      ? Responsive.fontSize(context, 24)
+                      : Responsive.fontSize(context, 28),
+                  fontWeight: FontWeight.bold,
+                  height: 1.2,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+                children: const [
+                  TextSpan(text: 'AI로 미리 보는\n'),
+                  TextSpan(
+                    text: '30년 후',
+                    style: TextStyle(color: Color(0xFF37EC13)),
+                  ),
+                  TextSpan(text: ' 내 얼굴'),
+                ],
+              ),
+            ),
+            SizedBox(height: isCompact ? 6 : Responsive.padding(context, 12)),
+            Text(
+              '현재 얼굴과 30년 후의 얼굴을 비교해보세요.\n생활습관 기반으로 노화 시나리오를 제공합니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: isCompact
+                    ? Responsive.fontSize(context, 12)
+                    : Responsive.fontSize(context, 14),
+                height: 1.4,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+          ],
+        );
+
+        if (isCompact) {
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: (constraints.maxHeight * 0.28).clamp(38.0, 56.0),
+                    child: imageCard,
+                  ),
+                  const SizedBox(height: 8),
+                  textBlock,
+                ],
+              ),
+            ),
+          );
+        }
+
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (isCompact)
-                SizedBox(
-                  height: (constraints.maxHeight * 0.28).clamp(38.0, 56.0),
-                  child: imageCard,
-                )
-              else
-                Expanded(
-                  flex: 3,
-                  child: imageCard,
-                ),
-              SizedBox(height: isCompact ? 8 : Responsive.padding(context, 24)),
-              // Text Content
-              Column(
-                children: [
-                  RichText(
-                    textAlign: TextAlign.center,
-                    text: TextSpan(
-                      style: TextStyle(
-                        fontSize: isCompact
-                            ? Responsive.fontSize(context, 24)
-                            : Responsive.fontSize(context, 28),
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      children: const [
-                        TextSpan(text: 'AI로 미리 보는\n'),
-                        TextSpan(
-                          text: '10년 후',
-                          style: TextStyle(color: Color(0xFF37EC13)),
-                        ),
-                        TextSpan(text: ' 내 얼굴'),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                      height: isCompact ? 6 : Responsive.padding(context, 12)),
-                  Text(
-                    '현재 얼굴과 10년 후의 얼굴을 비교해보세요.\n최첨단 AI가 당신의 미래를 예측합니다.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: isCompact
-                          ? Responsive.fontSize(context, 12)
-                          : Responsive.fontSize(context, 14),
-                      height: 1.4,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                ],
+              Expanded(
+                flex: 3,
+                child: imageCard,
               ),
+              SizedBox(height: Responsive.padding(context, 24)),
+              textBlock,
             ],
           ),
         );
@@ -541,7 +557,7 @@ class _Slide3 extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'SKIN AGE',
+                                          '수면 시간',
                                           style: TextStyle(
                                             fontSize: isCompact
                                                 ? Responsive.fontSize(
@@ -561,7 +577,7 @@ class _Slide3 extends StatelessWidget {
                                               CrossAxisAlignment.end,
                                           children: [
                                             Text(
-                                              '24.5',
+                                              '7.5',
                                               style: TextStyle(
                                                 fontSize: isCompact
                                                     ? Responsive.fontSize(
@@ -576,7 +592,7 @@ class _Slide3 extends StatelessWidget {
                                                 width: Responsive.padding(
                                                     context, 4)),
                                             Text(
-                                              '세',
+                                              '시간',
                                               style: TextStyle(
                                                 fontSize: isCompact
                                                     ? Responsive.fontSize(
@@ -719,7 +735,7 @@ class _Slide3 extends StatelessWidget {
               ),
               SizedBox(height: Responsive.padding(context, 12)),
               Text(
-                '감에 의존하지 마세요.\n객관적인 수치로 피부 건강을 지키세요.',
+                '매일의 생활습관을 기록하세요.\n대시보드로 한 눈에 생활습관을 점검할 수 있습니다.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: Responsive.fontSize(context, 14),

@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+from typing import Optional, List
 from app.database import get_db
 from app.models import User, Lifestyle
 from app.auth.security import verify_token
@@ -21,20 +20,19 @@ class LifestyleSurveyCreate(BaseModel):
     
     # C. UV / Photoaging (4)
     uv_exposure_10to16: Optional[str] = None  # 야외 노출(10~16시): <30m / 30~60 / 1~2h / >2h
-    sunscreen_frequency: Optional[str] = None  # 선크림 사용 빈도: never/sometimes/most_days/daily_with_reapply
+    sunscreen_frequency: Optional[str] = None  # 선크림 주 N회: 0/1/2-3/4-5/6-7 (레거시 코드 호환)
     sunscreen_reapply: Optional[str] = None  # 재도포(2~3시간 간격): never/rarely/sometimes/often
     outdoor_sports_uv: Optional[str] = None  # 야외스포츠(강한 UV): none/monthly/weekly
     
     # D. Alcohol & Smoking (4)
     drinking_days_per_week: Optional[str] = None  # 주당 음주일수: 0 / 1 / 2-3 / 4-5 / 6-7
-    drinking_amount_per_session: Optional[str] = None  # 1회 음주량 (문자열)
+    drinking_amount_per_session: Optional[str] = None  # 레거시 (앱에서는 미전송)
     smoking_status: Optional[str] = None  # never/former/current
-    smoking_amount_per_day: Optional[str] = None  # current일 경우: 갑/개비
+    smoking_amount_per_day: Optional[str] = None  # 레거시 (앱에서는 미전송)
+    smoking_days_per_week: Optional[str] = None  # 주당 흡연일수: 0 / 1 / 2-3 / 4-5 / 6-7
     
-    # E. Stress & Recovery (4)
+    # E. Stress & Recovery
     stress_score: Optional[float] = None  # 스트레스(지난 2주) 0~10
-    caffeine_intake: Optional[str] = None  # 카페인 섭취량: 0 / 1 / 2 / 3+
-    caffeine_timing: Optional[str] = None  # 카페인 섭취 시간대: before_noon / afternoon / evening
     
     # F. Activity & Metabolic (3)
     aerobic_weekly: Optional[str] = None  # 유산소(주당): 0 / 1-2 / 3-4 / 5+
@@ -42,15 +40,50 @@ class LifestyleSurveyCreate(BaseModel):
     height: Optional[float] = None  # 키
     weight: Optional[float] = None  # 몸무게
     
-    # Skin 상태 (3문항)
+    # Skin 상태
     skin_type: Optional[str] = None  # 피부 타입: dry/oily/combination/sensitive
-    skin_concerns: Optional[List[str]] = None  # 주요 피부 고민: ["wrinkle", "pigmentation", "elasticity", "dryness", "redness", "acne"]
     skin_satisfaction: Optional[float] = None  # 현재 피부상태 만족도 0~10
     
-    # 목표 연도
-    target_years: int
+    # 목표 연도 (고정값 30)
+    target_years: Optional[int] = 30
     # 이미지 URL (기존 호환성)
     original_image_url: Optional[str] = None
+    # /data/upload 로 만든 lifestyle 행에 설문만 채울 때 (없으면 기존처럼 새 행 INSERT)
+    lifestyle_id: Optional[int] = None
+
+
+def _apply_survey_payload_to_lifestyle(
+    lifestyle: Lifestyle,
+    profile_data: LifestyleSurveyCreate,
+    *,
+    update_original_image: bool,
+) -> None:
+    lifestyle.outcomes = profile_data.outcomes
+    lifestyle.sleep_hours_weekday = profile_data.sleep_hours_weekday
+    lifestyle.sleep_hours_weekend = profile_data.sleep_hours_weekend
+    lifestyle.sleep_quality_score = profile_data.sleep_quality_score
+    lifestyle.uv_exposure_10to16 = profile_data.uv_exposure_10to16
+    lifestyle.sunscreen_frequency = profile_data.sunscreen_frequency
+    lifestyle.sunscreen_reapply = profile_data.sunscreen_reapply
+    lifestyle.outdoor_sports_uv = profile_data.outdoor_sports_uv
+    lifestyle.drinking_days_per_week = profile_data.drinking_days_per_week
+    lifestyle.drinking_amount_per_session = profile_data.drinking_amount_per_session
+    lifestyle.smoking_status = profile_data.smoking_status
+    lifestyle.smoking_amount_per_day = profile_data.smoking_amount_per_day
+    lifestyle.smoking_days_per_week = profile_data.smoking_days_per_week
+    lifestyle.stress_score = profile_data.stress_score
+    lifestyle.aerobic_weekly = profile_data.aerobic_weekly
+    lifestyle.resistance_weekly = profile_data.resistance_weekly
+    lifestyle.height = profile_data.height
+    lifestyle.weight = profile_data.weight
+    lifestyle.skin_type = profile_data.skin_type
+    lifestyle.skin_satisfaction = profile_data.skin_satisfaction
+    lifestyle.target_years = (
+        profile_data.target_years if profile_data.target_years is not None else 30
+    )
+    if update_original_image and profile_data.original_image_url is not None:
+        lifestyle.original_image_url = profile_data.original_image_url
+
 
 def get_current_user(authorization: Optional[str] = None, db: Session = Depends(get_db)):
     if not authorization:
@@ -78,49 +111,56 @@ def create_lifestyle_profile(
 ):
     # 인증 확인
     current_user = get_current_user(authorization, db)
-    
-    # Lifestyle 레코드 생성
-    new_lifestyle = Lifestyle(
-        user_id=current_user.id,
-        outcomes=profile_data.outcomes,
-        sleep_hours_weekday=profile_data.sleep_hours_weekday,
-        sleep_hours_weekend=profile_data.sleep_hours_weekend,
-        sleep_quality_score=profile_data.sleep_quality_score,
-        uv_exposure_10to16=profile_data.uv_exposure_10to16,
-        sunscreen_frequency=profile_data.sunscreen_frequency,
-        sunscreen_reapply=profile_data.sunscreen_reapply,
-        outdoor_sports_uv=profile_data.outdoor_sports_uv,
-        drinking_days_per_week=profile_data.drinking_days_per_week,
-        drinking_amount_per_session=profile_data.drinking_amount_per_session,
-        smoking_status=profile_data.smoking_status,
-        smoking_amount_per_day=profile_data.smoking_amount_per_day,
-        stress_score=profile_data.stress_score,
-        caffeine_intake=profile_data.caffeine_intake,
-        caffeine_timing=profile_data.caffeine_timing,
-        aerobic_weekly=profile_data.aerobic_weekly,
-        resistance_weekly=profile_data.resistance_weekly,
-        height=profile_data.height,
-        weight=profile_data.weight,
-        skin_type=profile_data.skin_type,
-        skin_concerns=profile_data.skin_concerns,
-        skin_satisfaction=profile_data.skin_satisfaction,
-        target_years=profile_data.target_years,
-        original_image_url=profile_data.original_image_url,
+
+    if profile_data.lifestyle_id is not None:
+        lifestyle = (
+            db.query(Lifestyle)
+            .filter(
+                Lifestyle.id == profile_data.lifestyle_id,
+                Lifestyle.user_id == current_user.id,
+            )
+            .first()
+        )
+        if not lifestyle:
+            raise HTTPException(status_code=404, detail="Lifestyle not found")
+
+        _apply_survey_payload_to_lifestyle(
+            lifestyle,
+            profile_data,
+            update_original_image=True,
+        )
+        db.commit()
+        db.refresh(lifestyle)
+
+        print(
+            f"✅ Lifestyle 레코드 갱신 완료 - lifestyle_id: {lifestyle.id}, user_id: {current_user.id}"
+        )
+
+        return {
+            "success": True,
+            "message": "생활습관 정보가 저장되었습니다.",
+            "lifestyle_id": lifestyle.id,
+            "user_id": current_user.id,
+        }
+
+    new_lifestyle = Lifestyle(user_id=current_user.id)
+    _apply_survey_payload_to_lifestyle(
+        new_lifestyle,
+        profile_data,
+        update_original_image=True,
     )
-    
     db.add(new_lifestyle)
     db.commit()
     db.refresh(new_lifestyle)
-    
-    print(f"✅ Lifestyle 레코드 저장 완료 - lifestyle_id: {new_lifestyle.id}, user_id: {current_user.id}")
-    
-    # 저장 성공 후 건강 리포트 생성은 클라이언트에서 별도로 호출
-    # (리포트 생성에 시간이 걸릴 수 있으므로 비동기로 처리)
-    
+
+    print(
+        f"✅ Lifestyle 레코드 생성 완료 - lifestyle_id: {new_lifestyle.id}, user_id: {current_user.id}"
+    )
+
     return {
         "success": True,
         "message": "생활습관 정보가 저장되었습니다.",
         "lifestyle_id": new_lifestyle.id,
-        "user_id": current_user.id
+        "user_id": current_user.id,
     }
 

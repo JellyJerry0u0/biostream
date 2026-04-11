@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/profile_service.dart';
@@ -7,13 +6,13 @@ import '../services/auth_service.dart';
 import 'my_info/my_info_profile_controller.dart';
 import 'my_info/my_info_visibility_helper.dart';
 import 'onboarding_screen.dart';
-import 'past_face_archive_screen.dart';
 import 'past_report_history_screen.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/my_info/my_info_edit_profile_dialog.dart';
+import '../utils/app_snackbar.dart';
 import '../widgets/my_info/my_info_menu_section.dart';
+import '../widgets/my_info/my_info_notification_settings_dialog.dart';
 import '../widgets/my_info/my_info_profile_header.dart';
-import '../widgets/my_info/my_info_stats_panel.dart';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -24,10 +23,8 @@ class MyInfoScreen extends StatefulWidget {
 
 class _MyInfoScreenState extends State<MyInfoScreen>
     with TickerProviderStateMixin {
-  static const Color _primary = Color(0xFF2BEE75);
   static const Color _backgroundLight = Color(0xFFF6F8F6);
 
-  final ImagePicker _imagePicker = ImagePicker();
   final ProfileService _profileService = ProfileService();
   final AuthService _authService = AuthService();
   late final MyInfoProfileController _profileController =
@@ -38,18 +35,18 @@ class _MyInfoScreenState extends State<MyInfoScreen>
   final MyInfoVisibilityHelper _visibilityHelper = MyInfoVisibilityHelper();
 
   String _nickname = '김바이오';
-  String _email = 'biostream@example.com';
-  String? _profileImagePath;
+  String _userId = '';
+  String _accountEmail = 'biostream@example.com';
+  double? _heightCm;
+  double? _weightKg;
   bool _showBlankCanvas = false;
 
   late final AnimationController _introCtrl;
   late final AnimationController _visibilityCtrl;
   late final Animation<double> _pageOpacity;
   late final Animation<Offset> _profileSlide;
-  late final Animation<Offset> _statsSlide;
   late final Animation<Offset> _menuSlide;
   late final Animation<double> _profileOpacity;
-  late final Animation<double> _statsOpacity;
   late final Animation<double> _menuOpacity;
 
   @override
@@ -74,16 +71,7 @@ class _MyInfoScreenState extends State<MyInfoScreen>
     ).animate(
       CurvedAnimation(
         parent: _introCtrl,
-        curve: const Interval(0.0, 0.44, curve: Curves.easeOutCubic),
-      ),
-    );
-    _statsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _introCtrl,
-        curve: const Interval(0.16, 0.62, curve: Curves.easeOutCubic),
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOutCubic),
       ),
     );
     _menuSlide = Tween<Offset>(
@@ -92,20 +80,16 @@ class _MyInfoScreenState extends State<MyInfoScreen>
     ).animate(
       CurvedAnimation(
         parent: _introCtrl,
-        curve: const Interval(0.3, 0.92, curve: Curves.easeOutCubic),
+        curve: const Interval(0.22, 0.92, curve: Curves.easeOutCubic),
       ),
     );
     _profileOpacity = CurvedAnimation(
       parent: _introCtrl,
-      curve: const Interval(0.0, 0.44, curve: Curves.easeOut),
-    );
-    _statsOpacity = CurvedAnimation(
-      parent: _introCtrl,
-      curve: const Interval(0.16, 0.62, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
     );
     _menuOpacity = CurvedAnimation(
       parent: _introCtrl,
-      curve: const Interval(0.3, 0.92, curve: Curves.easeOut),
+      curve: const Interval(0.22, 0.92, curve: Curves.easeOut),
     );
     _loadProfile();
   }
@@ -160,17 +144,28 @@ class _MyInfoScreenState extends State<MyInfoScreen>
     _introCtrl.forward(from: 0);
   }
 
+  MyInfoProfileData get _profileSnapshot => MyInfoProfileData(
+        nickname: _nickname,
+        userId: _userId,
+        accountEmail: _accountEmail,
+        heightCm: _heightCm,
+        weightKg: _weightKg,
+      );
+
   Future<void> _loadProfile() async {
     final local = await _profileController.loadLocalProfile(
       defaultNickname: _nickname,
-      defaultEmail: _email,
+      defaultUserId: _userId,
+      defaultAccountEmail: _accountEmail,
     );
 
     if (!mounted) return;
     setState(() {
       _nickname = local.nickname;
-      _email = local.email;
-      _profileImagePath = local.profileImagePath;
+      _userId = local.userId;
+      _accountEmail = local.accountEmail;
+      _heightCm = local.heightCm;
+      _weightKg = local.weightKg;
     });
 
     final synced =
@@ -178,116 +173,103 @@ class _MyInfoScreenState extends State<MyInfoScreen>
     if (!mounted || synced == null) return;
     setState(() {
       _nickname = synced.nickname;
-      _email = synced.email;
-      _profileImagePath = synced.profileImagePath;
+      _userId = synced.userId;
+      _accountEmail = synced.accountEmail;
+      _heightCm = synced.heightCm;
+      _weightKg = synced.weightKg;
     });
   }
 
   Future<void> _saveProfile({
     required String nickname,
-    required String email,
-    String? profileImagePath,
+    required String accountEmail,
+    double? heightCm,
+    double? weightKg,
   }) async {
     final saved = await _profileController.saveProfile(
+      previous: _profileSnapshot,
       nickname: nickname,
-      email: email,
-      currentImagePath: _profileImagePath,
-      profileImagePath: profileImagePath,
+      accountEmail: accountEmail,
+      heightCm: heightCm,
+      weightKg: weightKg,
     );
 
     if (!mounted) return;
     setState(() {
       _nickname = saved.nickname;
-      _email = saved.email;
-      _profileImagePath = saved.profileImagePath;
+      _userId = saved.userId;
+      _accountEmail = saved.accountEmail;
+      _heightCm = saved.heightCm;
+      _weightKg = saved.weightKg;
     });
   }
 
-  Future<void> _pickProfileImage() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library, color: _primary),
-                title: const Text(
-                  '갤러리에서 선택',
-                  style: TextStyle(color: Color(0xFF102217)),
-                ),
-                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera, color: _primary),
-                title: const Text(
-                  '카메라로 촬영',
-                  style: TextStyle(color: Color(0xFF102217)),
-                ),
-                onTap: () => Navigator.of(context).pop(ImageSource.camera),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (source == null) return;
-
-    final file = await _imagePicker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 1200,
-    );
-
-    if (file == null) return;
-
-    await _saveProfile(
-      nickname: _nickname,
-      email: _email,
-      profileImagePath: file.path,
-    );
-  }
-
   Future<void> _showEditProfileDialog() async {
+    final emailController = TextEditingController(text: _accountEmail);
     final nicknameController = TextEditingController(text: _nickname);
-    final emailController = TextEditingController(text: _email);
+    final heightController = TextEditingController(
+      text: _heightCm != null && _heightCm! > 0
+          ? _formatNum(_heightCm!)
+          : '',
+    );
+    final weightController = TextEditingController(
+      text: _weightKg != null && _weightKg! > 0
+          ? _formatNum(_weightKg!)
+          : '',
+    );
 
     await showDialog<void>(
       context: context,
       builder: (context) {
         return MyInfoEditProfileDialog(
-          nicknameController: nicknameController,
           emailController: emailController,
-          onPickImage: _pickProfileImage,
+          nicknameController: nicknameController,
+          heightCmController: heightController,
+          weightKgController: weightController,
           onCancel: () => Navigator.of(context).pop(),
-          onSave: (nickname, email) async {
+          onSave: () async {
+            final nickname = nicknameController.text.trim();
+            final email = emailController.text.trim();
             if (nickname.isEmpty || email.isEmpty || !email.contains('@')) {
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                const SnackBar(content: Text('닉네임과 올바른 이메일을 입력해주세요.')),
+              showErrorSnackBar(
+                this.context,
+                '닉네임과 올바른 이메일을 입력해주세요.',
               );
               return;
             }
 
+            final h = _parsePositiveDouble(heightController.text);
+            final w = _parsePositiveDouble(weightController.text);
+
             await _saveProfile(
               nickname: nickname,
-              email: email,
+              accountEmail: email,
+              heightCm: h,
+              weightKg: w,
             );
 
             if (!mounted) return;
             Navigator.of(this.context).pop();
-            ScaffoldMessenger.of(this.context).showSnackBar(
-              const SnackBar(content: Text('수정이 완료되었습니다.')),
-            );
           },
         );
       },
     );
 
-    nicknameController.dispose();
-    emailController.dispose();
+    // Dialog transition 종료 직후에도 내부 위젯이 컨트롤러를 참조할 수 있어
+    // 수동 dispose는 하지 않는다.
+  }
+
+  static String _formatNum(double v) {
+    if (v == v.roundToDouble()) return v.round().toString();
+    return v.toString();
+  }
+
+  static double? _parsePositiveDouble(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    final v = double.tryParse(t.replaceAll(',', '.'));
+    if (v == null || v <= 0) return null;
+    return v;
   }
 
   Future<void> _logout() async {
@@ -342,18 +324,8 @@ class _MyInfoScreenState extends State<MyInfoScreen>
                               opacity: _profileOpacity,
                               child: MyInfoProfileHeader(
                                 nickname: _nickname,
-                                email: _email,
-                                profileImagePath: _profileImagePath,
-                                onEditTap: _showEditProfileDialog,
+                                email: _accountEmail,
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 22),
-                          SlideTransition(
-                            position: _statsSlide,
-                            child: FadeTransition(
-                              opacity: _statsOpacity,
-                              child: const MyInfoStatsPanel(),
                             ),
                           ),
                           const SizedBox(height: 28),
@@ -370,15 +342,13 @@ class _MyInfoScreenState extends State<MyInfoScreen>
                                     ),
                                   );
                                 },
-                                onOpenPastFaces: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const PastFaceArchiveScreen(),
-                                    ),
+                                onEditProfile: _showEditProfileDialog,
+                                onLogout: _logout,
+                                onNotificationSettings: () {
+                                  showMyInfoNotificationSettingsDialog(
+                                    context,
                                   );
                                 },
-                                onLogout: _logout,
                               ),
                             ),
                           ),

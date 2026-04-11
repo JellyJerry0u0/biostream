@@ -1,11 +1,11 @@
+import asyncio
 import os
 import sys
 import time
 from pathlib import Path
-from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from datetime import date
@@ -16,6 +16,73 @@ from app import models
 from app.auth.security import verify_token
 
 from app.services.image_service import image_service
+from app.api.public_origin import resolve_public_api_origin
+
+
+def _gpu_env_hint_for_detail() -> str:
+    """사용자/로그에 그대로 붙일 짧은 힌트 (Docker + localhost GPU 오설정)."""
+    if os.getenv("RUNNING_IN_DOCKER") != "true":
+        return ""
+    bu = (image_service.gpu_server_url or "").lower()
+    if not bu or ("127.0.0.1" not in bu and "localhost" not in bu):
+        return ""
+    return (
+        " Docker에서는 localhost가 호스트 GPU가 아닙니다. "
+        "IMAGE_GENERATION_BASE_URL을 host.docker.internal(또는 공인 GPU URL)로 설정하세요."
+    )
+
+
+def _format_image_gen_error(exc: Exception) -> str:
+    msg = str(exc)
+    msg += _gpu_env_hint_for_detail()
+    return msg
+
+
+async def _wait_for_lifestyle_generated_url(
+    db: Session,
+    *,
+    lifestyle_id: int,
+    user_id: int,
+    max_wait_seconds: float = 190.0,
+    poll_interval: float = 0.5,
+) -> models.Lifestyle:
+    """
+    페이스스캔에서 먼저 돌린 /generate 가 끝날 때까지 DB만 폴링 (GPU 이중 호출 방지).
+    GPU 클라이언트 timeout(180s)에 맞춰 여유를 둔 대기 상한.
+
+    매 주기마다 expire_all() 로 동일 세션에 캐시된 Lifestyle 행을 무효화해,
+    병렬 /generate 요청이 커밋한 generated_image_url 을 놓치지 않게 한다.
+    """
+    deadline = time.monotonic() + max_wait_seconds
+    started = time.monotonic()
+    while True:
+        db.expire_all()
+        lifestyle = (
+            db.query(models.Lifestyle)
+            .filter(
+                models.Lifestyle.id == lifestyle_id,
+                models.Lifestyle.user_id == user_id,
+            )
+            .first()
+        )
+        if not lifestyle:
+            raise HTTPException(status_code=404, detail="Lifestyle not found")
+        if (lifestyle.generated_image_url or "").strip():
+            waited = time.monotonic() - started
+            print(
+                f"[GPU] skin-edit 대기: generated_image_url 확인됨 "
+                f"lifestyle_id={lifestyle_id} waited_s={waited:.2f}"
+            )
+            return lifestyle
+        if time.monotonic() >= deadline:
+            waited = time.monotonic() - started
+            print(
+                f"[GPU] skin-edit 대기: 타임아웃({max_wait_seconds}s)에도 URL 없음 "
+                f"lifestyle_id={lifestyle_id} waited_s={waited:.2f} "
+                f"→ 폴백 /generate 1회 예정"
+            )
+            return lifestyle
+        await asyncio.sleep(poll_interval)
 
 # MCP tools 함수 import (MCP 서버의 함수를 사용)
 try:
@@ -70,57 +137,18 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
     return user
 
-# [1] 데이터 규격 정의 (Flutter의 HealthDataPayload와 일치해야 함)
-class HealthMetric(BaseModel):
-    type: str
-    value: str
-    unit: str
-    from_date: str
-    to_date: str
-
-class HealthPayload(BaseModel):
-    user_id: str
-    metrics: List[HealthMetric]
-    timestamp: str
-
-# [2] 데이터 수집 엔드포인트
-@router.post("/collect")
-async def collect_data(
-    payload: HealthPayload,
-    current_user: models.User = Depends(get_current_user),
-):
-    # 여기서 데이터를 확인합니다.
-    print(
-        f"📥 수신된 데이터 - 사용자: {current_user.id} "
-        f"(payload user_id={payload.user_id}), 지표 수: {len(payload.metrics)}"
-    )
-    
-    # TODO: 여기서 kafka_producer를 통해 Kafka 토픽으로 전송하는 로직이 들어갑니다.
-    # producer.send('biometrics', value=payload.dict())
-
-    # 상위 3개 데이터만 상세 출력 (너무 많을 수 있으므로)
-    for i, metric in enumerate(payload.metrics[:3]):
-        print(f"  [{i+1}] 타입: {metric.type} | 값: {metric.value} {metric.unit}")
-        print(f"      기간: {metric.from_date} ~ {metric.to_date}")
-    
-    if len(payload.metrics) > 3:
-        print(f"  ... 외 {len(payload.metrics) - 3}개의 데이터 생략")
-    print("="*50 + "\n")
-    
-    return {"status": "success", "message": f"{len(payload.metrics)}개의 데이터가 전송되었습니다."}
-
-# [3] 이미지 업로드 엔드포인트
+# 이미지 업로드 엔드포인트
 @router.post("/upload")
 async def upload_image(
-    target_years: int = Form(...),
     file: UploadFile = File(...),
+    target_years: int = Form(default=30),  # 고정값 30 (이미지 생성은 별도로 3 사용)
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     이미지 업로드 엔드포인트
-    - target_years: 몇 년 후 모습을 보고 싶은지 (연수)
     - file: 업로드할 이미지 파일
+    - target_years: DB 저장용 (고정 30), 실제 이미지 생성은 3 사용
     """
     try:
         original_name = Path(file.filename or "upload.bin").name
@@ -170,6 +198,7 @@ async def upload_image(
 # [4] 사용자 lifestyle 데이터 조회 엔드포인트 (MCP tool 호출)
 @router.get("/lifestyle")
 async def get_lifestyle_data(
+    request: Request,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
@@ -205,7 +234,7 @@ async def get_lifestyle_data(
         
         # 이미지 경로를 서버 URL로 변환
         if "images" in lifestyle_data:
-            origin = os.getenv("API_BASE_ORIGIN", "http://localhost:8080")
+            origin = resolve_public_api_origin(request)
             if lifestyle_data["images"].get("original_image_url"):
                 original_path = lifestyle_data["images"]["original_image_url"]
                 # 로컬 파일 경로인 경우 서버 URL로 변환
@@ -266,6 +295,7 @@ async def get_image(
             or_(
                 models.Lifestyle.original_image_url == image_real_path,
                 models.Lifestyle.generated_image_url == image_real_path,
+                models.Lifestyle.ideal_habits_skin_image_url == image_real_path,
             ),
         ).first()
         if not profile and not lifestyle:
@@ -315,3 +345,96 @@ async def generate_aging_image(
     )
 
     return result
+
+
+@router.post("/generate/{lifestyle_id}")
+async def generate_image_default(
+    lifestyle_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    기본 파라미터로 /generate 이미지 생성 요청을 시작합니다.
+    """
+    lifestyle = db.query(models.Lifestyle).filter(
+        models.Lifestyle.id == lifestyle_id,
+        models.Lifestyle.user_id == current_user.id,
+    ).first()
+    if not lifestyle:
+        raise HTTPException(status_code=404, detail="Lifestyle not found")
+
+    try:
+        result = await image_service.request_generate_image(
+            db=db,
+            lifestyle_id=lifestyle_id,
+            user_id=current_user.id,
+        )
+        return {
+            "success": True,
+            "lifestyle_id": lifestyle_id,
+            **result,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"기본 이미지 생성 요청 실패: {_format_image_gen_error(e)}",
+        )
+
+
+@router.post("/skin-edit/{lifestyle_id}")
+async def skin_edit_generated_image(
+    lifestyle_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    /generate 결과 이미지를 입력으로 GPU /skin-edit를 호출합니다.
+    습관 기반 6종 점수(0/100)는 라이프스타일에서만 계산해 GPU 폼과 동일하게 전달합니다.
+    """
+    lifestyle = db.query(models.Lifestyle).filter(
+        models.Lifestyle.id == lifestyle_id,
+        models.Lifestyle.user_id == current_user.id,
+    ).first()
+    if not lifestyle:
+        raise HTTPException(status_code=404, detail="Lifestyle not found")
+
+    try:
+        # 페이스스캔에서 미리 보낸 /generate 가 끝날 때까지 기다린 뒤 skin-edit (중복 generate 방지).
+        lifestyle = await _wait_for_lifestyle_generated_url(
+            db,
+            lifestyle_id=lifestyle_id,
+            user_id=current_user.id,
+        )
+        generate_fallback_after_wait = False
+        if not (lifestyle.generated_image_url or "").strip():
+            generate_fallback_after_wait = True
+            print(
+                f"[GPU] skin-edit 폴백: 선행 /generate 없음·실패·대기 초과로 "
+                f"서버에서 추가 POST /generate 호출 lifestyle_id={lifestyle_id}"
+            )
+            await image_service.request_generate_image(
+                db=db,
+                lifestyle_id=lifestyle_id,
+                user_id=current_user.id,
+            )
+
+        result = await image_service.request_skin_edit_from_generated(
+            db=db,
+            lifestyle_id=lifestyle_id,
+            user_id=current_user.id,
+        )
+        return {
+            "success": True,
+            "lifestyle_id": lifestyle_id,
+            "skin_edit_trace": {
+                "waited_for_parallel_generate": True,
+                "generate_fallback_after_timeout": generate_fallback_after_wait,
+                "meaning": "True면 선행 /generate 없음·실패·대기 초과 후 서버가 추가로 /generate 1회 호출함.",
+            },
+            **result,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"skin-edit 요청 실패: {_format_image_gen_error(e)}",
+        )

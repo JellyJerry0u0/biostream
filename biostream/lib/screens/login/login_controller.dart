@@ -100,6 +100,27 @@ class LoginController {
       );
     }
 
+    // 프로필 정보를 SharedPreferences에 저장
+    final prefs = await _prefsProvider();
+    final email = (result['email'] ?? '').toString().trim();
+    if (email.isNotEmpty) {
+      await prefs.setString(keyProfileEmail, email);
+    }
+    final nickname = (result['nickname'] ?? '').toString().trim();
+    if (nickname.isNotEmpty) {
+      await prefs.setString(keyProfileNickname, nickname);
+    }
+    final userId = result['user_id'];
+    if (userId is int) {
+      await prefs.setInt(keyProfileUserId, userId);
+    } else if (userId is num) {
+      await prefs.setInt(keyProfileUserId, userId.toInt());
+    }
+
+    // 푸시 알림 토큰 동기화
+    await _syncTokenToServer();
+
+    // 프로필 미완성(최초 카카오 가입) → 프로필 입력 화면
     if (result['needs_profile'] == true) {
       return const LoginFlowResult(
         success: true,
@@ -108,10 +129,11 @@ class LoginController {
       );
     }
 
+    // 기존 유저 → 홈 화면
     return const LoginFlowResult(
       success: true,
       message: '',
-      nextRoute: LoginNextRoute.faceScan,
+      nextRoute: LoginNextRoute.home,
     );
   }
 }

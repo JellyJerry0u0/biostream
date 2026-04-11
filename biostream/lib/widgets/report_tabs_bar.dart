@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../utils/responsive.dart';
 
 class ReportTabsBar extends StatelessWidget {
@@ -13,10 +14,17 @@ class ReportTabsBar extends StatelessWidget {
     required this.onTabSelected,
   });
 
+  static const Color _primary = Color(0xFF37EC13);
+  static const Color _textOnLight = Color(0xFF101B0D);
+
   static const Map<String, String> _tabLabels = {
+    'summary': '요약',
     'goals': '목표',
     'sleep': '수면',
     'uv': '자외선',
+    'smoking': '흡연',
+    'drinking': '음주',
+    'stress': '스트레스',
     'lifestyle': '생활습관',
     'activity': '활동',
   };
@@ -24,65 +32,76 @@ class ReportTabsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.grey.shade200;
 
-    return Container(
-      height: Responsive.fontSize(context, 56),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF132210) : const Color(0xFFF6F8F6),
-        border: Border(
-          bottom: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.1)
-                : Colors.grey[200]!,
-            width: 1,
-          ),
-        ),
-      ),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(
-          horizontal: Responsive.padding(context, 16),
-        ),
-        itemCount: tabs.length,
-        itemBuilder: (context, index) {
-          final tab = tabs[index];
-          final isSelected = tab == selectedTab;
-          final label = _tabLabels[tab] ?? tab;
-
-          return Padding(
-            padding: EdgeInsets.only(
-              right: Responsive.padding(context, 12),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: Responsive.fontSize(context, 48),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.padding(context, 8),
             ),
-            child: GestureDetector(
-              onTap: () => onTabSelected(tab),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: Responsive.padding(context, 20),
-                  vertical: Responsive.padding(context, 12),
-                ),
-                decoration: BoxDecoration(
-                  color:
-                      isSelected ? const Color(0xFF37EC13) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Center(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: Responsive.fontSize(context, 14),
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected
-                          ? const Color(0xFF101B0D)
-                          : (isDark ? Colors.white70 : Colors.grey[700]),
+            itemCount: tabs.length,
+            separatorBuilder: (_, __) =>
+                SizedBox(width: Responsive.padding(context, 2)),
+            itemBuilder: (context, index) {
+              final tab = tabs[index];
+              final isSelected = tab == selectedTab;
+              final label = _tabLabels[tab] ?? tab;
+
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => onTabSelected(tab),
+                  borderRadius: BorderRadius.circular(8),
+                  splashColor: _primary.withValues(alpha: 0.1),
+                  highlightColor: _primary.withValues(alpha: 0.05),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.center,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: Responsive.padding(context, 14),
+                      vertical: Responsive.padding(context, 10),
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isSelected ? _primary : Colors.transparent,
+                          width: 2.5,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: Responsive.fontSize(context, 13.5),
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        letterSpacing: -0.15,
+                        height: 1.25,
+                        color: isSelected
+                            ? (isDark ? Colors.white : _textOnLight)
+                            : (isDark
+                                ? Colors.white.withValues(alpha: 0.45)
+                                : Colors.grey.shade600),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ),
+        Divider(height: 1, thickness: 1, color: dividerColor),
+      ],
     );
   }
 }
